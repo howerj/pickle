@@ -30,54 +30,29 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+ * POSSIBILITY OF SUCH DAMAGE. */
 
 #ifndef PICKLE_H
 #define PICKLE_H
 
-enum {PICOL_OK, PICOL_ERR, PICOL_RETURN, PICOL_BREAK, PICOL_CONTINUE};
+struct picolCmd;
+struct picolCallFrame;
 
-struct picolParser {
-    char *text;
-    char *p; /* current text position */
-    int len; /* remaining length */
-    char *start; /* token start */
-    char *end; /* token end */
-    int type; /* token type, PT_... */
-    int insidequote; /* True if inside " " */
+struct pickle_interpreter {
+	struct picolCallFrame *callframe;
+	struct picolCmd *commands;
+	char *result;
+	int initialized;
+	int level; /* Level of nesting */
 };
 
-struct picolVar {
-    char *name, *val;
-    struct picolVar *next;
-};
+typedef struct pickle_interpreter pickle_t;
 
-struct picolInterp; /* forward declaration */
-typedef int (*picolCmdFunc)(struct picolInterp *i, int argc, char **argv, void *privdata);
+typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
-struct picolCmd {
-    char *name;
-    picolCmdFunc func;
-    void *privdata;
-    struct picolCmd *next;
-};
-
-struct picolCallFrame {
-    struct picolVar *vars;
-    struct picolCallFrame *parent; /* parent is NULL at top level */
-};
-
-struct picolInterp {
-    int level; /* Level of nesting */
-    struct picolCallFrame *callframe;
-    struct picolCmd *commands;
-    char *result;
-};
-
-int picolRegisterCommand(struct picolInterp *i, const char *name, picolCmdFunc f, void *privdata);
-int picolEval(struct picolInterp *i, char *t);
-void picolInitInterp(struct picolInterp *i);
-void picolRegisterCoreCommands(struct picolInterp *i);
+int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
+int pickle_eval(pickle_t *i, char *t);
+int pickle_initialize(pickle_t *i);
+int pickle_deinitialize(pickle_t *i);
 
 #endif
