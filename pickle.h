@@ -35,12 +35,16 @@
 #ifndef PICKLE_H
 #define PICKLE_H
 
-struct picolCmd;
-struct picolCallFrame;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct pickle_command;
+struct pickle_call_frame;
 
 struct pickle_interpreter {
-	struct picolCallFrame *callframe;
-	struct picolCmd *commands;
+	struct pickle_call_frame *callframe;
+	struct pickle_command    *commands;
 	char *result;
 	int initialized;
 	int level; /* Level of nesting */
@@ -54,5 +58,9 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 int pickle_eval(pickle_t *i, char *t);
 int pickle_initialize(pickle_t *i);
 int pickle_deinitialize(pickle_t *i);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
