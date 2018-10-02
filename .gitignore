@@ -1,0 +1,5 @@
+picol
+pickle
+*.o
+*.a
+*.log
