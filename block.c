@@ -24,11 +24,6 @@ size_t bitmap_bits(bitmap_t *b) {
 	return b->bits;
 }
 
-size_t bitmap_sizeof(bitmap_t *b) {
-	assert(b);
-	return sizeof(*b) + bitmap_units(b->bits)*sizeof(bitmap_unit_t);
-}
-
 bitmap_t *bitmap_new(size_t bits) {
 	const size_t length = bitmap_units(bits)*sizeof(bitmap_unit_t);
 	assert(length < (SIZE_MAX/bits));
@@ -36,7 +31,7 @@ bitmap_t *bitmap_new(size_t bits) {
 	bitmap_t *r = calloc(sizeof(bitmap_t), 1);
 	if(!r)
 		return NULL;
-	r->map = calloc(length, 1);
+	r->map = calloc(length, sizeof(r->map[0]));
 	if(!r->map) {
 		free(r);
 		return NULL;
@@ -45,12 +40,13 @@ bitmap_t *bitmap_new(size_t bits) {
 	return r;
 }
 
-bitmap_t *bitmap_copy(bitmap_t *b) {
+bitmap_t *bitmap_copy(const bitmap_t *b) {
 	assert(b);
 	bitmap_t *r = bitmap_new(b->bits);
 	if(!r)
 		return NULL;
-	return memcpy(r, b, bitmap_sizeof(b));
+	memcpy(r->map, b->map, bitmap_units(b->bits) * sizeof(bitmap_unit_t));
+	return r;
 }
 
 void bitmap_free(bitmap_t *b) {
@@ -84,19 +80,33 @@ bool bitmap_get(bitmap_t *b, size_t bit) {
 	return !!(b->map[bit/BITS] & (1u << (bit & MASK)));
 }
 
-
 static size_t block_count(block_arena_t *a) {
 	assert(a);
 	return bitmap_bits(&a->freelist);
 }
 
+#define FIND_BY_BIT (0)
+
 static long block_find_free(block_arena_t *a) {
 	assert(a);
+	if(FIND_BY_BIT) { /* much slower, simpler */
+		bitmap_t *b = &a->freelist;
+		long r = -1, max = block_count(a);
+		for(long i = 0; i < max; i++)
+			if(!bitmap_get(b, i))
+				return i;
+		return r;
+	}
 	bitmap_t *b = &a->freelist;
-	long r = -1, max = block_count(a);
-	for(long i = 0; i < max; i++) /** @todo more efficient version */
-		if(!bitmap_get(b, i))
-			return i;
+	bitmap_unit_t *u = b->map;
+	long r = -1, max = bitmap_units(b->bits);
+	for(long i = 0; i < max; i++)
+		if(u[i] != (bitmap_unit_t)-1uLL) {
+			for(long j = i*BITS; j < (long)((i*BITS)+BITS); j++)
+				if(!bitmap_get(b, j))
+					return j;
+			abort(); /* should never be reached */
+		}
 	return r;
 }
 
@@ -203,8 +213,8 @@ void block_arena_free(block_arena_t *a) {
 	free(a);
 }
 
-#define BLK_COUNT (1024) /* must be power of 2! */
-#define BLK_SIZE  (512)  /* must be power of 2! */
+#define BLK_COUNT (32) /* must be power of 2! */
+#define BLK_SIZE  (32) /* must be power of 2! */
 
 static bitmap_unit_t freelist_map[BLK_COUNT / sizeof(bitmap_unit_t)];
 static uint64_t memory[BLK_COUNT*(BLK_SIZE  / sizeof(uint64_t))] = { 0 };
