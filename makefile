@@ -1,5 +1,5 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g
-all: pickle picol
+all: pickle
 
 run: pickle
 	${TRACE} ./pickle ${FILE}
@@ -10,12 +10,7 @@ pickle.o: pickle.c pickle.h
 
 block.o: block.c block.h
 
-block: block.o
-
-pickle: pickle.o main.o
-
-picol: picol.orig.c
-	${CC} $< -o $@
+pickle: pickle.o main.o block.o
 
 clean:
 	rm -rf picol pickle *.o *.a

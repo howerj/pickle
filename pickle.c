@@ -25,6 +25,10 @@
 #define UNUSED(X) ((void)(X))
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 
+#define CALLOC(I, SZ)      ((I)->allocator.calloc((I)->allocator.arena,      (SZ)))
+#define REALLOC(I, P, SZ) ((I)->allocator.realloc((I)->allocator.arena, (P), (SZ)))
+#define FREE(I, P)           ((I)->allocator.free((I)->allocator.arena, (P)))
+
 enum { PICOL_OK, PICOL_ERR, PICOL_RETURN, PICOL_BREAK, PICOL_CONTINUE };
 enum { PT_ESC, PT_STR, PT_CMD, PT_VAR, PT_SEP, PT_EOL, PT_EOF };
 
@@ -65,13 +69,14 @@ struct pickle_call_frame {
 	return NULL;
 }*/
 
-static char *picolStrdup(const char *s) {  /* intern common strings? */
+static char *picolStrdup(allocator_t *a, const char *s) {  /* intern common strings? */
+	assert(a);
 	assert(s);
 	/*char *in = (char*)picolIntern(s); // requires string specific free routine 
 	if(in)
 		return in;*/
 	const size_t l = strlen(s);
-	char *r = malloc(l + 1);
+	char *r = a->calloc(a->arena, l + 1);
 	if(!r) 
 		return NULL;
 	return memcpy(r, s, l + 1);
@@ -274,8 +279,8 @@ static int picolGetToken(struct picolParser *p) {
 char *pickle_set_result(pickle_t *i, const char *s) {
 	assert(i);
 	assert(s);
-	free(i->result);
-	return i->result = picolStrdup(s);
+	FREE(i, i->result);
+	return i->result = picolStrdup(&i->allocator, s);
 }
 
 static struct pickle_var *picolGetVar(pickle_t *i, const char *name) {
@@ -296,18 +301,18 @@ static int picolSetVar(pickle_t *i, char *name, char *val) {
 	assert(val);
 	struct pickle_var *v = picolGetVar(i, name);
 	if (v) {
-		free(v->val);
-		if(!(v->val = picolStrdup(val)))
+		FREE(i, v->val);
+		if(!(v->val = picolStrdup(&i->allocator, val)))
 			return PICOL_ERR;
 	} else {
-		if(!(v = malloc(sizeof(*v))))
+		if(!(v = CALLOC(i, sizeof(*v))))
 			return PICOL_ERR;
-		v->name = picolStrdup(name);
-		v->val  = picolStrdup(val);
+		v->name = picolStrdup(&i->allocator, name);
+		v->val  = picolStrdup(&i->allocator, val);
 		if(!(v->name) || !(v->val)) {
-			free(v->name);
-			free(v->val);
-			free(v);
+			FREE(i, v->name);
+			FREE(i, v->val);
+			FREE(i, v);
 			return PICOL_ERR;
 		}
 		v->next = i->callframe->vars;
@@ -339,11 +344,11 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 		pickle_set_result(i, errbuf);
 		return PICOL_ERR;
 	}
-	if(!(c = malloc(sizeof(*c)))) {
+	if(!(c = CALLOC(i, sizeof(*c)))) {
 		//pickle_set_result(i, "OOM");
 		return PICOL_ERR;
 	}
-	c->name     = picolStrdup(name);
+	c->name     = picolStrdup(&i->allocator, name);
 	c->func     = f;
 	c->privdata = privdata;
 	c->next     = i->commands;
@@ -369,7 +374,7 @@ int pickle_eval(pickle_t *i, char *t) {
 		int tlen = p.end - p.start + 1;
 		if (tlen < 0) 
 			tlen = 0;
-		char *t = malloc(tlen + 1);
+		char *t = CALLOC(i, tlen + 1);
 		if(!t) {
 			//pickle_set_result(i, "OOM");
 			return PICOL_ERR;
@@ -380,30 +385,30 @@ int pickle_eval(pickle_t *i, char *t) {
 			struct pickle_var *v = picolGetVar(i, t);
 			if (!v) {
 				snprintf(errbuf, 1024, "No such variable '%s'", t);
-				free(t);
+				FREE(i, t);
 				pickle_set_result(i, errbuf);
 				retcode = PICOL_ERR;
 				goto err;
 			}
-			free(t);
-			t = picolStrdup(v->val);
+			FREE(i, t);
+			t = picolStrdup(&i->allocator, v->val);
 		} else if (p.type == PT_CMD) {
 			retcode = pickle_eval(i, t);
-			free(t);
+			FREE(i, t);
 			if (retcode != PICOL_OK) 
 				goto err;
-			t = picolStrdup(i->result);
+			t = picolStrdup(&i->allocator, i->result);
 		} else if (p.type == PT_ESC) {
 			/* XXX: escape handling missing! */
 		} else if (p.type == PT_SEP) {
 			prevtype = p.type;
-			free(t);
+			FREE(i, t);
 			continue;
 		}
 		/* We have a complete command + args. Call it! */
 		if (p.type == PT_EOL) {
 			struct pickle_command *c = NULL;
-			free(t);
+			FREE(i, t);
 			prevtype = p.type;
 			if (argc) {
 				if ((c = picolGetCommand(i, argv[0])) == NULL) {
@@ -418,8 +423,8 @@ int pickle_eval(pickle_t *i, char *t) {
 			}
 			/* Prepare for the next command */
 			for (int j = 0; j < argc; j++) 
-				free(argv[j]);
-			free(argv);
+				FREE(i, argv[j]);
+			FREE(i, argv);
 			argv = NULL;
 			argc = 0;
 			continue;
@@ -427,7 +432,7 @@ int pickle_eval(pickle_t *i, char *t) {
 		/* We have a new token, append to the previous or as new arg? */
 		if (prevtype == PT_SEP || prevtype == PT_EOL) {
 			char **old = argv;
-			argv = realloc(argv, sizeof(char*)*(argc+1));
+			argv = REALLOC(i, argv, sizeof(char*)*(argc+1));
 			if(!argv) {
 				argv = old;
 				retcode = PICOL_ERR;
@@ -438,17 +443,17 @@ int pickle_eval(pickle_t *i, char *t) {
 		} else { /* Interpolation */
 			const int oldlen = strlen(argv[argc - 1]), tlen = strlen(t);
 			/**@bug realloc failure memory leak */
-			argv[argc - 1] = realloc(argv[argc - 1], oldlen + tlen + 1);
+			argv[argc - 1] = REALLOC(i, argv[argc - 1], oldlen + tlen + 1);
 			memcpy(argv[argc - 1] + oldlen, t, tlen);
 			argv[argc - 1][oldlen + tlen]='\0';
-			free(t);
+			FREE(i, t);
 		}
 		prevtype = p.type;
 	}
 err:
 	for (int j = 0; j < argc; j++) 
-		free(argv[j]);
-	free(argv);
+		FREE(i, argv[j]);
+	FREE(i, argv);
 	return retcode;
 }
 
@@ -578,27 +583,29 @@ static void picolDropCallFrame(pickle_t *i) {
 	struct pickle_var *v = cf->vars, *t = NULL;
 	while(v) {
 		t = v->next;
-		free(v->name);
-		free(v->val);
-		free(v);
+		FREE(i, v->name);
+		FREE(i, v->val);
+		FREE(i, v);
 		v = t;
 	}
 	i->callframe = cf->parent;
-	free(cf);
+	FREE(i, cf);
 }
 
 static int picolCommandCallProc(pickle_t *i, int argc, char **argv, void *pd) {
-	char **x = pd, *alist = x[0], *body = x[1], *p = picolStrdup(alist), *tofree = NULL;
+	assert(i);
+	assert(argv);
+	char **x = pd, *alist = x[0], *body = x[1], *p = picolStrdup(&i->allocator, alist), *tofree = NULL;
 	int arity = 0, done = 0, errcode = PICOL_OK;
 	char errbuf[1024];
 	if(!p) {
 		//pickle_set_result(i, "OOM");
 		return PICOL_ERR;
 	}
-	struct pickle_call_frame *cf = malloc(sizeof(*cf));
+	struct pickle_call_frame *cf = CALLOC(i, sizeof(*cf));
 	if(!cf) {
 		//pickle_set_result(i, "OOM");
-		free(p);
+		FREE(i, p);
 		return PICOL_ERR;
 	}
 	cf->vars = NULL;
@@ -626,7 +633,7 @@ static int picolCommandCallProc(pickle_t *i, int argc, char **argv, void *pd) {
 		if (done) 
 			break;
 	}
-	free(tofree);
+	FREE(i, tofree);
 	if (arity != argc - 1) 
 		goto arityerr;
 	errcode = pickle_eval(i, body);
@@ -647,16 +654,16 @@ static int picolCommandProc(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 4) 
 		return pickle_arity_error(i, argv[0]);
-	char **procdata = malloc(sizeof(char*)*2);
+	char **procdata = CALLOC(i, sizeof(char*)*2);
 	if(!procdata) {
 		return PICOL_ERR;
 	}
-	procdata[0] = picolStrdup(argv[2]); /* arguments list */
-	procdata[1] = picolStrdup(argv[3]); /* procedure body */
+	procdata[0] = picolStrdup(&i->allocator, argv[2]); /* arguments list */
+	procdata[1] = picolStrdup(&i->allocator, argv[3]); /* procedure body */
 	if(!(procdata[0]) || !(procdata[1])) {
-		free(procdata[0]);
-		free(procdata[1]);
-		free(procdata);
+		FREE(i, procdata[0]);
+		FREE(i, procdata[1]);
+		FREE(i, procdata);
 		return PICOL_ERR;
 	}
 	return pickle_register_command(i, argv[1], picolCommandCallProc, procdata);
@@ -697,40 +704,65 @@ int picolRegisterCoreCommands(pickle_t *i) {
 	return 0;
 }
 
-static void pickleFreeCmd(struct pickle_command *p) {
+static void pickleFreeCmd(allocator_t *a, struct pickle_command *p) {
+	assert(a);
 	if(!p)
 		return;
 	if(p->func == picolCommandCallProc) {
 		char **procdata = (char**) p->privdata;
 		if(procdata) {
-			free(procdata[0]);
-			free(procdata[1]);
+			a->free(a->arena, procdata[0]);
+			a->free(a->arena, procdata[1]);
 		}
-		free(procdata);
+		a->free(a->arena, procdata);
 	}
-	free(p->name);
-	free(p);
+	a->free(a->arena, p->name);
+	a->free(a->arena, p);
 }
 
 int pickle_deinitialize(pickle_t *i) {
 	assert(i);
+	allocator_t *a = &i->allocator;
 	i->initialized = 0;
 	picolDropCallFrame(i);
-	free(i->result);
+	a->free(a->arena, i->result);
 	struct pickle_command *c = i->commands, *p = NULL;
 	for(; c; p = c, c = c->next)
-		pickleFreeCmd(p);
-	pickleFreeCmd(p);
+		pickleFreeCmd(a, p);
+	pickleFreeCmd(a, p);
 	return 0;
 }
 
-int pickle_initialize(pickle_t *i) {
+static void *pcalloc(void *arena, size_t size) {
+	UNUSED(arena);
+	return calloc(size, 1);
+}
+
+static void *prealloc(void *arena, void *ptr, size_t size) {
+	UNUSED(arena);
+	return realloc(ptr, size);
+}
+
+static void pfree(void *arena, void *ptr) {
+	UNUSED(arena);
+	free(ptr);
+}
+
+static allocator_t allocator = {
+	.calloc  = pcalloc,
+	.realloc = prealloc,
+	.free    = pfree,
+	.arena   = NULL,
+};
+
+int pickle_initialize(pickle_t *i, allocator_t *a) {
 	assert(i);
 	assert(!(i->initialized));
 	memset(i, 0, sizeof *i);
 	i->initialized = 1;
-	i->callframe   = calloc(sizeof(struct pickle_call_frame), 1);
-	i->result      = picolStrdup("");
+	i->allocator   = a ? *a : allocator;
+	i->callframe   = i->allocator.calloc(i->allocator.arena, sizeof(struct pickle_call_frame));
+	i->result      = picolStrdup(&i->allocator, "");
 	if(!(i->callframe) || !(i->result))
 		goto fail;
 	if(picolRegisterCoreCommands(i) < 0)

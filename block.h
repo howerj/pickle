@@ -15,11 +15,15 @@ typedef struct {
 	/*size_t *used;    // memory used within block */
 } block_arena_t;
 
-void *block_arena_allocate_block(block_arena_t *a, size_t length);
+void *block_arena_malloc_block(block_arena_t *a, size_t length);
+void *block_arena_calloc_block(block_arena_t *a, size_t length);
 void block_arena_free_block(block_arena_t *a, void *v);
+void *block_arena_realloc_block(block_arena_t *a, void *v, size_t length);
 
 block_arena_t *block_arena_allocate(size_t blocksz, size_t count);
 void block_arena_free(block_arena_t *a);
+
+int block_test(void);
 
 extern block_arena_t block_arena;
 

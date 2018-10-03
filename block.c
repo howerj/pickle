@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <stdio.h>
 
 #define BITS (sizeof(bitmap_unit_t)*CHAR_BIT)
 #define MASK (BITS-1)
@@ -114,7 +115,7 @@ bool is_power_of_2(unsigned long long x) {
 	return x && !(x & (x - 1));
 }
 
-void *block_arena_allocate_block(block_arena_t *a, size_t length) {
+void *block_arena_malloc_block(block_arena_t *a, size_t length) {
 	assert(a);
 	assert(is_power_of_2(a->blocksz));
 	assert((block_count(a) % sizeof(bitmap_unit_t)) == 0);
@@ -128,6 +129,14 @@ void *block_arena_allocate_block(block_arena_t *a, size_t length) {
 	assert(is_aligned(r));
 	/*if(a->used)
 		a->used[f] = length;*/
+	return r;
+}
+
+void *block_arena_calloc_block(block_arena_t *a, size_t length) {
+	void *r = block_arena_malloc_block(a, length);
+	if(!r)
+		return r;
+	memset(r, 0, a->blocksz);
 	return r;
 }
 
@@ -148,13 +157,14 @@ void block_arena_free_block(block_arena_t *a, void *v) {
 	bitmap_clear(&a->freelist, p / a->blocksz);
 }
 
-void *block_arena_realloc(block_arena_t *a, void *v, size_t length) {
+void *block_arena_realloc_block(block_arena_t *a, void *v, size_t length) {
 	assert(a);
-	assert(v);
 	if(!length) {
 		block_arena_free_block(a, v);
 		return NULL;
 	}
+	if(!v)
+		return block_arena_malloc_block(a, length);
 	if(length < a->blocksz)
 		return v;
 	return NULL;
@@ -171,6 +181,8 @@ block_arena_t *block_arena_allocate(size_t blocksz, size_t count) {
 	a->memory       = calloc(blocksz, count);
 	if(!(a->freelist.map) || !(a->memory))
 		goto fail;
+	a->freelist.bits = count;
+	a->blocksz = blocksz;
 	return a;
 fail:
 	if(a) {
@@ -208,28 +220,26 @@ block_arena_t block_arena = {
 	/*.used    = used,*/
 };
 
-#ifndef LIBRARY
-#include <stdio.h>
-
 static uintptr_t diff(void *a, void *b) {
 	return a > b ? (char*)a - (char*)b : (char*)b - (char*)a;
 }
 
-int main(void) {
+int block_test(void) {
+	printf("block tests");
 	printf("arena   = %p\n", (void*)&block_arena);
 	printf("arena.m = %p\n", block_arena.memory);
 	void *v1, *v2, *v3;
-	v1 = block_arena_allocate_block(&block_arena, 12);
+	v1 = block_arena_malloc_block(&block_arena, 12);
 	assert(v1);
 	printf("v1 = %p\n", v1);
-	v2 = block_arena_allocate_block(&block_arena, 30);
+	v2 = block_arena_malloc_block(&block_arena, 30);
 	assert(v2);
 	printf("v2 = %p\n", v2);
 	assert(diff(v1, v2) == BLK_SIZE);
 	block_arena_free_block(&block_arena, v1);
-	v1 = block_arena_allocate_block(&block_arena, 12);
+	v1 = block_arena_malloc_block(&block_arena, 12);
 	printf("v1 = %p\n", v1);
-	v3 = block_arena_allocate_block(&block_arena, 12);
+	v3 = block_arena_malloc_block(&block_arena, 12);
 	assert(v3);
 	printf("v3 = %p\n", v3);
 	assert(diff(v1, v3) == BLK_SIZE*2);
@@ -239,10 +249,10 @@ int main(void) {
 	block_arena_free_block(&block_arena, v3);
 	size_t i = 0;
 	for(i = 0; i < (BLK_COUNT+1); i++)
-		if(!block_arena_allocate_block(&block_arena, 1))
+		if(!block_arena_malloc_block(&block_arena, 1))
 			break;
 	printf("exhausted at = %zu\n", i);
 	assert(i == BLK_COUNT);
 	return 0;
 }
-#endif
+
