@@ -17,3 +17,9 @@ blog post describing this interpreter can be found at
 <http://antirez.com/picol/picol.c.txt>. It does a surprising amount for such a
 small amount of code.
 
+## To Do
+
+* Add more useful commands
+* Make the library suitable for embedded use (by reducing memory usage and
+allowing the use of a custom allocator).
+

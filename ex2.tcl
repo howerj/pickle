@@ -12,3 +12,4 @@ while {<= $a 10} {
     puts "I can compute that $a*$a = [square $a]"
     set a [+ $a 1]
 }
+

@@ -59,6 +59,9 @@ int pickle_eval(pickle_t *i, char *t);
 int pickle_initialize(pickle_t *i);
 int pickle_deinitialize(pickle_t *i);
 
+int pickle_arity_error(pickle_t *i, const char *name); /* use within registered command if wrong number of args given */
+char *pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
+
 #ifdef __cplusplus
 }
 #endif

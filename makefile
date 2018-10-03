@@ -8,6 +8,10 @@ main.o: main.c pickle.h
 
 pickle.o: pickle.c pickle.h
 
+block.o: block.c block.h
+
+block: block.o
+
 pickle: pickle.o main.o
 
 picol: picol.orig.c
