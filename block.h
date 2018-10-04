@@ -12,7 +12,6 @@ typedef struct {
 	bitmap_t freelist; /* list of free blocks */
 	size_t blocksz;    /* size of a block: 1, 2, 4, 8, ... */
 	void *memory;      /* memory backing this allocator, should be aligned! */
-	/*size_t *used;    // memory used within block */
 } block_arena_t;
 
 void *block_arena_malloc_block(block_arena_t *a, size_t length);

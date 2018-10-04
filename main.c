@@ -25,8 +25,8 @@ static int picolCommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(pd);
 	if (argc != 1) 
 		return pickle_arity_error(i, argv[0]);
-	char buf[1024];
-	fgets(buf, sizeof buf, (FILE*)pd);
+	char buf[PICKLE_MAX_STRING] = { 0 };
+	(void)/*ignore result*/fgets(buf, sizeof buf, (FILE*)pd);
 	pickle_set_result(i, buf);
 	return 0;
 }
@@ -34,7 +34,7 @@ static int picolCommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 static int picolCommandSystem(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
-	(void)pd;
+	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, argv[0]);
 	char v[64];
@@ -47,7 +47,7 @@ static int picolCommandSystem(pickle_t *i, int argc, char **argv, void *pd) {
 static int picolCommandRand(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
-	(void)pd;
+	UNUSED(pd);
 	if (argc != 1)
 		return pickle_arity_error(i, argv[0]);
 	char v[64];
@@ -59,7 +59,7 @@ static int picolCommandRand(pickle_t *i, int argc, char **argv, void *pd) {
 static int picolCommandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
-	(void)pd;
+	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, argv[0]);
 	exit(atoi(argv[1]));
@@ -69,7 +69,7 @@ static int picolCommandExit(pickle_t *i, int argc, char **argv, void *pd) {
 static int picolCommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
-	(void)pd;
+	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, argv[0]);
 	char *env = getenv(argv[1]);
@@ -80,10 +80,10 @@ static int picolCommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 static int picolCommandStrftime(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
-	(void)pd;
+	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, argv[0]);
-	char buf[1024] = { 0 };
+	char buf[PICKLE_MAX_STRING] = { 0 };
 	time_t rawtime;
 	time(&rawtime);
 	struct tm *timeinfo = gmtime(&rawtime);
@@ -91,6 +91,39 @@ static int picolCommandStrftime(pickle_t *i, int argc, char **argv, void *pd) {
 	pickle_set_result(i, buf);
 	return 0;
 }
+
+/*From <http://c-faq.com/lib/regex.html>*/
+static int match(const char *pat, const char *str) {
+	assert(pat);
+	assert(str);
+	switch(*pat) {
+	case '\0':  return !*str;
+	case '*':   return match(pat+1, str) || (*str && match(pat, str+1));
+	case '.':   return *str && match(pat+1, str+1);
+	default:    return *pat == *str && match(pat+1, str+1);
+	}
+}
+
+static int picolCommandMatch(pickle_t *i, int argc, char **argv, void *pd) {
+	assert(i);
+	assert(argv);
+	UNUSED(pd);
+	if (argc != 3)
+		return pickle_arity_error(i, argv[0]);
+	pickle_set_result(i, match(argv[1], argv[2]) ? argv[2] : "");
+	return 0;
+}
+
+static int picolCommandEqual(pickle_t *i, int argc, char **argv, void *pd) {
+	assert(i);
+	assert(argv);
+	UNUSED(pd);
+	if (argc != 3)
+		return pickle_arity_error(i, argv[0]);
+	pickle_set_result(i, !strcmp(argv[1], argv[2]) ? "1" : "0");
+	return 0;
+}
+
 
 void *custom_calloc(void *a, size_t length) { return block_arena_calloc_block(a, length); }
 void custom_free(void *a, void *v)          { block_arena_free_block(a, v); }
@@ -105,7 +138,7 @@ int main(int argc, char **argv) {
 		.free    = custom_free,
 		.realloc = custom_realloc,
 		.calloc  = custom_calloc,
-		.arena   = use_custom_allocator ? block_arena_allocate(1024, 2*1024) : NULL,
+		.arena   = use_custom_allocator ? block_arena_allocate(PICKLE_MAX_STRING, 2*1024) : NULL,
 	};
 
 	/*if(use_custom_allocator)
@@ -114,17 +147,26 @@ int main(int argc, char **argv) {
 	pickle_t interp = { .initialized = 0 };
 	pickle_initialize(&interp, use_custom_allocator ? &allocator : NULL);
 
-	pickle_register_command(&interp, "puts",     picolCommandPuts,     stdout);
-	pickle_register_command(&interp, "gets",     picolCommandGets,     stdin);
-	pickle_register_command(&interp, "system",   picolCommandSystem,   NULL);
-	pickle_register_command(&interp, "exit",     picolCommandExit,     NULL);
-	pickle_register_command(&interp, "getenv",   picolCommandGetEnv,   NULL);
-	pickle_register_command(&interp, "rand",     picolCommandRand,     NULL);
-	pickle_register_command(&interp, "strftime", picolCommandStrftime, NULL);
+	const pickle_register_command_t commands[] = {
+		{ "puts",     picolCommandPuts,     stdout },
+		{ "gets",     picolCommandGets,     stdin },
+		{ "system",   picolCommandSystem,   NULL },
+		{ "exit",     picolCommandExit,     NULL },
+		{ "getenv",   picolCommandGetEnv,   NULL },
+		{ "rand",     picolCommandRand,     NULL },
+		{ "strftime", picolCommandStrftime, NULL },
+		{ "match",    picolCommandMatch,    NULL },
+		{ "eq",       picolCommandEqual,    NULL },
+	};
+	for(size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
+		if(pickle_register_command(&interp, commands[j].name, commands[j].func, commands[j].data) != 0) {
+			r = -1;
+			goto end;
+		}
 
 	if (argc == 1) {
 		for(;;) {
-			char clibuf[1024];
+			char clibuf[PICKLE_MAX_STRING];
 			fprintf(output, "pickle> "); 
 			fflush(output);
 			if (!fgets(clibuf, sizeof clibuf, input))
@@ -145,8 +187,8 @@ int main(int argc, char **argv) {
 		r = -1;
 		goto end;
 	}
-	char buf[1024*16];
-	buf[fread(buf, 1, 1024*16, fp)] = '\0';
+	char buf[PICKLE_MAX_STRING*16];
+	buf[fread(buf, 1, PICKLE_MAX_STRING*16, fp)] = '\0';
 	fclose(fp);
 	if (pickle_eval(&interp, buf) != 0) 
 		fprintf(output, "%s\n", interp.result);

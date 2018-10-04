@@ -9,21 +9,12 @@
  * The BSD license has been moved to the header.
  *
  * Extensions/Changes by Richard James Howe, available at:
- * <https://github.com/howerj/pickle>
- *
- * @todo Allocation changing; custom allocator should be an option, and
- * the allocator running out of memory should be dealt with, as well as
- * proper realloc handling.
- * @todo Add getenv, system, time functions, random function, ...
- * @todo Regexes, Split, Substring, more string operations */
+ * <https://github.com/howerj/pickle> */
 #include "pickle.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define UNUSED(X) ((void)(X))
-#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 
 #define CALLOC(I, SZ)      ((I)->allocator.calloc((I)->allocator.arena,      (SZ)))
 #define REALLOC(I, P, SZ) ((I)->allocator.realloc((I)->allocator.arena, (P), (SZ)))
@@ -339,7 +330,7 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 	assert(f);
 	struct pickle_command *c = picolGetCommand(i, name);
 	if (c) {
-		char errbuf[1024];
+		char errbuf[PICKLE_MAX_STRING];
 		snprintf(errbuf, sizeof errbuf, "Command '%s' already defined", name);
 		pickle_set_result(i, errbuf);
 		return PICOL_ERR;
@@ -363,7 +354,7 @@ int pickle_eval(pickle_t *i, char *t) {
 	struct picolParser p;
 	int retcode = PICOL_OK, argc = 0;
 	char **argv = NULL;
-	char errbuf[1024];
+	char errbuf[PICKLE_MAX_STRING];
 	pickle_set_result(i, "");
 	picolInitParser(&p, t);
 	for(;;) {
@@ -384,7 +375,7 @@ int pickle_eval(pickle_t *i, char *t) {
 		if (p.type == PT_VAR) {
 			struct pickle_var *v = picolGetVar(i, t);
 			if (!v) {
-				snprintf(errbuf, 1024, "No such variable '%s'", t);
+				snprintf(errbuf, PICKLE_MAX_STRING, "No such variable '%s'", t);
 				FREE(i, t);
 				pickle_set_result(i, errbuf);
 				retcode = PICOL_ERR;
@@ -412,7 +403,7 @@ int pickle_eval(pickle_t *i, char *t) {
 			prevtype = p.type;
 			if (argc) {
 				if ((c = picolGetCommand(i, argv[0])) == NULL) {
-					snprintf(errbuf, 1024, "No such command '%s'", argv[0]);
+					snprintf(errbuf, PICKLE_MAX_STRING, "No such command '%s'", argv[0]);
 					pickle_set_result(i, errbuf);
 					retcode = PICOL_ERR;
 					goto err;
@@ -460,7 +451,7 @@ err:
 int pickle_arity_error(pickle_t *i, const char *name) {
 	assert(i);
 	assert(name);
-	char errbuf[1024];
+	char errbuf[PICKLE_MAX_STRING];
 	snprintf(errbuf, sizeof errbuf, "Wrong number of args for %s", name);
 	pickle_set_result(i, errbuf);
 	return PICOL_ERR;
@@ -498,28 +489,6 @@ static int picolCommandSet(pickle_t *i, int argc, char **argv, void *pd) {
 		return pickle_arity_error(i, argv[0]);
 	picolSetVar(i, argv[1], argv[2]);
 	pickle_set_result(i, argv[2]);
-	return PICOL_OK;
-}
-
-/*From <http://c-faq.com/lib/regex.html>*/
-static int match(const char *pat, const char *str) {
-	assert(pat);
-	assert(str);
-	switch(*pat) {
-	case '\0':  return !*str;
-	case '*':   return match(pat+1, str) || (*str && match(pat, str+1));
-	case '.':   return *str && match(pat+1, str+1);
-	default:    return *pat == *str && match(pat+1, str+1);
-	}
-}
-
-static int picolCommandMatch(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
-	UNUSED(pd);
-	if (argc != 3)
-		return pickle_arity_error(i, argv[0]);
-	pickle_set_result(i, match(argv[1], argv[2]) ? argv[2] : "");
 	return PICOL_OK;
 }
 
@@ -597,7 +566,7 @@ static int picolCommandCallProc(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(argv);
 	char **x = pd, *alist = x[0], *body = x[1], *p = picolStrdup(&i->allocator, alist), *tofree = NULL;
 	int arity = 0, done = 0, errcode = PICOL_OK;
-	char errbuf[1024];
+	char errbuf[PICKLE_MAX_STRING];
 	if(!p) {
 		//pickle_set_result(i, "OOM");
 		return PICOL_ERR;
@@ -642,7 +611,7 @@ static int picolCommandCallProc(pickle_t *i, int argc, char **argv, void *pd) {
 	picolDropCallFrame(i); /* remove the called proc callframe */
 	return errcode;
 arityerr:
-	snprintf(errbuf, 1024, "Proc '%s' called with wrong arg num", argv[0]);
+	snprintf(errbuf, PICKLE_MAX_STRING, "Proc '%s' called with wrong arg num", argv[0]);
 	pickle_set_result(i, errbuf);
 	picolDropCallFrame(i); /* remove the called proc callframe */
 	return PICOL_ERR;
@@ -679,20 +648,14 @@ static int picolCommandReturn(pickle_t *i, int argc, char **argv, void *pd) {
 
 int picolRegisterCoreCommands(pickle_t *i) {
 	assert(i);
-	typedef struct {
-		char *name;
-		pickle_command_func_t func;
-		void *data;
-	} pickle_command_t;
-	const pickle_command_t commands[] = {
-		{ "set",       picolCommandSet,       NULL}, 
-		{ "if",        picolCommandIf,        NULL}, 
-		{ "while",     picolCommandWhile,     NULL}, 
-		{ "break",     picolCommandRetCodes,  NULL}, 
-		{ "continue",  picolCommandRetCodes,  NULL}, 
-		{ "proc",      picolCommandProc,      NULL}, 
-		{ "return",    picolCommandReturn,    NULL}, 
-		{ "match",     picolCommandMatch,     NULL}, 
+	static const pickle_register_command_t commands[] = {
+		{ "set",       picolCommandSet,       NULL }, 
+		{ "if",        picolCommandIf,        NULL }, 
+		{ "while",     picolCommandWhile,     NULL }, 
+		{ "break",     picolCommandRetCodes,  NULL }, 
+		{ "continue",  picolCommandRetCodes,  NULL }, 
+		{ "proc",      picolCommandProc,      NULL }, 
+		{ "return",    picolCommandReturn,    NULL }, 
 	};
 	static const char *name[] = { "+", "-", "*", "/", ">", ">=", "<", "<=", "==", "!=" };
 	for (size_t j = 0; j < sizeof(name)/sizeof(char*); j++)

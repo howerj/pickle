@@ -41,6 +41,16 @@ extern "C" {
 
 #include <stddef.h>
 
+#define PICKLE_MAX_STRING (1024u)
+
+#ifndef UNUSED
+#define UNUSED(X) ((void)(X))
+#endif 
+
+#ifndef BUILD_BUG_ON
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+#endif
+
 typedef void *(*calloc_t)(void *arena,  size_t bytes);
 typedef void *(*realloc_t)(void *arena, void *ptr, size_t bytes);
 typedef void  (*free_t)(void *arena,    void *ptr);
@@ -67,6 +77,12 @@ struct pickle_interpreter {
 typedef struct pickle_interpreter pickle_t;
 
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
+
+typedef struct {
+	char *name;
+	pickle_command_func_t func;
+	void *data;
+} pickle_register_command_t;
 
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 int pickle_eval(pickle_t *i, char *t);

@@ -137,8 +137,7 @@ void *block_arena_malloc_block(block_arena_t *a, size_t length) {
 	bitmap_set(&a->freelist, f);
 	void *r = ((char*)a->memory) + (f * a->blocksz);
 	assert(is_aligned(r));
-	/*if(a->used)
-		a->used[f] = length;*/
+	//fprintf(stderr, "%u\n", (unsigned)length);
 	return r;
 }
 
@@ -186,7 +185,6 @@ block_arena_t *block_arena_allocate(size_t blocksz, size_t count) {
 		goto fail;
 	if(!(a = calloc(sizeof(*a), 1)))
 		goto fail;
-	/*a->used = calloc(count, sizeof(a->used[0]));*/
 	a->freelist.map = calloc(count / sizeof(bitmap_unit_t), 1);
 	a->memory       = calloc(blocksz, count);
 	if(!(a->freelist.map) || !(a->memory))
@@ -198,7 +196,6 @@ fail:
 	if(a) {
 		free(a->freelist.map);
 		free(a->memory);
-		/*free(a->used);*/
 	}
 	free(a);
 	return NULL;
@@ -209,7 +206,6 @@ void block_arena_free(block_arena_t *a) {
 		return;
 	free(a->freelist.map);
 	free(a->memory);
-	/*free(a->unused);*/
 	free(a);
 }
 
@@ -218,7 +214,6 @@ void block_arena_free(block_arena_t *a) {
 
 static bitmap_unit_t freelist_map[BLK_COUNT / sizeof(bitmap_unit_t)];
 static uint64_t memory[BLK_COUNT*(BLK_SIZE  / sizeof(uint64_t))] = { 0 };
-/*static size_t used[BLK_COUNT] = { 0 };*/
 
 block_arena_t block_arena = {
 	.freelist = {
@@ -227,7 +222,6 @@ block_arena_t block_arena = {
 	},
 	.blocksz = BLK_SIZE,
 	.memory  = (void*)memory,
-	/*.used    = used,*/
 };
 
 static uintptr_t diff(void *a, void *b) {
@@ -261,7 +255,7 @@ int block_test(void) {
 	for(i = 0; i < (BLK_COUNT+1); i++)
 		if(!block_arena_malloc_block(&block_arena, 1))
 			break;
-	printf("exhausted at = %zu\n", i);
+	printf("exhausted at = %u\n", (unsigned)i);
 	assert(i == BLK_COUNT);
 	return 0;
 }
