@@ -20,6 +20,9 @@ small amount of code.
 ## To Do
 
 * Add more useful commands
+* Make unit tests; both in Pickle source and in C
 * Make the library suitable for embedded use (by reducing memory usage and
 allowing the use of a custom allocator).
+* Add documentation here; building, command line use, command list, syntax
+and semantics.
 

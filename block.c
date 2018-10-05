@@ -1,7 +1,9 @@
 /**@file block.c
- * @brief A simple block allocator 
+ * @brief A simple block allocator
  * @copyright Richard James Howe (2018)
- * @license MIT */
+ * @license MIT 
+ *
+ * @todo Optimize, cleanup and improve. Write better unit tests. */
 
 #include "block.h"
 #include <assert.h>
@@ -99,8 +101,12 @@ static long block_find_free(block_arena_t *a) {
 	}
 	bitmap_t *b = &a->freelist;
 	bitmap_unit_t *u = b->map;
-	long r = -1, max = bitmap_units(b->bits);
-	for(long i = 0; i < max; i++)
+	long r = -1;
+	const long max = bitmap_units(b->bits), start = 0; // start = bitmap_units(a->lastfree);
+	/*assert(start <= max);
+	if(u[start] == (bitmap_unit_t)-1uLL)
+		a->lastfree = 0;*/
+	for(long i = start; i < max; i++)
 		if(u[i] != (bitmap_unit_t)-1uLL) {
 			for(long j = i*BITS; j < (long)((i*BITS)+BITS); j++)
 				if(!bitmap_get(b, j))
@@ -125,6 +131,7 @@ bool is_power_of_2(unsigned long long x) {
 	return x && !(x & (x - 1));
 }
 
+/**@todo use last free */
 void *block_arena_malloc_block(block_arena_t *a, size_t length) {
 	assert(a);
 	assert(is_power_of_2(a->blocksz));
@@ -149,21 +156,29 @@ void *block_arena_calloc_block(block_arena_t *a, size_t length) {
 	return r;
 }
 
+int block_arena_valid_pointer(block_arena_t *a, void *v) {
+	const size_t max = block_count(a);
+	if(v < a->memory || (char*)v > ((char*)a->memory + (max * a->blocksz))) 
+		return 0;
+	return 1;
+}
+
 void block_arena_free_block(block_arena_t *a, void *v) {
 	assert(a);
 	if(!v)
 		return;
-	const size_t max = block_count(a);
-	if(v < a->memory || (char*)v > ((char*)a->memory + (max * a->blocksz))) { /* not our pointer */
+	if(!block_arena_valid_pointer(a, v)) {
 		abort();
 		return;
 	}
 	const intptr_t p = ((char*)v - (char*)a->memory);
-	if(!bitmap_get(&a->freelist, p / a->blocksz)) { /* double free */
+	const size_t bit = p / a->blocksz;
+	if(!bitmap_get(&a->freelist, bit)) { /* double free */
 		abort();
 		return;
 	}
-	bitmap_clear(&a->freelist, p / a->blocksz);
+	bitmap_clear(&a->freelist, bit);
+	a->lastfree = bit;
 }
 
 void *block_arena_realloc_block(block_arena_t *a, void *v, size_t length) {
@@ -179,7 +194,7 @@ void *block_arena_realloc_block(block_arena_t *a, void *v, size_t length) {
 	return NULL;
 }
 
-block_arena_t *block_arena_allocate(size_t blocksz, size_t count) {
+block_arena_t *block_arena_new(size_t blocksz, size_t count) {
 	block_arena_t *a = NULL;
 	if(!is_power_of_2(blocksz) || !is_power_of_2(count))
 		goto fail;
@@ -201,12 +216,80 @@ fail:
 	return NULL;
 }
 
-void block_arena_free(block_arena_t *a) {
+void block_arena_delete(block_arena_t *a) {
 	if(!a)
 		return;
 	free(a->freelist.map);
 	free(a->memory);
 	free(a);
+}
+
+pool_t *pool_new(void) { /**@todo handle errors, allow custom allocations */
+	pool_t *p = malloc(sizeof *p);
+	p->count = 3;
+	p->arenas = malloc(sizeof(p->arenas[0]) * p->count);
+	p->arenas[0] = block_arena_new(8,   1024);
+	p->arenas[1] = block_arena_new(64,  128);
+	p->arenas[2] = block_arena_new(512, 16);
+	return p;
+}
+
+void pool_delete(pool_t *p) {
+	if(!p)
+		return;
+	if(p->arenas)
+		for(size_t i = 0; i < p->count; i++)
+			block_arena_delete(p->arenas[i]);
+	free(p->arenas);
+	free(p);
+}
+
+void *pool_malloc(pool_t *p, size_t length) {
+	assert(p);
+	void *r = NULL;
+	for(size_t i = 0; i < p->count; i++)
+		if((r = block_arena_malloc_block(p->arenas[i], length)))
+			return r;
+	return r;
+}
+
+void pool_free(pool_t *p, void *v) {
+	assert(p);
+	if(!v)
+		return;
+	for(size_t i = 0; i < p->count; i++) {
+		if(block_arena_valid_pointer(p->arenas[i], v)) {
+			block_arena_free_block(p->arenas[i], v);
+			return;
+		}
+	}
+	abort();
+}
+
+size_t pool_block_size(pool_t *p, void *v) {
+	assert(p);
+	for(size_t i = 0; i < p->count; i++)
+		if(block_arena_valid_pointer(p->arenas[i], v))
+			return p->arenas[i]->blocksz;
+	abort();
+	return 0;
+}
+
+void *pool_realloc(pool_t *p, void *v, size_t length) {
+	assert(p);
+	if(!length) {
+		pool_free(p, v);
+		return NULL;
+	}
+	if(!v)
+		return pool_malloc(p, length);
+	void *n = pool_malloc(p, length);
+	if(!n)
+		return NULL;
+	const size_t size = pool_block_size(p, v);
+	memcpy(n, v, size);
+	pool_free(p, v);
+	return n;
 }
 
 #define BLK_COUNT (32) /* must be power of 2! */

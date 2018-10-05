@@ -45,22 +45,24 @@ extern "C" {
 
 #ifndef UNUSED
 #define UNUSED(X) ((void)(X))
-#endif 
+#endif
 
 #ifndef BUILD_BUG_ON
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 #endif
 
-typedef void *(*calloc_t)(void *arena,  size_t bytes);
+typedef void *(*malloc_t)(void *arena,  size_t bytes);
 typedef void *(*realloc_t)(void *arena, void *ptr, size_t bytes);
 typedef void  (*free_t)(void *arena,    void *ptr);
 
 typedef struct {
-	calloc_t  calloc;
+	malloc_t  malloc;
 	realloc_t realloc;
 	free_t    free;
 	void     *arena;
 } allocator_t;
+
+enum { PICKLE_OK, PICKLE_ERR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
 
 struct pickle_command;
 struct pickle_call_frame;
@@ -89,7 +91,7 @@ int pickle_eval(pickle_t *i, char *t);
 int pickle_initialize(pickle_t *i, allocator_t *a); /* if(a == NULL) default allocator used */
 int pickle_deinitialize(pickle_t *i);
 
-int pickle_arity_error(pickle_t *i, const char *name); /* use within registered command if wrong number of args given */
+int pickle_arity_error(pickle_t *i, int argc, const char *name); /* use within registered command if wrong number of args given */
 char *pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
 
 #ifdef __cplusplus
