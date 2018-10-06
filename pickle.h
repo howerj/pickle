@@ -1,4 +1,7 @@
-/** <https://github.com/howerj/pickle>
+/**@file pickle.h
+ * @brief pickle language header
+ *
+ * <https://github.com/howerj/pickle>
  *
  * A small TCL interpreter, called Pickle, that is basically just a copy
  * of the original written by Antirez, the original is available at
@@ -51,16 +54,16 @@ extern "C" {
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 #endif
 
-typedef void *(*malloc_t)(void *arena,  size_t bytes);
-typedef void *(*realloc_t)(void *arena, void *ptr, size_t bytes);
-typedef void  (*free_t)(void *arena,    void *ptr);
+typedef void *(*pickle_malloc_t)(void *arena,  size_t bytes);
+typedef void *(*pickle_realloc_t)(void *arena, void *ptr, size_t bytes);
+typedef void  (*pickle_free_t)(void *arena,    void *ptr);
 
 typedef struct {
-	malloc_t  malloc;
-	realloc_t realloc;
-	free_t    free;
+	pickle_malloc_t  malloc;
+	pickle_realloc_t realloc;
+	pickle_free_t    free;
 	void     *arena;
-} allocator_t;
+} pickle_allocator_t;
 
 enum { PICKLE_OK, PICKLE_ERR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
 
@@ -68,7 +71,7 @@ struct pickle_command;
 struct pickle_call_frame;
 
 struct pickle_interpreter {
-	allocator_t allocator;
+	pickle_allocator_t allocator;
 	struct pickle_call_frame *callframe;
 	struct pickle_command    *commands;
 	char *result;
@@ -88,7 +91,7 @@ typedef struct {
 
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 int pickle_eval(pickle_t *i, char *t);
-int pickle_initialize(pickle_t *i, allocator_t *a); /* if(a == NULL) default allocator used */
+int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) default allocator used */
 int pickle_deinitialize(pickle_t *i);
 
 int pickle_arity_error(pickle_t *i, int argc, const char *name); /* use within registered command if wrong number of args given */

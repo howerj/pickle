@@ -1,9 +1,11 @@
 /**@file block.c
  * @brief A simple block allocator
  * @copyright Richard James Howe (2018)
- * @license MIT 
+ * @license BSD
  *
- * @todo Optimize, cleanup and improve. Write better unit tests. */
+ * @todo Optimize, cleanup and improve. Write better unit tests.
+ * @todo There could be an option for falling back to malloc if an allocation
+ * fails */
 
 #include "block.h"
 #include <assert.h>
@@ -12,10 +14,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <stdio.h>
 
-#define BITS (sizeof(bitmap_unit_t)*CHAR_BIT)
-#define MASK (BITS-1)
+#define FIND_BY_BIT (0)
+#define BITS        (sizeof(bitmap_unit_t)*CHAR_BIT)
+#define MASK        (BITS-1)
 
 size_t bitmap_units(size_t bits) {
 	return bits/BITS + !!(bits & MASK);
@@ -82,12 +84,10 @@ bool bitmap_get(bitmap_t *b, size_t bit) {
 	return !!(b->map[bit/BITS] & (1u << (bit & MASK)));
 }
 
-static size_t block_count(block_arena_t *a) {
+static inline size_t block_count(block_arena_t *a) {
 	assert(a);
 	return bitmap_bits(&a->freelist);
 }
-
-#define FIND_BY_BIT (0)
 
 static long block_find_free(block_arena_t *a) {
 	assert(a);
@@ -127,12 +127,12 @@ static inline bool is_aligned(void *v) {
 	return 0;
 }
 
-bool is_power_of_2(unsigned long long x) {
+static bool is_power_of_2(unsigned long long x) {
 	return x && !(x & (x - 1));
 }
 
 /**@todo use last free */
-void *block_arena_malloc_block(block_arena_t *a, size_t length) {
+void *block_malloc(block_arena_t *a, size_t length) {
 	assert(a);
 	assert(is_power_of_2(a->blocksz));
 	assert((block_count(a) % sizeof(bitmap_unit_t)) == 0);
@@ -148,22 +148,22 @@ void *block_arena_malloc_block(block_arena_t *a, size_t length) {
 	return r;
 }
 
-void *block_arena_calloc_block(block_arena_t *a, size_t length) {
-	void *r = block_arena_malloc_block(a, length);
+void *block_calloc(block_arena_t *a, size_t length) {
+	void *r = block_malloc(a, length);
 	if(!r)
 		return r;
 	memset(r, 0, a->blocksz);
 	return r;
 }
 
-int block_arena_valid_pointer(block_arena_t *a, void *v) {
+static inline int block_arena_valid_pointer(block_arena_t *a, void *v) {
 	const size_t max = block_count(a);
 	if(v < a->memory || (char*)v > ((char*)a->memory + (max * a->blocksz))) 
 		return 0;
 	return 1;
 }
 
-void block_arena_free_block(block_arena_t *a, void *v) {
+void block_free(block_arena_t *a, void *v) {
 	assert(a);
 	if(!v)
 		return;
@@ -181,20 +181,28 @@ void block_arena_free_block(block_arena_t *a, void *v) {
 	a->lastfree = bit;
 }
 
-void *block_arena_realloc_block(block_arena_t *a, void *v, size_t length) {
+void *block_realloc(block_arena_t *a, void *v, size_t length) {
 	assert(a);
 	if(!length) {
-		block_arena_free_block(a, v);
+		block_free(a, v);
 		return NULL;
 	}
 	if(!v)
-		return block_arena_malloc_block(a, length);
+		return block_malloc(a, length);
 	if(length < a->blocksz)
 		return v;
 	return NULL;
 }
 
-block_arena_t *block_arena_new(size_t blocksz, size_t count) {
+void block_delete(block_arena_t *a) {
+	if(!a)
+		return;
+	free(a->freelist.map);
+	free(a->memory);
+	free(a);
+}
+
+block_arena_t *block_new(size_t blocksz, size_t count) {
 	block_arena_t *a = NULL;
 	if(!is_power_of_2(blocksz) || !is_power_of_2(count))
 		goto fail;
@@ -208,30 +216,8 @@ block_arena_t *block_arena_new(size_t blocksz, size_t count) {
 	a->blocksz = blocksz;
 	return a;
 fail:
-	if(a) {
-		free(a->freelist.map);
-		free(a->memory);
-	}
-	free(a);
+	block_delete(a);
 	return NULL;
-}
-
-void block_arena_delete(block_arena_t *a) {
-	if(!a)
-		return;
-	free(a->freelist.map);
-	free(a->memory);
-	free(a);
-}
-
-pool_t *pool_new(void) { /**@todo handle errors, allow custom allocations */
-	pool_t *p = malloc(sizeof *p);
-	p->count = 3;
-	p->arenas = malloc(sizeof(p->arenas[0]) * p->count);
-	p->arenas[0] = block_arena_new(8,   1024);
-	p->arenas[1] = block_arena_new(64,  128);
-	p->arenas[2] = block_arena_new(512, 16);
-	return p;
 }
 
 void pool_delete(pool_t *p) {
@@ -239,18 +225,44 @@ void pool_delete(pool_t *p) {
 		return;
 	if(p->arenas)
 		for(size_t i = 0; i < p->count; i++)
-			block_arena_delete(p->arenas[i]);
+			block_delete(p->arenas[i]);
 	free(p->arenas);
 	free(p);
+}
+
+pool_t *pool_new(size_t length, const pool_specification_t *specs) {
+	assert(specs);
+	pool_t *p = malloc(sizeof *p);
+	if(!p)
+		goto fail;
+	p->count = length;
+	p->arenas = malloc(sizeof(p->arenas[0]) * p->count);
+	if(!(p->arenas))
+		goto fail;
+	for(size_t i = 0; i < length; i++) {
+		const pool_specification_t spec = specs[i];
+		p->arenas[i] = block_new(spec.blocksz, spec.count);
+		if(!(p->arenas[i]))
+			goto fail;
+	}
+	return p;
+fail:
+	pool_delete(p);
+	return NULL;
 }
 
 void *pool_malloc(pool_t *p, size_t length) {
 	assert(p);
 	void *r = NULL;
 	for(size_t i = 0; i < p->count; i++)
-		if((r = block_arena_malloc_block(p->arenas[i], length)))
+		if((r = block_malloc(p->arenas[i], length)))
 			return r;
 	return r;
+}
+
+void *pool_calloc(pool_t *p, size_t length) {
+	void *r = pool_malloc(p, length);
+	return r ? memset(r, 0, length) : r;
 }
 
 void pool_free(pool_t *p, void *v) {
@@ -259,7 +271,7 @@ void pool_free(pool_t *p, void *v) {
 		return;
 	for(size_t i = 0; i < p->count; i++) {
 		if(block_arena_valid_pointer(p->arenas[i], v)) {
-			block_arena_free_block(p->arenas[i], v);
+			block_free(p->arenas[i], v);
 			return;
 		}
 	}
@@ -292,20 +304,26 @@ void *pool_realloc(pool_t *p, void *v, size_t length) {
 	return n;
 }
 
+#ifndef NDEBUG
+
+#include <stdio.h>
+
 #define BLK_COUNT (32) /* must be power of 2! */
 #define BLK_SIZE  (32) /* must be power of 2! */
 
-static bitmap_unit_t freelist_map[BLK_COUNT / sizeof(bitmap_unit_t)];
-static uint64_t memory[BLK_COUNT*(BLK_SIZE  / sizeof(uint64_t))] = { 0 };
+#define BLOCK_DECLARE(NAME, BLOCK_COUNT, BLOCK_SIZE)\
+	static bitmap_unit_t NAME ## _freelist_map[BLOCK_COUNT / sizeof(bitmap_unit_t)];\
+	static uint64_t NAME ## _memory[BLOCK_COUNT * (BLOCK_SIZE    / sizeof(uint64_t))] = { 0 };\
+	block_arena_t NAME = {\
+		.freelist = {\
+			.bits = BLOCK_COUNT,\
+			.map  = NAME ## _freelist_map,\
+		},\
+		.blocksz = BLOCK_SIZE,\
+		.memory  = (void*) NAME ## _memory,\
+	};
 
-block_arena_t block_arena = {
-	.freelist = {
-		.bits = BLK_COUNT,
-		.map  = freelist_map,
-	},
-	.blocksz = BLK_SIZE,
-	.memory  = (void*)memory,
-};
+BLOCK_DECLARE(block_arena, BLK_COUNT, BLK_SIZE)
 
 static uintptr_t diff(void *a, void *b) {
 	return a > b ? (char*)a - (char*)b : (char*)b - (char*)a;
@@ -316,30 +334,31 @@ int block_test(void) {
 	printf("arena   = %p\n", (void*)&block_arena);
 	printf("arena.m = %p\n", block_arena.memory);
 	void *v1, *v2, *v3;
-	v1 = block_arena_malloc_block(&block_arena, 12);
+	v1 = block_malloc(&block_arena, 12);
 	assert(v1);
 	printf("v1 = %p\n", v1);
-	v2 = block_arena_malloc_block(&block_arena, 30);
+	v2 = block_malloc(&block_arena, 30);
 	assert(v2);
 	printf("v2 = %p\n", v2);
 	assert(diff(v1, v2) == BLK_SIZE);
-	block_arena_free_block(&block_arena, v1);
-	v1 = block_arena_malloc_block(&block_arena, 12);
+	block_free(&block_arena, v1);
+	v1 = block_malloc(&block_arena, 12);
 	printf("v1 = %p\n", v1);
-	v3 = block_arena_malloc_block(&block_arena, 12);
+	v3 = block_malloc(&block_arena, 12);
 	assert(v3);
 	printf("v3 = %p\n", v3);
 	assert(diff(v1, v3) == BLK_SIZE*2);
 
-	block_arena_free_block(&block_arena, v1);
-	block_arena_free_block(&block_arena, v2);
-	block_arena_free_block(&block_arena, v3);
+	block_free(&block_arena, v1);
+	block_free(&block_arena, v2);
+	block_free(&block_arena, v3);
 	size_t i = 0;
 	for(i = 0; i < (BLK_COUNT+1); i++)
-		if(!block_arena_malloc_block(&block_arena, 1))
+		if(!block_malloc(&block_arena, 1))
 			break;
 	printf("exhausted at = %u\n", (unsigned)i);
 	assert(i == BLK_COUNT);
 	return 0;
 }
 
+#endif

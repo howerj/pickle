@@ -4,14 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <signal.h>
 #include <string.h>
 #include <time.h>
 
 #define FILE_SZ (1024 * 16)
 
 static int picolCommandPuts(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	assert(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argv[0]);
@@ -20,8 +19,6 @@ static int picolCommandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int picolCommandGets(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	assert(pd);
 	if (argc != 1)
 		return pickle_arity_error(i, 1, argv[0]);
@@ -32,21 +29,17 @@ static int picolCommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int picolCommandSystem(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	UNUSED(pd);
-	if (argc != 2)
+	if (argc != 2 && argc != 1)
 		return pickle_arity_error(i, 2, argv[0]);
 	char v[64];
-	const int r = system(argv[1]);
+	const int r = system(argc == 1 ? NULL : argv[1]);
 	snprintf(v, sizeof v, "%d", r);
 	pickle_set_result(i, v);
 	return PICKLE_OK;
 }
 
-static int picolCommandRand(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
+static int picolCommandRandom(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 1)
 		return pickle_arity_error(i, 1, argv[0]);
@@ -57,8 +50,6 @@ static int picolCommandRand(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int picolCommandExit(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	UNUSED(pd);
 	if (argc != 2 && argc != 1)
 		return pickle_arity_error(i, 2, argv[0]);
@@ -68,8 +59,6 @@ static int picolCommandExit(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int picolCommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argv[0]);
@@ -79,8 +68,6 @@ static int picolCommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int picolCommandStrftime(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argv[0]);
@@ -99,15 +86,13 @@ static int match(const char *pat, const char *str) {
 	assert(str);
 	switch(*pat) {
 	case '\0':  return !*str;
-	case '*':   return match(pat+1, str) || (*str && match(pat, str+1));
-	case '.':   return *str && match(pat+1, str+1);
-	default:    return *pat == *str && match(pat+1, str+1);
+	case '*':   return match(pat + 1, str) || (*str && match(pat, str + 1));
+	case '?':   return *str && match(pat + 1, str + 1);
+	default:    return *pat == *str && match(pat + 1, str + 1);
 	}
 }
 
 static int picolCommandMatch(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_arity_error(i, 3, argv[0]);
@@ -116,12 +101,30 @@ static int picolCommandMatch(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int picolCommandEqual(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_arity_error(i, 3, argv[0]);
 	pickle_set_result(i, !strcmp(argv[1], argv[2]) ? "1" : "0");
+	return PICKLE_OK;
+}
+
+static int picolCommandLength(pickle_t *i, int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	if (argc != 2)
+		return pickle_arity_error(i, 2, argv[0]);
+	char v[64];
+	snprintf(v, sizeof v, "%u", (unsigned)strlen(argv[1])/*strnlen(argv[2], PICKLE_MAX_STRING)*/);
+	pickle_set_result(i, v);
+	return PICKLE_OK;
+}
+
+static int picolCommandRaise(pickle_t *i, int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	if (argc != 2)
+		return pickle_arity_error(i, 2, argv[0]);
+	char v[64];
+	snprintf(v, sizeof v, "%d", raise(atoi(argv[1])));
+	pickle_set_result(i, v);
 	return PICKLE_OK;
 }
 
@@ -132,13 +135,19 @@ void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v
 int main(int argc, char **argv) {
 	int r = 0;
 	FILE *input = stdin, *output = stdout;
-	int use_custom_allocator = 1;
+	int use_custom_allocator = 0;
 
-	allocator_t allocator = {
+	static const pool_specification_t specs[] = {
+		{ 8, 1024 }, /* most allocations are quite small */
+		{ 64, 128 },
+		{ 512, 16 }, /* maximum string length is bounded by this */
+	};
+
+	pickle_allocator_t allocator = {
 		.free    = custom_free,
 		.realloc = custom_realloc,
 		.malloc  = custom_malloc,
-		.arena   = use_custom_allocator ? pool_new() : NULL,
+		.arena   = use_custom_allocator ? pool_new(sizeof(specs)/sizeof(specs[0]), &specs[0]) : NULL,
 	};
 
 	/*if(use_custom_allocator)
@@ -149,16 +158,17 @@ int main(int argc, char **argv) {
 
 	const pickle_register_command_t commands[] = {
 		{ "puts",     picolCommandPuts,     stdout },
-	//	{ "eputs",    picolCommandPuts,     stderr },
 		{ "gets",     picolCommandGets,     stdin },
 		{ "system",   picolCommandSystem,   NULL },
 		{ "exit",     picolCommandExit,     NULL },
 		{ "quit",     picolCommandExit,     NULL },
 		{ "getenv",   picolCommandGetEnv,   NULL },
-		{ "rand",     picolCommandRand,     NULL },
+		{ "random",   picolCommandRandom,   NULL },
 		{ "strftime", picolCommandStrftime, NULL },
 		{ "match",    picolCommandMatch,    NULL },
 		{ "eq",       picolCommandEqual,    NULL },
+		{ "length",   picolCommandLength,   NULL },
+		{ "raise",    picolCommandRaise,    NULL },
 	};
 	for(size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
 		if(pickle_register_command(&interp, commands[j].name, commands[j].func, commands[j].data) != 0) {

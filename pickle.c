@@ -1,4 +1,5 @@
-/* Pickle: A tiny TCL like interpreter
+/**@file pickle.c
+ * @brief Pickle: A tiny TCL like interpreter
  *
  *  This is a copy and extension of a tiny TCL interpreter called 'picol', by
  *  Antirez, under the BSD license, available at:
@@ -21,7 +22,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/**@todo use calloc/malloc where appropriate */
 #define MALLOC(I, SZ)      ((I)->allocator.malloc((I)->allocator.arena,      (SZ)))
 #define REALLOC(I, P, SZ) ((I)->allocator.realloc((I)->allocator.arena, (P), (SZ)))
 #define FREE(I, P)           ((I)->allocator.free((I)->allocator.arena, (P)))
@@ -55,7 +55,7 @@ struct pickle_call_frame {
 	struct pickle_call_frame *parent; /* parent is NULL at top level */
 };
 
-static char *picolStrdup(allocator_t *a, const char *s) {  /* intern common strings? */
+static char *picolStrdup(pickle_allocator_t *a, const char *s) {  /* intern common strings? */
 	assert(a);
 	assert(s);
 	const size_t l = strlen(s);
@@ -278,7 +278,7 @@ static struct pickle_var *picolGetVar(pickle_t *i, const char *name) {
 	return NULL;
 }
 
-static int picolSetVar(pickle_t *i, char *name, char *val) {
+static int picolSetVar(pickle_t *i, const char *name, const char *val) {
 	assert(i);
 	assert(name);
 	assert(val);
@@ -339,14 +339,14 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 	return PICKLE_OK;
 }
 
-static inline void picolAssertCommandPreConditions(pickle_t *i, int argc, char **argv, void *pd) { /** @todo move to evaluator? */
+static inline void picolAssertCommandPreConditions(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(i);    assert(i);
 	UNUSED(argc); assert(argc >= 0);
 	UNUSED(argv); assert(argv);
 	UNUSED(pd);   /* pd may be NULL*/
 }
 
-static void picolAssertCommandPostConditions(pickle_t *i, int retcode) { /**@todo use this */
+static void picolAssertCommandPostConditions(pickle_t *i, int retcode) {
 	UNUSED(i);       assert(i);
 	UNUSED(retcode); assert((retcode >= 0) && (retcode < PICKLE_LAST_ENUM));
 }
@@ -461,7 +461,7 @@ int pickle_arity_error(pickle_t *i, int argc, const char *name) {
 	assert(i);
 	assert(name);
 	char errbuf[PICKLE_MAX_STRING];
-	snprintf(errbuf, sizeof errbuf, "Wrong number of args for %s (expected %d)", name, argc - 1);
+	snprintf(errbuf, sizeof errbuf, "Wrong number of args for '%s' (expected %d)", name, argc - 1);
 	pickle_set_result(i, errbuf);
 	return PICKLE_ERR;
 }
@@ -621,6 +621,7 @@ static int picolCommandProc(pickle_t *i, int argc, char **argv, void *pd) {
 		return pickle_arity_error(i, 4, argv[0]);
 	char **procdata = MALLOC(i, sizeof(char*)*2);
 	if(!procdata) {
+		//pickle_set_result(i, "OOM");
 		return PICKLE_ERR;
 	}
 	procdata[0] = picolStrdup(&i->allocator, argv[2]); /* arguments list */
@@ -634,12 +635,22 @@ static int picolCommandProc(pickle_t *i, int argc, char **argv, void *pd) {
 	return pickle_register_command(i, argv[1], picolCommandCallProc, procdata);
 }
 
-static int picolCommandReturn(pickle_t *i, int argc, char **argv, void *pd) { /**@todo extend to handle returning return types; like PICKLE_OK, or PICKLE_CONTINUE */
+static int picolCommandReturn(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	if (argc != 1 && argc != 2)
-		return pickle_arity_error(i, 2, argv[0]);
-	pickle_set_result(i, (argc == 2) ? argv[1] : "");
-	return PICKLE_RETURN;
+	if (argc != 1 && argc != 2 && argc != 3)
+		return pickle_arity_error(i, 3, argv[0]);
+	int retcode = PICKLE_RETURN;
+	if(argc == 3) {
+		retcode   = atoi(argv[2]);
+		if(retcode < 0 || retcode >= PICKLE_LAST_ENUM) {
+			char errbuf[PICKLE_MAX_STRING];
+			snprintf(errbuf, sizeof errbuf, "Invalid return code: %d", retcode);
+			pickle_set_result(i, errbuf);
+			return PICKLE_ERR;
+		}
+	}
+	pickle_set_result(i, argc >= 2 ? argv[1] : "");
+	return retcode;
 }
 
 int picolRegisterCoreCommands(pickle_t *i) {
@@ -663,7 +674,7 @@ int picolRegisterCoreCommands(pickle_t *i) {
 	return 0;
 }
 
-static void pickleFreeCmd(allocator_t *a, struct pickle_command *p) {
+static void pickleFreeCmd(pickle_allocator_t *a, struct pickle_command *p) {
 	assert(a);
 	if(!p)
 		return;
@@ -681,7 +692,7 @@ static void pickleFreeCmd(allocator_t *a, struct pickle_command *p) {
 
 int pickle_deinitialize(pickle_t *i) {
 	assert(i);
-	allocator_t *a = &i->allocator;
+	pickle_allocator_t *a = &i->allocator;
 	i->initialized = 0;
 	picolDropCallFrame(i);
 	a->free(a->arena, i->result);
@@ -707,11 +718,11 @@ static void pfree(void *arena, void *ptr) {
 	free(ptr);
 }
 
-int pickle_initialize(pickle_t *i, allocator_t *a) {
+int pickle_initialize(pickle_t *i, pickle_allocator_t *a) {
 	assert(i);
 	assert(!(i->initialized));
 	memset(i, 0, sizeof *i);
-	static const allocator_t allocator = {
+	static const pickle_allocator_t allocator = {
 		.malloc  = pmalloc,
 		.realloc = prealloc,
 		.free    = pfree,
