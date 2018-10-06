@@ -44,7 +44,7 @@ extern "C" {
 
 #include <stddef.h>
 
-#define PICKLE_MAX_STRING (1024u)
+#define PICKLE_MAX_STRING (512u)
 
 #ifndef UNUSED
 #define UNUSED(X) ((void)(X))
@@ -96,6 +96,10 @@ int pickle_deinitialize(pickle_t *i);
 
 int pickle_arity_error(pickle_t *i, int argc, const char *name); /* use within registered command if wrong number of args given */
 char *pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
+
+#ifndef NDEBUG
+int pickle_tests(void);
+#endif
 
 #ifdef __cplusplus
 }

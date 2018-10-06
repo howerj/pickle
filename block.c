@@ -329,7 +329,7 @@ static uintptr_t diff(void *a, void *b) {
 	return a > b ? (char*)a - (char*)b : (char*)b - (char*)a;
 }
 
-int block_test(void) {
+int block_tests(void) {
 	printf("block tests");
 	printf("arena   = %p\n", (void*)&block_arena);
 	printf("arena.m = %p\n", block_arena.memory);

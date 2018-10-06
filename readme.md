@@ -65,7 +65,7 @@ you find a bug, please report it.
 expected string operations, they have to be added by the user. This includes
 facilities for trimming strings, replacing subsections of strings,
 concatenating strings, modifying bits of string, searching, and more.
-* Lacks Unicode support
+* Lacks Unicode support.
 
 Potential Improvements:
 
@@ -73,6 +73,12 @@ Potential Improvements:
 more usable.
 * A hash library could be integrate. It would not have to that big or complex 
 to greatly speed up moderately complex programs.
+* The following small library can be used to either extend or modify the
+interpreter to suite your purposes:
+  - UTF-8: <https://www.cprogramming.com/tutorial/unicode.html>
+  - Data Packing/Unpacking: <https://beej.us/guide/bgnet/html/multi/advanced.html#serialization>
+  - Base-64: <https://stackoverflow.com/questions/342409/>
+
 
 ### Internally Defined Commands
 
@@ -121,6 +127,29 @@ command is used.
 
 Optionally return a string, optionally with an internal number that can affect
 control flow.
+
+* upvar number otherVar myVar
+
+Form a link from myVar to otherVar in the context specified by number. A
+special case is '#0', which is the global context.
+
+* uplevel number strings...
+
+Evaluate the 'strings...' in the context indicated by 'number'. A special case
+is '#0', which is the global context.
+
+* unset string
+
+Unset a variable, removing it.
+
+* concat strings...
+
+Concatenate a list of strings with a space in-between them.
+
+* eval strings...
+
+Concatenate a list of strings with a space in-between them, as with 'concat',
+then evaluate the string, returning the result of the evaluation.
 
 * mathematical operations
 
@@ -209,7 +238,8 @@ pattern with '\*'.
 
 * eq string string
 
-Returns '0' is two strings are not equal and '1' if they are.
+Returns '0' is two strings are not equal and '1' if they are. Unlike '==' this
+acts on the entire string.
 
 * length string
 
@@ -234,6 +264,8 @@ If defined this will disable assertions. It will also disable unit tests
 functions from being compiled. Assertions are used heavily to check that the
 library is being used correctly and to check the libraries internals, this
 applies both to the block allocation routines and pickle itself.
+
+This is all.
 
 ## Custom Allocator
 
@@ -263,10 +295,11 @@ those commands with the *pickle\_register\_command* function.
 allowing the use of a custom allocator).
 * Add documentation here; building, command line use, command list, syntax
 and semantics.
-* Commands should act on all their inputs where possible: "+ 2 3 4"
-* Make the arguments passed to main() available.
 * Reduce allocations by interning common strings like "", "1", "0", "if",
 "return", and "Out-Of-Memory".
+* Profile, profile, profile!
+* Remove errors occurring from out of memory situations. These can be tested
+by modifying the custom allocator.
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h

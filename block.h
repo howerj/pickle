@@ -30,6 +30,10 @@
 #ifndef BLOCK_H
 #define BLOCK_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <stdbool.h>
 
@@ -74,6 +78,9 @@ void *block_calloc(block_arena_t *a, size_t length);
 void block_free(block_arena_t *a, void *v);
 void *block_realloc(block_arena_t *a, void *v, size_t length);
 
+/* NOTE: As the structures needed to define a memory pool are available it
+ * is possible to allocate pools on the statically, or even on the stack,
+ * as you see fit. You do not have to use 'pool_new' to create a new pool. */
 pool_t *pool_new(size_t count, const pool_specification_t *specs);
 void pool_delete(pool_t *p);
 void *pool_malloc(pool_t *p, size_t length);
@@ -81,8 +88,12 @@ void pool_free(pool_t *p, void *v);
 void *pool_realloc(pool_t *p, void *v, size_t length);
 void *pool_calloc(pool_t *p, size_t length);
 
-#ifdef UNIT_TESTS
-int block_test(void);
+#ifndef NDEBUG
+int block_tests(void);
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif
