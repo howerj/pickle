@@ -44,7 +44,8 @@ extern "C" {
 
 #include <stddef.h>
 
-#define PICKLE_MAX_STRING (512u)
+#define PICKLE_MAX_STRING    (512u)
+#define PICKLE_MAX_RECURSION (512u)
 
 #ifndef UNUSED
 #define UNUSED(X) ((void)(X))
@@ -62,7 +63,7 @@ typedef struct {
 	pickle_malloc_t  malloc;
 	pickle_realloc_t realloc;
 	pickle_free_t    free;
-	void     *arena;
+	void *arena;
 } pickle_allocator_t;
 
 enum { PICKLE_OK, PICKLE_ERR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
@@ -95,7 +96,11 @@ int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) defa
 int pickle_deinitialize(pickle_t *i);
 
 int pickle_arity_error(pickle_t *i, int argc, const char *name); /* use within registered command if wrong number of args given */
+int pickle_error(pickle_t *i, const char *fmt, ...);
 char *pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
+
+const char *pickle_get_var(pickle_t *i, const char *name);
+int pickle_set_var(pickle_t *i, const char *name, const char *val);
 
 #ifndef NDEBUG
 int pickle_tests(void);

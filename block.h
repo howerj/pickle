@@ -53,6 +53,11 @@ typedef struct {
 typedef struct {
 	size_t count;
 	block_arena_t **arenas;
+
+	/* statistics collection */
+	long freed, allocs, relocations; /* non NULL frees, malloc/callocs, reallocs */
+	long active, max; /* current active, maximum on heap at any one time */
+	long total, blocks; /* total memory allocations, total memory allocations of blocks */
 } pool_t;
 
 typedef struct {
@@ -78,15 +83,22 @@ void *block_calloc(block_arena_t *a, size_t length);
 void block_free(block_arena_t *a, void *v);
 void *block_realloc(block_arena_t *a, void *v, size_t length);
 
-/* NOTE: As the structures needed to define a memory pool are available it
- * is possible to allocate pools on the statically, or even on the stack,
- * as you see fit. You do not have to use 'pool_new' to create a new pool. */
 pool_t *pool_new(size_t count, const pool_specification_t *specs);
 void pool_delete(pool_t *p);
 void *pool_malloc(pool_t *p, size_t length);
 void pool_free(pool_t *p, void *v);
 void *pool_realloc(pool_t *p, void *v, size_t length);
 void *pool_calloc(pool_t *p, size_t length);
+
+#define BLOCK_DECLARE(NAME, BLOCK_COUNT, BLOCK_SIZE)\
+	block_arena_t NAME = {\
+		.freelist = {\
+			.bits = BLOCK_COUNT,\
+			.map  = (bitmap_unit_t [BLOCK_COUNT/sizeof(bitmap_unit_t)]) { 0 }\
+		},\
+		.blocksz = BLOCK_SIZE,\
+		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE    / sizeof(uint64_t))]) { 0 })\
+	}
 
 #ifndef NDEBUG
 int block_tests(void);

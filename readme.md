@@ -78,7 +78,7 @@ interpreter to suite your purposes:
   - UTF-8: <https://www.cprogramming.com/tutorial/unicode.html>
   - Data Packing/Unpacking: <https://beej.us/guide/bgnet/html/multi/advanced.html#serialization>
   - Base-64: <https://stackoverflow.com/questions/342409/>
-
+  - Line editing: <https://github.com/antirez/linenoise>
 
 ### Internally Defined Commands
 
@@ -128,19 +128,24 @@ command is used.
 Optionally return a string, optionally with an internal number that can affect
 control flow.
 
-* upvar number otherVar myVar
-
-Form a link from myVar to otherVar in the context specified by number. A
-special case is '#0', which is the global context.
-
 * uplevel number strings...
 
-Evaluate the 'strings...' in the context indicated by 'number'. A special case
-is '#0', which is the global context.
+Evaluate the 'strings...' in the scope indicated by 'number'. A special case
+is '#0', which is the global context. The strings are concatenated together as
+with if they have been run through the 'concat' command. A scope of 0 is the
+current scope, of 1, the caller, of 2, the caller's caller, and so on. A '#'
+prefix is meant to reverse the search and start from the global scope and work
+down through the call stack, however only '#0' is supported.
+
+* upvar number otherVar myVar
+
+Form a link from myVar to otherVar in the scope specified by number. A
+special case is '#0', which is the global context, see 'uplevel' for a
+description of the scoping traversal rules implied by the number argument. 
 
 * unset string
 
-Unset a variable, removing it.
+Unset a variable, removing it from the current scope.
 
 * concat strings...
 
@@ -204,23 +209,29 @@ Instead it taunts you with the correct answer).
 Retrieve the contents of the environment variable named in string. This will
 return the empty string on failure to locate the variable.
 
-* random
+* random number?
 
 Use whatever random number generator is available on your system to return a
-random number.
+random number. It should not be relied upon to produce good quality random
+numbers. An optional number argument can be used to seed the pseudo random number
+generator.
 
-* strftime format
+* clock format?
 
 This command calls the [C][] function [strftime][] on GMT to create a new
 string containing time information, or not, depending on what you have put in
 the format string. The full details of the format string will not be specified
 here, but here are a few examples:
 
-	strftime "Date/Time: %c"
+	clock "Date/Time: %c"
 
 Returns the String:
 
 	"Date/Time: Sat Oct  6 11:32:59 2018"
+
+When no argument is given the time since start of program execution is given.
+On some systems this is the CPU time and not the total time that the program
+has been executed.
 
 * match pattern string
 
@@ -251,6 +262,28 @@ Raise a signal, what this will do depends on your system, but it will most
 likely kill the process. If it does not, it returns an integer indicating the
 result of calling "raise()".
 
+* help ...
+
+Display a help message. It discards all arguments given to it.
+
+* argv number?
+
+'argv' is a function at the moment, it could be made into a variable.
+
+* info item
+
+Retrieve information about the system.
+
+* heap item number!
+
+The heap command is used to enquire about the status of the heap. Using the
+command does change the thing it is measuring, however physics has the same
+problem and physicists are doing pretty well. The command only works when the
+custom allocator is used, as it interrogates it for the statistics it has
+captured.
+
+The heap command could be folded into the info command.
+
 ## Compile Time Options
 
 I am not a big fan of using the [C Preprocessor][] to define a myriad of
@@ -265,7 +298,12 @@ functions from being compiled. Assertions are used heavily to check that the
 library is being used correctly and to check the libraries internals, this
 applies both to the block allocation routines and pickle itself.
 
-This is all.
+This is all. Inevitably when an interpreter is made for a new language,
+[readline][] (or [linenoise][]) integration is a build option, usually because
+the author is tired of pressing the up arrow key and seeing '^\[\[A'. Naturally
+this increases the complexity of the build system, adds more options, and adds
+more code. Instead you can use [rlwrap][], or an alternative, as a wrapper
+around your program.
 
 ## Custom Allocator
 
@@ -321,3 +359,6 @@ by modifying the custom allocator.
 [stdout]: http://www.cplusplus.com/reference/cstdio/stdout/
 [stdin]: http://www.cplusplus.com/reference/cstdio/stdin/
 [strftime]: http://www.cplusplus.com/reference/ctime/strftime/
+[readline]: https://tiswww.case.edu/php/chet/readline/rltop.html
+[linenoise]: https://github.com/antirez/linenoise
+[rlwrap]: https://linux.die.net/man/1/rlwrap
