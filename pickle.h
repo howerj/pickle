@@ -78,6 +78,8 @@ struct pickle_interpreter {
 	char *result;
 	int initialized;
 	int level; /* Level of nesting */
+	int line;
+	char *ch;  /* text position */
 };
 
 typedef struct pickle_interpreter pickle_t;
@@ -95,7 +97,7 @@ int pickle_eval(pickle_t *i, char *t);
 int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) default allocator used */
 int pickle_deinitialize(pickle_t *i);
 
-int pickle_arity_error(pickle_t *i, int argc, const char *name); /* use within registered command if wrong number of args given */
+int pickle_arity_error(pickle_t *i, int expected, int argc, char **argv); /* use within registered command if wrong number of args given */
 int pickle_error(pickle_t *i, const char *fmt, ...);
 char *pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
 

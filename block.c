@@ -121,10 +121,13 @@ static long block_find_free(block_arena_t *a) {
 	bitmap_unit_t *u = b->map;
 	long r = -1;
 	const long max = bitmap_units(b->bits), start = 0; // start = bitmap_units(a->lastfree);
-	/*assert(start <= max);
-	if(u[start] == (bitmap_unit_t)-1uLL)
-		a->lastfree = 0;*/
-	for(long i = start; i < max; i++)
+	if(a->lastfree) {
+		const long i = a->lastfree;
+		a->lastfree = 0;
+		if(!bitmap_get(b, i))
+			return i;
+	}
+	for(long i = start; i < max; i++) /**@todo start at last position, wrap around */
 		if(u[i] != (bitmap_unit_t)-1uLL) {
 			const size_t index = i * BITS;
 			const size_t end = MIN(b->bits, (index + BITS));
@@ -150,7 +153,6 @@ static bool is_power_of_2(unsigned long long x) {
 	return x && !(x & (x - 1));
 }
 
-/**@todo use last free */
 void *block_malloc(block_arena_t *a, size_t length) {
 	assert(a);
 	assert(is_power_of_2(a->blocksz));
@@ -185,16 +187,12 @@ void block_free(block_arena_t *a, void *v) {
 	assert(a);
 	if(!v)
 		return;
-	if(!block_arena_valid_pointer(a, v)) {
+	if(!block_arena_valid_pointer(a, v))
 		abort();
-		return;
-	}
 	const intptr_t p = ((char*)v - (char*)a->memory);
 	const size_t bit = p / a->blocksz;
-	if(!bitmap_get(&a->freelist, bit)) { /* double free */
+	if(!bitmap_get(&a->freelist, bit)) /* double free */
 		abort();
-		return;
-	}
 	bitmap_clear(&a->freelist, bit);
 	a->lastfree = bit;
 }
@@ -358,21 +356,22 @@ int block_tests(void) {
 	printf("arena   = %p\n", (void*)&block_arena);
 	printf("arena.m = %p\n", block_arena.memory);
 	void *v1, *v2, *v3;
-	v1 = block_malloc(&block_arena, 12);
-	assert(v1);
+	if(!(v1 = block_malloc(&block_arena, 12)))
+		return -1;
 	printf("v1 = %p\n", v1);
-	v2 = block_malloc(&block_arena, 30);
-	assert(v2);
+	if(!(v2 = block_malloc(&block_arena, 30)))
+		return -2;
 	printf("v2 = %p\n", v2);
-	assert(diff(v1, v2) == BLK_SIZE);
+	if(diff(v1, v2) != BLK_SIZE)
+		return -3;
 	block_free(&block_arena, v1);
 	v1 = block_malloc(&block_arena, 12);
 	printf("v1 = %p\n", v1);
-	v3 = block_malloc(&block_arena, 12);
-	assert(v3);
+	if(!(v3 = block_malloc(&block_arena, 12)))
+		return -4;
 	printf("v3 = %p\n", v3);
-	assert(diff(v1, v3) == BLK_SIZE*2);
-
+	if(diff(v1, v3) != BLK_SIZE*2)
+		return -5;
 	block_free(&block_arena, v1);
 	block_free(&block_arena, v2);
 	block_free(&block_arena, v3);
@@ -381,7 +380,8 @@ int block_tests(void) {
 		if(!block_malloc(&block_arena, 1))
 			break;
 	printf("exhausted at = %u\n", (unsigned)i);
-	assert(i == BLK_COUNT);
+	if(i != BLK_COUNT)
+		return -6;
 	printf("[DONE]\n\n");
 	return 0;
 }

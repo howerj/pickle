@@ -28,11 +28,17 @@ proc decr {x} {
 	set i [- $i 1]
 }
 
-# TODO Turn Color On/Off
-proc normal {} { return "\x1b\[0m" }
-proc red    {} { return "\x1b\[31;1m" }
-proc green  {} { return "\x1b\[32;1m" }
-proc blue   {} { return "\x1b\[34;1m" }
+# Set environment variable COLOR to 'on' to turn on color
+set colorize [getenv COLOR]
+proc color {x} { 
+	upvar #0 colorize c; 
+	if {eq $c on } { return $x } else { return "" } 
+}
+
+proc normal {} { color "\x1b\[0m" }
+proc red    {} { color "\x1b\[31;1m" }
+proc green  {} { color "\x1b\[32;1m" }
+proc blue   {} { color "\x1b\[34;1m" }
 
 proc test {x} {
 	set r [eval $x]
@@ -65,11 +71,11 @@ test {eq a a}
 test "eq \"a b\" \[concat a b\]"
 test "eq \"a,b,c\" \[join , a b c\]"
 
-
 assert [<= $passed $total]
 
 set failed [!= $passed $total]
 set emphasize [green]
+
 
 if {!= $failed 0} {
 	set emphasize [red]
@@ -113,7 +119,9 @@ puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
 
 unset heaps; unset i; unset m; unset blk; unset sz; unset used;
 
+puts "line: [info line]"
 
 # exit $failed
 return $failed ""
+
 

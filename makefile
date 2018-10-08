@@ -1,4 +1,7 @@
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g
+AR=ar
+ARFLAGS=rcs
+RANLIB=ranlib
 # CFLAGS=-std=c99 -Wall -Wextra -pedantic -Os -fwrapv -Wl,--gc-sections -ffunction-sections -fdata-sections -DNDEBUG
 
 .PHONY: all run test wrap clean
@@ -21,7 +24,11 @@ pickle.o: pickle.c pickle.h
 
 block.o: block.c block.h
 
-pickle: pickle.o main.o block.o
+libpickle.a: pickle.o
+	${AR} ${ARFLAGS} $@ $<
+	${RANLIB} $@
+
+pickle: main.o block.o libpickle.a
 	${CC} ${CFLAGS} $^ -o $@
 	# strip $@
 
