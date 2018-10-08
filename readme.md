@@ -273,19 +273,44 @@ Raise a signal, what this will do depends on your system, but it will most
 likely kill the process. If it does not, it returns an integer indicating the
 result of calling "raise()".
 
+* signal number action *OR* signal
+
+This is used to both set a signal handler and to query whether a signal has
+been raised. If no arguments are given then the signal fired, or zero if
+no signals have been detected, is returned. A subsequent call with zero
+arguments will return zero (if a signal has not be fired since). Signal events
+are not queued and can be lost.
+
+If two arguments are given, the first is treated as a signal number and 
+the second is the action to perform.  There are three possible actions; 
+"ignore", "default" and "catch". A caught signal will set a variable 
+which can be queried by calling signal with no arguments, as already described.
+An "ignored" signal will be ignored and a signal with "default" behavior will
+use the systems defaults. On successful installation of the handler, a "1" is
+returned, and on failure "0".
+
 * help ...
 
 Display a help message. It discards all arguments given to it.
 
 * argv number?
 
-'argv' is a function at the moment, it could be made into a variable.
+'argv' is a function at the moment, it could be made into a variable. If given
+no arguments it will return the number of arguments passed to 'main()'. If a
+number is given it will retrieved that argument from the argument list passed
+to 'main()'.
 
 * info item
 
-Retrieve information about the system.
+Retrieve information about the system. Information items include, and are
+but are limited to:
 
-* heap item number!
+  - level, call stack level
+  - line, current line number
+
+The 'heap' information can also be queried.
+
+* heap item number *OR* heap item *OR* heap
 
 The heap command is used to enquire about the status of the heap. Using the
 command does change the thing it is measuring, however physics has the same

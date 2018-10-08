@@ -218,7 +218,9 @@ static void help(FILE *output, char *arg0);
 
 static int pickleCommandInfo(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	if(argc != 2)
+	if (argc >= 2 && !strcmp(argv[1], "heap"))
+		return pickleCommandHeapUsage(i, argc - 1, argv + 1, i->allocator.arena);
+	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	const char *rq = argv[1];
 	if(!strcmp(rq, "level")) { return pickle_set_result_int(i, i->level); }
@@ -254,7 +256,7 @@ static int pickleCommandArgv(pickle_t *i, int argc, char **argv, void *pd) {
 	return PICKLE_OK;
 }
 
-static int register_custom_commands(pickle_t *i, argument_t *args) {
+static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 	assert(i);
 	assert(args);
 	const pickle_register_command_t commands[] = {
@@ -278,6 +280,8 @@ static int register_custom_commands(pickle_t *i, argument_t *args) {
 	};
 	if (pickle_set_var_int(i, "argc", args->argc) != PICKLE_OK)
 		return -1;
+	if (pickle_set_var(i, "prompt", prompt ? "pickle> " : "") != PICKLE_OK)
+		return -1;
 	for (size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
 		if(pickle_register_command(i, commands[j].name, commands[j].func, commands[j].data) != 0)
 			return -1;
@@ -285,21 +289,17 @@ static int register_custom_commands(pickle_t *i, argument_t *args) {
 }
 
 /* an interactive pickle - the things you can do with it! */
-static int interactive(pickle_t *i, FILE *input, FILE *output, int prompt) {
+static int interactive(pickle_t *i, FILE *input, FILE *output) {
 	assert(i);
 	assert(input);
 	assert(output);
-	if(prompt)
-		fputs("type 'help' for instructions, 'quit' to exit\n", output);
 	i->line = 0;
 	for(;;) {
 		char clibuf[LINE_SZ];
-		if (prompt) {
-			const char *prompt = pickle_get_var(i, "prompt");
-			prompt  = prompt ? prompt : "pickle> ";
-			fputs(prompt, output);
-			fflush(output);
-		}
+		const char *prompt = pickle_get_var(i, "prompt");
+		prompt = prompt ? prompt : "";
+		fputs(prompt, output);
+		fflush(output);
 		if (!fgets(clibuf, sizeof clibuf, input))
 			return 0;
 		const int retcode = pickle_eval(i, clibuf);
@@ -416,10 +416,10 @@ int main(int argc, char **argv) {
 	pickle_t interp = { .initialized = 0 };
 	if ((r = pickle_initialize(&interp, use_custom_allocator ? &allocator : NULL)) < 0)
 		goto end;
-	if ((r = register_custom_commands(&interp, &args)) < 0)
+	if ((r = register_custom_commands(&interp, &args, prompt_on)) < 0)
 		goto end;
 	if (argc == 0) {
-		r = interactive(&interp, stdin, stdout, prompt_on);
+		r = interactive(&interp, stdin, stdout);
 	} else {
 		for (j = 0; j < argc; j++)
 			if((r = file(&interp, argv[j], stdout)) != PICKLE_OK)
