@@ -70,6 +70,20 @@ test "== 3  \[length 123\]"
 test {eq a a}
 test "eq \"a b\" \[concat a b\]"
 test "eq \"a,b,c\" \[join , a b c\]"
+test {match %% %}
+test {match "%?" "?"}
+test {match "???" "abc"}
+test {match "???" "abc"}
+test {== 0 {match "???" "abcd"}}
+test {== 0 {match "abc" "abcd"}}
+test {match "abc" "abc"}
+test {match "abc*" "abc"}
+test {== 0 {match "abc*d" "abc"}}
+test {match "abc*d" "abcd"}
+test {match "abc*d" "abcXXXXd"}
+test {match "*" "ahoy!"}
+test {match "*abc*c?d" "xxxxxabcxxxxc3d"}
+test {match "*abc*c?d" "xxxxxabcxxxxc?d"}
 
 assert [<= $passed $total]
 
@@ -119,9 +133,10 @@ puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
 
 unset heaps; unset i; unset m; unset blk; unset sz; unset used;
 
+# Prints wrong line number on Windows, related (depends on this line!)
 puts "line: [info line]"
 
 # exit $failed
-return $failed ""
+return "" $failed
 
 

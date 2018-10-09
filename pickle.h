@@ -79,7 +79,7 @@ struct pickle_interpreter {
 	int initialized;
 	int level; /* Level of nesting */
 	int line;
-	char *ch;  /* text position */
+	const char *ch;  /* text position; set if line != 0 */
 };
 
 typedef struct pickle_interpreter pickle_t;
@@ -87,26 +87,24 @@ typedef struct pickle_interpreter pickle_t;
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
 typedef struct {
-	char *name;
+	const char *name;
 	pickle_command_func_t func;
 	void *data;
 } pickle_register_command_t;
 
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
-int pickle_eval(pickle_t *i, char *t);
+int pickle_eval(pickle_t *i, const char *t);
 int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) default allocator used */
 int pickle_deinitialize(pickle_t *i);
 
 int pickle_arity_error(pickle_t *i, int expected, int argc, char **argv); /* use within registered command if wrong number of args given */
 int pickle_error(pickle_t *i, const char *fmt, ...);
-char *pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
+int pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
 
 const char *pickle_get_var(pickle_t *i, const char *name);
 int pickle_set_var(pickle_t *i, const char *name, const char *val);
 
-#ifndef NDEBUG
 int pickle_tests(void);
-#endif
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,11 @@
  *
  * @todo Optimize, cleanup and improve. Write better unit tests.
  * @todo There could be an option for falling back to malloc if an allocation
+ * fails.
+ * @todo Add a mechanism (which could be a set of callbacks) for simulating
+ * failure at arbitrary times. This could then be used for testing and making
+ * picol.c more robust in the face of failure.
+ * @todo Add maximum number of blocks allocated in a specific arena
  *
  * This file contains a simple memory pool allocator, and contains three main
  * sections as well as some optional tests. The sections are a bitmap data
@@ -338,8 +343,9 @@ void *pool_realloc(pool_t *p, void *v, size_t length) {
 	return n;
 }
 
-#ifndef NDEBUG
-
+#ifdef NDEBUG
+int block_tests(void) { return 0; }
+#else
 #include <stdio.h>
 
 #define BLK_COUNT (32) /* must be power of 2! */
@@ -385,5 +391,4 @@ int block_tests(void) {
 	printf("[DONE]\n\n");
 	return 0;
 }
-
 #endif

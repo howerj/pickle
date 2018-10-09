@@ -100,9 +100,7 @@ void *pool_calloc(pool_t *p, size_t length);
 		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE    / sizeof(uint64_t))]) { 0 })\
 	}
 
-#ifndef NDEBUG
 int block_tests(void);
-#endif
 
 #ifdef __cplusplus
 }

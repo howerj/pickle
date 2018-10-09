@@ -2,7 +2,6 @@ CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g
 AR=ar
 ARFLAGS=rcs
 RANLIB=ranlib
-# CFLAGS=-std=c99 -Wall -Wextra -pedantic -Os -fwrapv -Wl,--gc-sections -ffunction-sections -fdata-sections -DNDEBUG
 
 .PHONY: all run test wrap clean
 

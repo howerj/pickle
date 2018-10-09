@@ -20,8 +20,7 @@
 static int pickle_set_result_int(pickle_t *i, long r) {
 	char v[64];
 	snprintf(v, sizeof v, "%ld", r);
-	char *s = pickle_set_result(i, v);
-	return s ? PICKLE_OK : PICKLE_ERR;
+	return pickle_set_result(i, v);
 }
 
 static int pickle_set_var_int(pickle_t *i, const char *name, long r) {
@@ -44,8 +43,7 @@ static int pickleCommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 		return pickle_arity_error(i, 1, argc, argv);
 	char buf[PICKLE_MAX_STRING] = { 0 };
 	(void)/*ignore result*/fgets(buf, sizeof buf, (FILE*)pd);
-	pickle_set_result(i, buf);
-	return PICKLE_OK;
+	return pickle_set_result(i, buf);
 }
 
 static int pickleCommandSystem(pickle_t *i, int argc, char **argv, void *pd) {
@@ -81,8 +79,7 @@ static int pickleCommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	char *env = getenv(argv[1]);
-	pickle_set_result(i, env ? env : "");
-	return PICKLE_OK;
+	return pickle_set_result(i, env ? env : "");
 }
 
 static int pickleCommandClock(pickle_t *i, int argc, char **argv, void *pd) {
@@ -98,36 +95,59 @@ static int pickleCommandClock(pickle_t *i, int argc, char **argv, void *pd) {
 	time(&rawtime);
 	struct tm *timeinfo = gmtime(&rawtime);
 	strftime(buf, sizeof buf, argv[1], timeinfo);
-	pickle_set_result(i, buf);
-	return PICKLE_OK;
+	return pickle_set_result(i, buf);
 }
 
-/*From <http://c-faq.com/lib/regex.html>*/
-static int match(const char *pat, const char *str) {
-	assert(pat);
-	assert(str);
-	switch(*pat) {
-	case '\0':  return !*str;
-	case '*':   return match(pat + 1, str) || (*str && match(pat, str + 1));
-	case '?':   return *str && match(pat + 1, str + 1);
-	default:    return *pat == *str && match(pat + 1, str + 1);
+/*Based on: <http://c-faq.com/lib/regex.html>*/
+static int match(const char *pat, const char *str, size_t depth) {
+	if (!depth) return -1;
+ again:
+        switch (*pat) {
+	case '\0': return !*str;
+	case '*': { /* match any number of characters: normally '.*' */
+		const int r = match(pat + 1, str, depth - 1);
+		if(r) return r;
+		if(!*(str++)) return 0;
+		goto again;
 	}
+	case '?':  /* match any single characters: normally '.' */
+		if (!*str) return 0;
+		pat++, str++;
+		goto again;
+	case '%': /* escape character: normally backslash */
+		if (!*(++pat)) return -2; /* missing escaped character */
+		if (!*str)     return 0;
+		/* fall through */
+	default:
+		if (*pat != *str) return 0;
+		pat++, str++;
+		goto again;
+	}
+	return -3; /* not reached */
 }
 
 static int pickleCommandMatch(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_arity_error(i, 3, argc, argv);
-	pickle_set_result(i, match(argv[1], argv[2]) ? argv[2] : "");
-	return PICKLE_OK;
+	const int r = match(argv[1], argv[2], PICKLE_MAX_RECURSION);
+	if(r < 0)
+		return pickle_error(i, "Regex error: %d", r);
+	return pickle_set_result(i, r ? "1" : "0");
 }
 
 static int pickleCommandEqual(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_arity_error(i, 3, argc, argv);
-	pickle_set_result(i, !strcmp(argv[1], argv[2]) ? "1" : "0");
-	return PICKLE_OK;
+	return pickle_set_result(i, !strcmp(argv[1], argv[2]) ? "1" : "0");
+}
+
+static int pickleCommandNotEqual(pickle_t *i, int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	if (argc != 3)
+		return pickle_arity_error(i, 3, argc, argv);
+	return pickle_set_result(i, strcmp(argv[1], argv[2]) ? "1" : "0");
 }
 
 static int pickleCommandLength(pickle_t *i, int argc, char **argv, void *pd) {
@@ -164,7 +184,8 @@ static int pickleCommandSignal(pickle_t *i, int argc, char **argv, void *pd) {
 	if (!strcmp(rq, "ignore"))  { r = SIG_ERR == signal(sig, SIG_IGN) ? r : PICKLE_OK; }
 	if (!strcmp(rq, "default")) { r = SIG_ERR == signal(sig, SIG_DFL) ? r : PICKLE_OK; }
 	if (!strcmp(rq, "catch"))   { r = SIG_ERR == signal(sig, signal_handler) ? r : PICKLE_OK; }
-	pickle_set_result_int(i, r == PICKLE_OK);
+	if (pickle_set_result_int(i, r == PICKLE_OK) != PICKLE_OK)
+		return PICKLE_ERR;
 	return r;
 }
 
@@ -178,10 +199,8 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 		goto done;
 	}
 
-	if (!pd) {
-		pickle_set_result(i, "unknown");
-		return PICKLE_OK;
-	}
+	if (!pd)
+		return pickle_set_result(i, "unknown");
 	const char *const rq = argv[1];
 
 	if(argc == 2) {
@@ -250,32 +269,32 @@ static int pickleCommandArgv(pickle_t *i, int argc, char **argv, void *pd) {
 		return pickle_set_result_int(i, global_argc);
 	int j = atoi(argv[1]);
 	if(j < 0 || j >= global_argc)
-		pickle_set_result(i, "");
+		return pickle_set_result(i, "");
 	else
-		pickle_set_result(i, global_argv[j]);
-	return PICKLE_OK;
+		return pickle_set_result(i, global_argv[j]);
 }
 
 static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 	assert(i);
 	assert(args);
 	const pickle_register_command_t commands[] = {
-		{ "puts",     pickleCommandPuts,    stdout },
-		{ "gets",     pickleCommandGets,    stdin },
-		{ "system",   pickleCommandSystem,  NULL },
-		{ "exit",     pickleCommandExit,    NULL },
-		{ "quit",     pickleCommandExit,    NULL },
-		{ "getenv",   pickleCommandGetEnv,  NULL },
-		{ "random",   pickleCommandRandom,  NULL },
-		{ "clock",    pickleCommandClock,   NULL },
-		{ "match",    pickleCommandMatch,   NULL },
-		{ "eq",       pickleCommandEqual,   NULL },
-		{ "length",   pickleCommandLength,  NULL },
-		{ "raise",    pickleCommandRaise,   NULL },
-		{ "signal",   pickleCommandSignal,  NULL },
-		{ "argv",     pickleCommandArgv,    args },
-		{ "info",     pickleCommandInfo,    NULL },
-		{ "help",     pickleCommandHelp,    stdout },
+		{ "puts",     pickleCommandPuts,      stdout },
+		{ "gets",     pickleCommandGets,      stdin },
+		{ "system",   pickleCommandSystem,    NULL },
+		{ "exit",     pickleCommandExit,      NULL },
+		{ "quit",     pickleCommandExit,      NULL },
+		{ "getenv",   pickleCommandGetEnv,    NULL },
+		{ "random",   pickleCommandRandom,    NULL },
+		{ "clock",    pickleCommandClock,     NULL },
+		{ "match",    pickleCommandMatch,     NULL },
+		{ "eq",       pickleCommandEqual,     NULL },
+		{ "ne",       pickleCommandNotEqual,  NULL },
+		{ "length",   pickleCommandLength,    NULL },
+		{ "raise",    pickleCommandRaise,     NULL },
+		{ "signal",   pickleCommandSignal,    NULL },
+		{ "argv",     pickleCommandArgv,      args },
+		{ "info",     pickleCommandInfo,      NULL },
+		{ "help",     pickleCommandHelp,      stdout },
 		{ "heap",     pickleCommandHeapUsage, i->allocator.arena },
 	};
 	if (pickle_set_var_int(i, "argc", args->argc) != PICKLE_OK)
@@ -289,7 +308,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 }
 
 /* an interactive pickle - the things you can do with it! */
-static int interactive(pickle_t *i, FILE *input, FILE *output) {
+static int interactive(pickle_t *i, FILE *input, FILE *output) { /**@todo rewrite this a pickle program? */
 	assert(i);
 	assert(input);
 	assert(output);
@@ -331,7 +350,6 @@ static int file(pickle_t *i, char *name, FILE *output) {
 }
 
 static int tests(void) {
-#ifndef NDEBUG
 	typedef int (*test_t)(void);
 	static const test_t ts[] = { block_tests, pickle_tests, NULL };
 	int r = 0;
@@ -339,10 +357,6 @@ static int tests(void) {
 		 if(ts[i]() < 0)
 			 r = -1;
 	return r;
-#else
-	puts("NO TESTS COMPILED IN");
-	return 0;
-#endif
 }
 
 static void help(FILE *output, char *arg0) {
@@ -355,11 +369,11 @@ Repository: https://github.com/howerj/pickle\n\
 \n\
 Options:\n\
 \n\
-\t--   stop processing command line arguments\n\
-\t-h   display this help message and exit\n\
-\t-t   run built in self tests and exit (return code 0 is success)\n\
-\t-a   use custom block allocator, for testing purposes\n\
-\t-s   suppress prompt printing\n\
+\t--           stop processing command line arguments\n\
+\t-h, --help   display this help message and exit\n\
+\t-t, --test   run built in self tests and exit (return code 0 is success)\n\
+\t-a           use custom block allocator, for testing purposes\n\
+\t-s, --silent suppress prompt printing\n\
 \n\
 If no arguments are given then input is taken from stdin. Otherwise\n\
 they are treated as scripts to execute. Maximum file size is %d\n\
@@ -392,12 +406,12 @@ int main(int argc, char **argv) {
 			break;
 		} else if (!strcmp(argv[j], "-a")) {
 			use_custom_allocator = 1;
-		} else if (!strcmp(argv[j], "-s")) {
+		} else if (!strcmp(argv[j], "-s") || !strcmp(argv[j], "--silent")) {
 			prompt_on = 0;
-		} else if (!strcmp(argv[j], "-h")) {
+		} else if (!strcmp(argv[j], "-h") || !strcmp(argv[j], "--help")) {
 			help(stdout, argv[0]);
 			return 0;
-		} else if (!strcmp(argv[j], "-t")) {
+		} else if (!strcmp(argv[j], "-t") || !strcmp(argv[j], "--silent")) {
 			return tests();
 		} else {
 			break;

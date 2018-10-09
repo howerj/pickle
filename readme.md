@@ -46,7 +46,7 @@ run the built in unit tests and the unit tests in [test.tcl][].
 
 The internals of the interpreter do not deviate from the original interpreter,
 so the document on the [picol][] language still applies. The language is like a
-simplified version of [tcl][], where everything is a command and the primary
+simplified version of [TCL][], where everything is a command and the primary
 data structure is the string. 
 
 Some programmers seem to an obsessive interest in their language of choice, 
@@ -90,6 +90,23 @@ interpreter to suite your purposes:
   - Data Packing/Unpacking: <https://beej.us/guide/bgnet/html/multi/advanced.html#serialization>
   - Base-64: <https://stackoverflow.com/questions/342409/>
   - Line editing: <https://github.com/antirez/linenoise>
+
+### The language itself
+
+Picol, and [TCL][], are dynamic languages with only one real data type, the
+string. This might seem inefficient but it is fine for a glue language whose
+main purpose is to bind lots of things written in C together. It is similar to
+[lisp][], it is [homoiconic][], and is simple with very little in the way of
+syntax. 
+
+
+	string  called if first argument
+	{ }     quote
+	[ ]     command substitution
+	" "     string
+	$var    variable lookup
+	\c      escape
+
 
 ### Internally Defined Commands
 
@@ -205,7 +222,8 @@ be 'cmd.exe'. On MS-DOS this will be 'COMMAND.COM' (lol).
 * exit number?
 
 Exit from the interpreter, the number argument is optional and is coerced into
-a number to be used as the exit code.
+a number to be used as the exit code. This calls the C function 'exit', so
+commands registered with 'atexit' will be called.
 
 * quit number?
 
@@ -250,8 +268,8 @@ This command is a primitive regular expression matcher, as available from
 <http://c-faq.com/lib/regex.html>. What it lacks in functionality, safety and
 usability, it makes up for by being only ten lines long (in the original). It
 is meant more for wildcard expansion of file names (so '?' replaces the meaning
-of '.' is most regular expression languages). Escape characters are not
-supported.
+of '.' is most regular expression languages). '%' is used as an escape
+character, which escapes the next character.
 
 The following operations are supported: '\*' (match any string) and '?' (match
 any character). By default all patterns are anchored to match the entire
@@ -261,6 +279,11 @@ pattern with '\*'.
 * eq string string
 
 Returns '0' is two strings are not equal and '1' if they are. Unlike '==' this
+acts on the entire string.
+
+* ne string string
+
+Returns '1' is two strings are not equal and '0' if they are. Unlike '!=' this
 acts on the entire string.
 
 * length string
@@ -307,6 +330,7 @@ but are limited to:
 
   - level, call stack level
   - line, current line number
+  - heap, information about the heap, if available, see 'heap' command
 
 The 'heap' information can also be queried.
 
@@ -318,7 +342,21 @@ problem and physicists are doing pretty well. The command only works when the
 custom allocator is used, as it interrogates it for the statistics it has
 captured.
 
-The heap command could be folded into the info command.
+ - "freed": Number of calls to 'free'
+ - "allocs": Number of calls to 'allocate'
+ - "reallocs": Number of calls to 'realloc'
+ - "active": Current active byte count
+ - "max": Maximum number of bytes in use
+ - "total": Total bytes request
+ - "blocks": Total bytes given
+ - "arenas": Number of arenas
+
+These options require an argument; a number which species which allocation
+arena to query for information.
+
+ - "arena-size": Number of blocks
+ - "arena-block": Size of a block
+ - "arena-used": Number of blocks currently in use
 
 ## Compile Time Options
 
@@ -373,7 +411,12 @@ and semantics.
 "return", and "Out-Of-Memory".
 * Profile, profile, profile!
 * Remove errors occurring from out of memory situations. These can be tested
-by modifying the custom allocator.
+by modifying the custom allocator. Also remove any possible instances of
+boundless recursion.
+* Create a mechanism for catching errors within the interpreter
+  - Allow arbitrary return codes, instead of just the PICKLE return codes
+* Allow specification of a startup script?
+* Rewrite the input loops in pickle?
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h
@@ -381,7 +424,7 @@ by modifying the custom allocator.
 [block.h]: block.h
 [main.c]: main.c
 [picol]: http://oldblog.antirez.com/post/picol.html
-[tcl]: https://en.wikipedia.org/wiki/Tcl
+[TCL]: https://en.wikipedia.org/wiki/Tcl
 [stdio.h]: http://www.cplusplus.com/reference/cstdio/
 [snprintf]: http://www.cplusplus.com/reference/cstdio/snprintf/
 [FORTH]: https://en.wikipedia.org/wiki/Forth_(programming_language)
@@ -398,3 +441,5 @@ by modifying the custom allocator.
 [readline]: https://tiswww.case.edu/php/chet/readline/rltop.html
 [linenoise]: https://github.com/antirez/linenoise
 [rlwrap]: https://linux.die.net/man/1/rlwrap
+[lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
+[homoiconic]: https://en.wikipedia.org/wiki/Homoiconicity
