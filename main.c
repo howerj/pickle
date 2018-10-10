@@ -17,6 +17,8 @@
 #define LINE_SZ (1024)
 #define FILE_SZ (1024 * 16)
 
+typedef struct { int argc; char **argv; } argument_t;
+
 static int pickle_set_result_int(pickle_t *i, long r) {
 	char v[64];
 	snprintf(v, sizeof v, "%ld", r);
@@ -31,9 +33,20 @@ static int pickle_set_var_int(pickle_t *i, const char *name, long r) {
 
 static int pickleCommandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(pd);
-	if (argc != 2)
-		return pickle_arity_error(i, 2, argc, argv);
-	fprintf((FILE*)pd, "%s\n", argv[1]);
+	if (argc != 2 && argc != 3)
+		return pickle_arity_error(i, 3, argc, argv);
+	int newline = 1;
+	char *line = argv[1];
+	if (argc == 3) {
+		line = argv[2];
+		if (!strcmp(argv[1], "-nonewline")) { newline = 0; }
+		else return pickle_error(i, "Unknown puts command %s", argv[1]);
+	}
+	if(newline)
+		fprintf((FILE*)pd, "%s\n", line);
+	else
+		fputs(line, (FILE*)pd);
+	fflush((FILE*)pd);
 	return PICKLE_OK;
 }
 
@@ -257,7 +270,6 @@ static int pickleCommandHelp(pickle_t *i, int argc, char **argv, void *pd) {
 	return PICKLE_OK;
 }
 
-typedef struct { int argc; char **argv; } argument_t;
 
 static int pickleCommandArgv(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(pd);
@@ -272,6 +284,41 @@ static int pickleCommandArgv(pickle_t *i, int argc, char **argv, void *pd) {
 		return pickle_set_result(i, "");
 	else
 		return pickle_set_result(i, global_argv[j]);
+}
+
+/* retrieve and process those pickles you filed away for safe keeping */
+static int file(pickle_t *i, char *name, FILE *output, int command) {
+	assert(i);
+	assert(file);
+	assert(output);
+	errno = 0;
+	FILE *fp = fopen(name, "r"); /**@bug interpreter does not handle 'rb' mode */
+	if (!fp) {
+		if (command)
+			return pickle_error(i, "Failed to open file %s (rb): %s\n", name, strerror(errno));
+		fprintf(stderr, "Failed to open file %s (rb): %s\n", name, strerror(errno));
+		return -1;
+	}
+	i->line = 1;
+	char buf[FILE_SZ];
+	buf[fread(buf, 1, FILE_SZ, fp)] = '\0';
+	fclose(fp);
+	int retcode = PICKLE_OK;
+	if ((retcode = pickle_eval(i, buf)) != PICKLE_OK)
+		if (!command)
+			fprintf(output, "%s\n", i->result);
+	return retcode == PICKLE_OK ? 0 : -1;
+}
+
+static int pickleCommandSource(pickle_t *i, int argc, char **argv, void *pd) {
+	assert(i);
+	assert(file);
+	assert(pd);
+	if (argc != 2)
+		return pickle_arity_error(i, 2, argc, argv);
+	if (file(i, argv[1], pd, 1) < 0)
+		return PICKLE_ERR;
+	return PICKLE_OK;
 }
 
 static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
@@ -293,6 +340,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 		{ "raise",    pickleCommandRaise,     NULL },
 		{ "signal",   pickleCommandSignal,    NULL },
 		{ "argv",     pickleCommandArgv,      args },
+		{ "source",   pickleCommandSource,    stdout },
 		{ "info",     pickleCommandInfo,      NULL },
 		{ "help",     pickleCommandHelp,      stdout },
 		{ "heap",     pickleCommandHeapUsage, i->allocator.arena },
@@ -326,27 +374,6 @@ static int interactive(pickle_t *i, FILE *input, FILE *output) { /**@todo rewrit
 			fprintf(output, "[%d] %s\n", retcode, i->result);
 	}
 	return 0;
-}
-
-/* retrieve and process those pickles you filed away for safe keeping */
-static int file(pickle_t *i, char *name, FILE *output) {
-	assert(i);
-	assert(file);
-	assert(output);
-	errno = 0;
-	FILE *fp = fopen(name, "r"); /**@bug interpreter does not handle 'rb' mode */
-	if (!fp) {
-		fprintf(stderr, "failed to open file %s (rb): %s\n", name, strerror(errno));
-		return -1;
-	}
-	i->line = 1;
-	char buf[FILE_SZ];
-	buf[fread(buf, 1, FILE_SZ, fp)] = '\0';
-	fclose(fp);
-	int retcode = PICKLE_OK;
-	if ((retcode = pickle_eval(i, buf)) != PICKLE_OK)
-		fprintf(output, "%s\n", i->result);
-	return retcode == PICKLE_OK ? 0 : -1;
 }
 
 static int tests(void) {
@@ -387,18 +414,42 @@ void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, le
 void custom_free(void *a, void *v)                    { pool_free(a, v); }
 void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v, length); }
 
+static int use_custom_allocator = 0;
+static pickle_t interp = { .initialized = 0 };
+static pickle_allocator_t allocator = {
+	.free    = custom_free,
+	.realloc = custom_realloc,
+	.malloc  = custom_malloc,
+	.arena   = NULL
+};
+
+static void cleanup(void) {
+	if(interp.initialized)
+		pickle_deinitialize(&interp);
+	if (use_custom_allocator) {
+		use_custom_allocator = 0;
+		pool_delete(allocator.arena);
+	}
+}
+
 int main(int argc, char **argv) {
-	int r = 0, use_custom_allocator = 0, prompt_on = 1, j;
+	int r = 0, prompt_on = 1, j;
 	argument_t args = { .argc = argc, .argv = argv };
 
 	static const pool_specification_t specs[] = {
 		{ 8,   512 }, /* most allocations are quite small */
-		{ 16,  128 },
+		{ 16,  256 },
 		{ 32,  128 },
-		{ 128,   8 },
+		{ 64,   32 },
+		{ 128,  16 },
 		{ 256,   8 },
 		{ 512,   8 }, /* maximum string length is bounded by this */
 	};
+
+	if (atexit(cleanup)) {
+		fprintf(stderr, "atexit failed\n");
+		return -1;
+	}
 
 	for (j = 1; j < argc; j++) {
 		if (!strcmp(argv[j], "--")) {
@@ -420,14 +471,9 @@ int main(int argc, char **argv) {
 	argc -= j;
 	argv += j;
 
-	pickle_allocator_t allocator = {
-		.free    = custom_free,
-		.realloc = custom_realloc,
-		.malloc  = custom_malloc,
-		.arena   = use_custom_allocator ? pool_new(sizeof(specs)/sizeof(specs[0]), &specs[0]) : NULL,
-	};
+	if (use_custom_allocator)
+		allocator.arena = pool_new(sizeof(specs)/sizeof(specs[0]), &specs[0]);
 
-	pickle_t interp = { .initialized = 0 };
 	if ((r = pickle_initialize(&interp, use_custom_allocator ? &allocator : NULL)) < 0)
 		goto end;
 	if ((r = register_custom_commands(&interp, &args, prompt_on)) < 0)
@@ -436,14 +482,11 @@ int main(int argc, char **argv) {
 		r = interactive(&interp, stdin, stdout);
 	} else {
 		for (j = 0; j < argc; j++)
-			if((r = file(&interp, argv[j], stdout)) != PICKLE_OK)
+			if((r = file(&interp, argv[j], stdout, 0)) != PICKLE_OK)
 				break;
 	}
 end:
-	/**@todo do cleanup atexit */
-	pickle_deinitialize(&interp);
-	if (use_custom_allocator)
-		pool_delete(allocator.arena);
+	cleanup();
 	return r;
 }
 

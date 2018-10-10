@@ -73,14 +73,15 @@ struct pickle_command;
 struct pickle_call_frame;
 
 struct pickle_interpreter {
-	pickle_allocator_t allocator;
+	pickle_allocator_t allocator; /* custom allocator, if desired */
 	struct pickle_call_frame *callframe;
 	struct pickle_command    *commands;
-	char *result;
-	int initialized;
-	int level; /* Level of nesting */
-	int line;
-	const char *ch;  /* text position; set if line != 0 */
+	const char *result;        /* result of an evaluation */
+	const char *ch;            /* text position; set if line != 0 */
+	int level;                 /* level of nesting */
+	int line;                  /* current line number */
+	unsigned initialized   :1; /* if true, interpreter is initialized and ready to use */
+	unsigned static_result :1; /* internal use only: if true, result should not be freed */
 };
 
 typedef struct pickle_interpreter pickle_t;

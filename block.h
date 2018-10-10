@@ -97,7 +97,7 @@ void *pool_calloc(pool_t *p, size_t length);
 			.map  = (bitmap_unit_t [BLOCK_COUNT/sizeof(bitmap_unit_t)]) { 0 }\
 		},\
 		.blocksz = BLOCK_SIZE,\
-		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE    / sizeof(uint64_t))]) { 0 })\
+		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE / sizeof(uint64_t))]) { 0 })\
 	}
 
 int block_tests(void);

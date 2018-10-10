@@ -4,10 +4,7 @@
 # - implement full test suite
 # - implement ANSI Terminal Color Codes
 
-proc die {x} {
-	puts $x
-	exit 1
-}
+proc die {x} { puts $x; exit 1 }
 
 set passed 0
 set total  0
@@ -18,15 +15,8 @@ proc assert {x} {
 	}
 }
 
-proc incr {x} {
-	upvar 1 $x i
-	set i [+ $i 1]
-}
-
-proc decr {x} {
-	upvar 1 $x i
-	set i [- $i 1]
-}
+proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
+proc decr {x} { upvar 1 $x i; set i [- $i 1] }
 
 # Set environment variable COLOR to 'on' to turn on color
 set colorize [getenv COLOR]
@@ -60,6 +50,14 @@ proc test {x} {
 
 proc square {x} { * $x $x }
 
+proc fib {x} {
+	if {<= $x 1} {
+		return 1
+	} else {
+		+ [fib [- $x 1]] [fib [- $x 2]]
+	}
+}
+
 puts "\[Pickle Tests\]"
 
 test {== 2 2}
@@ -84,6 +82,7 @@ test {match "abc*d" "abcXXXXd"}
 test {match "*" "ahoy!"}
 test {match "*abc*c?d" "xxxxxabcxxxxc3d"}
 test {match "*abc*c?d" "xxxxxabcxxxxc?d"}
+test {== 89 [fib 10]}
 
 assert [<= $passed $total]
 
