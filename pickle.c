@@ -32,31 +32,32 @@
 enum { PT_ESC, PT_STR, PT_CMD, PT_VAR, PT_SEP, PT_EOL, PT_EOF };
 
 struct picolParser {
-	const char *text;      /* the program */
-	const char *p;         /* current text position */
-	int len;         /* remaining length */
-	const char *start;     /* token start */
-	const char *end;       /* token end */
-	int type;        /* token type, PT_... */
-	int insidequote; /* true if inside " " */
-	int *line;       /* pointer to line number */
-	const char **ch;       /* pointer to global test position */
+	const char *text;  /* the program */
+	const char *p;     /* current text position */
+	int len;           /* remaining length */
+	const char *start; /* token start */
+	const char *end;   /* token end */
+	int type;          /* token type, PT_... */
+	int insidequote;   /* true if inside " " */
+	int *line;         /* pointer to line number */
+	const char **ch;   /* pointer to global test position */
 };
 
-/* A possible way to make this more space efficient is by using the lowest
- * bits of the 'val' pointer to store information about the pointer, with
- * the requirement that all points are aligned to at least a 2 byte boundary
- * (so the lowest bit is unused). Whether the variable is a link variable or
- * a normal variable could be stored in this bit. Alternatively, whether the
- * string is a number or not. Special variable 'val' field accessor functions
- * would need to be created. Another space saving measure would be to use
- * a small string compression library, such as smaz
- * <https://github.com/antirez/smaz>, to compress all strings. It would help
- * if the compressed strings contains no NUL characters to the C string
- * functions could be used on compressed data. */
-struct pickle_var {
-	char *name, *val;
-	struct pickle_var *next, *link;
+enum { PV_STRING, PV_SMALL_STRING, PV_LINK };
+
+struct pickle_var { /* strings are stored as either pointers, or as 'small' strings */
+	union {
+		char *val;                 /* TCLs basic data type, the string */
+		char small[sizeof(char*)]; /* small character string, same as val */
+		struct pickle_var *link;   /* link to another variable */
+	} v;
+	union {
+		char *name;
+		char small[sizeof(char*)];
+	} n;
+	struct pickle_var *next;
+	unsigned type      :2;
+	unsigned smallname :1;
 };
 
 struct pickle_command {
@@ -285,7 +286,7 @@ static int picolGetToken(struct picolParser *p) {
 
 int pickle_set_result(pickle_t *i, const char *s) {
 	assert(i);
-	//assert(i->result);
+	assert(i->result);
 	assert(s);
 	char *r = picolStrdup(&i->allocator, s);
 	if (r) {
@@ -301,15 +302,63 @@ static struct pickle_var *picolGetVar(pickle_t *i, const char *name, int link) {
 	assert(name);
 	struct pickle_var *v = i->callframe->vars;
 	while (v) {
-		if (!strcmp(v->name, name)) {
+		const char *n = v->smallname ? &v->n.small[0] : v->n.name;
+		if (!strcmp(n, name)) {
 			if(link)
-				while(v->link)
-					v = v->link;
+				while(v->type == PV_LINK)
+					v = v->v.link;
 			return v;
 		}
 		v = v->next;
 	}
 	return NULL;
+}
+
+static void picolFreeVarName(pickle_t *i, struct pickle_var *v) {
+	assert(i);
+	assert(v);
+	if (!(v->smallname))
+		FREE(i, v->n.name);
+}
+
+static void picolFreeVarVal(pickle_t *i, struct pickle_var *v) {
+	assert(i);
+	assert(v);
+	if (v->type == PV_STRING)
+		FREE(i, v->v.val);
+}
+
+static int picolIsSmallString(const char *val) {
+	assert(val);
+	return !!memchr(val, 0, sizeof(char*));
+}
+
+static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val) {
+	assert(i);
+	assert(v);
+	assert(val);
+	if(picolIsSmallString(val)) {
+		v->type   = PV_SMALL_STRING;
+		memset(v->v.small, 0, sizeof(v->v.small));
+		strcat(v->v.small, val);
+		return 0;
+	} 
+	v->type   = PV_STRING;
+	return (v->v.val  = picolStrdup(&i->allocator, val)) ? 0 : -1;
+}
+
+static int picolSetVarName(pickle_t *i, struct pickle_var *v, const char *name) {
+	assert(i);
+	assert(v);
+	assert(name);
+	if(picolIsSmallString(name)) {
+		v->smallname = 1;
+		memset(v->n.small, 0, sizeof(v->n.small));
+		strcat(v->n.small, name);
+		return 0;
+	} 
+	v->smallname = 0;
+	return (v->n.name = picolStrdup(&i->allocator, name)) ? 0 : -1;
 }
 
 int pickle_set_var(pickle_t *i, const char *name, const char *val) {
@@ -318,18 +367,17 @@ int pickle_set_var(pickle_t *i, const char *name, const char *val) {
 	assert(val);
 	struct pickle_var *v = picolGetVar(i, name, 1);
 	if (v) {
-		FREE(i, v->val);
-		if(!(v->val = picolStrdup(&i->allocator, val)))
+		picolFreeVarVal(i, v);
+		if(picolSetVarString(i, v, val) < 0)
 			return PICKLE_ERR;
 	} else {
 		if(!(v = MALLOC(i, sizeof(*v))))
 			return PICKLE_ERR;
-		v->link = NULL;
-		v->name = picolStrdup(&i->allocator, name);
-		v->val  = picolStrdup(&i->allocator, val);
-		if(!(v->name) || !(v->val)) {
-			FREE(i, v->name);
-			FREE(i, v->val);
+		const int r1 = picolSetVarName(i, v, name);
+		const int r2 = picolSetVarString(i, v, val);
+		if(r1 < 0 || r2 < 0) {
+			picolFreeVarName(i, v);
+			picolFreeVarVal(i, v);
 			FREE(i, v);
 			return PICKLE_ERR;
 		}
@@ -339,11 +387,24 @@ int pickle_set_var(pickle_t *i, const char *name, const char *val) {
 	return PICKLE_OK;
 }
 
+const char *picolGetVarVal(struct pickle_var *v) {
+	assert(v);
+	switch(v->type) {
+	case PV_SMALL_STRING: return v->v.small;
+	case PV_STRING:       return v->v.val;
+	default:
+		abort();
+	}
+	return NULL;
+}
+
 const char *pickle_get_var(pickle_t *i, const char *name) {
 	assert(i);
 	assert(name);
 	struct pickle_var *v = picolGetVar(i, name, 1);
-	return v ? v->val : NULL;
+	if(!v)
+		return NULL;
+	return picolGetVarVal(v);
 }
 
 static struct pickle_command *picolGetCommand(pickle_t *i, const char *name) {
@@ -480,7 +541,7 @@ int pickle_eval(pickle_t *i, const char *t) {
 				goto err;
 			}
 			FREE(i, t);
-			t = picolStrdup(&i->allocator, v->val);
+			t = picolStrdup(&i->allocator, picolGetVarVal(v));
 		} else if (p.type == PT_CMD) {
 			retcode = pickle_eval(i, t);
 			FREE(i, t);
@@ -661,8 +722,8 @@ static int picolCommandRetCodes(pickle_t *i, int argc, char **argv, void *pd) {
 static void picolVarFree(pickle_t *i, struct pickle_var *v) {
 	if(!v)
 		return;
-	FREE(i, v->name);
-	FREE(i, v->val);
+	picolFreeVarName(i, v);
+	picolFreeVarVal(i, v);
 	FREE(i, v);
 }
 
@@ -770,6 +831,8 @@ static char *concatenate(pickle_t *i, const char *join, int argc, char **argv) {
 	assert(argv);
 	assert(join);
 	assert(argc >= 0);
+	if (argc > (int)PICKLE_MAX_ARGS)
+		return NULL;
 	size_t jl = strlen(join);
 	size_t ls[argc] /* NB! */, l = 0;
 	for(int j = 0; j < argc; j++) {
@@ -869,7 +932,8 @@ static int picolCommandUpVar(pickle_t *i, int argc, char **argv, void *pd) {
 		/*check*/ pickle_set_var(i, argv[2], "");
 		/*check*/ otherVar = i->callframe->vars; //picolGetVar(i, argv[2], 1);
 	}
-	myVar->link = otherVar;
+	myVar->type = PV_LINK;
+	myVar->v.link = otherVar;
 	
 end:
 	i->callframe = cf;

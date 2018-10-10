@@ -46,6 +46,7 @@ extern "C" {
 
 #define PICKLE_MAX_STRING    (512u)
 #define PICKLE_MAX_RECURSION (512u)
+#define PICKLE_MAX_ARGS      (128u)
 
 #ifndef UNUSED
 #define UNUSED(X) ((void)(X))
