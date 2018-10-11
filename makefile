@@ -1,3 +1,4 @@
+CC=gcc
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g
 AR=ar
 ARFLAGS=rcs

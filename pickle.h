@@ -52,10 +52,6 @@ extern "C" {
 #define UNUSED(X) ((void)(X))
 #endif
 
-#ifndef BUILD_BUG_ON
-#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
-#endif
-
 typedef void *(*pickle_malloc_t)(void *arena,  size_t bytes);
 typedef void *(*pickle_realloc_t)(void *arena, void *ptr, size_t bytes);
 typedef void  (*pickle_free_t)(void *arena,    void *ptr);

@@ -91,7 +91,7 @@ static int pickleCommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
-	char *env = getenv(argv[1]);
+	const char *env = getenv(argv[1]);
 	return pickle_set_result(i, env ? env : "");
 }
 
@@ -274,12 +274,12 @@ static int pickleCommandHelp(pickle_t *i, int argc, char **argv, void *pd) {
 static int pickleCommandArgv(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(pd);
 	char **global_argv = ((argument_t*)pd)->argv;
-	int global_argc = ((argument_t*)pd)->argc;
+	const int global_argc = ((argument_t*)pd)->argc;
 	if(argc != 1 && argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	if(argc == 1)
 		return pickle_set_result_int(i, global_argc);
-	int j = atoi(argv[1]);
+	const int j = atoi(argv[1]);
 	if(j < 0 || j >= global_argc)
 		return pickle_set_result(i, "");
 	else

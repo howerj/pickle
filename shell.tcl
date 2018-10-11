@@ -1,8 +1,20 @@
 #!./pickle
 # Simple Shell
 # Before this is usable, several things need to be done:
-# - A file needs to be sourced
 # - Evaluation could be done in a sandbox
+# - ARGC/ARGC could be processed
+
+set HOME "HOME"
+set OS Unix
+if {eq [getenv OS] "Windows_NT" } {
+	set OS Windows
+	set HOME "HOMEPATH"
+}
+
+set HOME [getenv $HOME]
+puts $HOME
+
+source $HOME/.picklerc
 
 set colorize [getenv COLOR]
 proc color {x} { 

@@ -123,9 +123,11 @@ to -50.
 Truth is represented as a non zero string, false as a string that evaluates to
 zero.
 
-* set variable value
+* set variable value?
 
-Create a variable, or overwrite an existing variable, with a value.
+Create a variable, or overwrite an existing variable, with a value. If only one
+argument is given, it returns that value if it exists or an error if it does
+not.
 
 * if {condition} {true clause}  *OR*  if {condition} {true clause} else {false clause}
 
@@ -193,6 +195,9 @@ obvious what each one does. It should be noted that because all variables are
 stored internally as strings, mathematical operations are egregiously slow.
 Numbers are first converted to strings, the operation performed, then converted
 back to strings.
+
+There are also the following unary mathematical operators defined: '!', '~',
+'abs', 'bool'.
 
 ### Extension Commands
 
@@ -323,6 +328,11 @@ no arguments it will return the number of arguments passed to 'main()'. If a
 number is given it will retrieved that argument from the argument list passed
 to 'main()'.
 
+* source file.tcl
+
+Execute a file off disk, 'file.tcl' is the file to execute. This executes the
+file in the current interpreter context and is *not* a safe operation.
+
 * info item
 
 Retrieve information about the system. Information items include, and are
@@ -402,21 +412,14 @@ those commands with the *pickle\_register\_command* function.
 
 ## To Do
 
-* Make unit tests; both in Pickle source and in C
-* Make the library suitable for embedded use (by reducing memory usage and
-allowing the use of a custom allocator).
 * Add documentation here; building, command line use, command list, syntax
 and semantics.
-* Reduce allocations by interning common strings like "", "1", "0", "if",
-"return", and "Out-Of-Memory".
 * Profile, profile, profile!
-* Remove errors occurring from out of memory situations. These can be tested
-by modifying the custom allocator. Also remove any possible instances of
-boundless recursion.
-* Create a mechanism for catching errors within the interpreter
-  - Allow arbitrary return codes, instead of just the PICKLE return codes
-* Allow specification of a startup script?
-* Rewrite the input loops in pickle?
+* More assertions!
+* Add a hash table implementation to speed things up to the max; this would
+primarily affect command and variable search.
+* BUG: Trailing space causes extra argument to appear in argument list. This is
+probably related to other white space bugs.
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h
