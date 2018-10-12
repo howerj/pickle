@@ -37,20 +37,15 @@
 
 #ifndef PICKLE_H
 #define PICKLE_H
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stddef.h>
 
-#define PICKLE_MAX_STRING    (512u)
-#define PICKLE_MAX_RECURSION (512u)
-#define PICKLE_MAX_ARGS      (128u)
-
-#ifndef UNUSED
-#define UNUSED(X) ((void)(X))
-#endif
+#define PICKLE_MAX_STRING    (512)
+#define PICKLE_MAX_RECURSION (128)
+#define PICKLE_MAX_ARGS      (128)
 
 typedef void *(*pickle_malloc_t)(void *arena,  size_t bytes);
 typedef void *(*pickle_realloc_t)(void *arena, void *ptr, size_t bytes);
@@ -96,7 +91,7 @@ int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) defa
 int pickle_deinitialize(pickle_t *i);
 
 int pickle_arity_error(pickle_t *i, int expected, int argc, char **argv); /* use within registered command if wrong number of args given */
-int pickle_error(pickle_t *i, const char *fmt, ...);
+int pickle_error(pickle_t *i, const char *fmt, ...); /* use within registered command to return an error */
 int pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
 
 const char *pickle_get_var(pickle_t *i, const char *name);
@@ -107,5 +102,4 @@ int pickle_tests(void);
 #ifdef __cplusplus
 }
 #endif
-
 #endif

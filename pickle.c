@@ -25,6 +25,7 @@
 #include <limits.h>
 #include <stdarg.h>
 
+#define UNUSED(X) ((void)(X))
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 #define implies(P, Q)  assert(!(P) || (Q)) /* material implication, immaterial if NDEBUG define */
 #define verify(X) if (!(X)) { abort(); }
@@ -35,7 +36,7 @@
 #define DEBUGGING (1)
 #endif
 
-#define MALLOC(I, SZ)      ((I)->allocator.malloc((I)->allocator.arena,      (SZ)))
+#define MALLOC(I, SZ)      (assert((SZ) > 0 && (SZ) < PICKLE_MAX_STRING), (I)->allocator.malloc((I)->allocator.arena,      (SZ)))
 #define REALLOC(I, P, SZ) ((I)->allocator.realloc((I)->allocator.arena, (P), (SZ)))
 #define FREE(I, P)           ((I)->allocator.free((I)->allocator.arena, (P)))
 
@@ -84,10 +85,16 @@ struct pickle_call_frame {
 
 static char *string_empty = "", *string_oom = "Out Of Memory";
 
-static char *picolStrdup(pickle_allocator_t *a, const char *s) {  /* intern common strings? */
+static inline void static_assertions(void) {
+	BUILD_BUG_ON(PICKLE_MAX_STRING    < 128);
+	BUILD_BUG_ON(PICKLE_MAX_RECURSION < 8);
+	BUILD_BUG_ON(PICKLE_MAX_ARGS      < 8);
+}
+
+static char *picolStrdup(pickle_allocator_t *a, const char *s) {
 	assert(a);
 	assert(s);
-	const size_t l = strlen(s);
+	const size_t l = strlen(s); /* NB: could use 'strnlen(s, PICKLE_MAX_STRING)' */
 	char *r = a->malloc(a->arena, l + 1);
 	if (!r)
 		return NULL;
@@ -340,7 +347,7 @@ static struct pickle_var *picolGetVar(pickle_t *i, const char *name, int link) {
 		const char *n = v->smallname ? &v->name.small[0] : v->name.ptr;
 		assert(n);
 		if (!strcmp(n, name)) {
-			if (link)
+			if (link) /**@todo resolve link chain at variable creation, not here */
 				while (v->type == PV_LINK) {
 					assert(v != v->data.link);
 					v = v->data.link;
@@ -505,6 +512,7 @@ oom:
 }
 
 static inline void picolAssertCommandPreConditions(pickle_t *i, const int argc, char **argv, void *pd) {
+	/* UNUSED is used to suppress warnings if NDEBUG is defined */
 	UNUSED(i);    assert(i);
 	UNUSED(argc); assert(argc >= 1);
 	UNUSED(argv); assert(argv);
@@ -597,7 +605,7 @@ int pickle_eval(pickle_t *i, const char *t) {
 		memcpy(t, p.start, tlen);
 		t[tlen] = '\0';
 		if (p.type == PT_VAR) {
-			struct pickle_var *v = picolGetVar(i, t, 1);
+			struct pickle_var * const v = picolGetVar(i, t, 1);
 			if (!v) {
 				retcode = pickle_error(i, "No such variable '%s'", t);
 				FREE(i, t);
@@ -653,13 +661,13 @@ int pickle_eval(pickle_t *i, const char *t) {
 		/* We have a new token, append to the previous or as new arg? */
 		if (prevtype == PT_SEP || prevtype == PT_EOL) {
 			char **old = argv;
-			argv = REALLOC(i, argv, sizeof(char*)*(argc + 1));
-			if (!argv) {
+			if (!(argv = REALLOC(i, argv, sizeof(char*)*(argc + 1)))) {
 				argv = old;
 				retcode = picolErrorOom(i);
 				goto err;
 			}
 			argv[argc] = t;
+			t = NULL;
 			argc++;
 		} else { /* Interpolation */
 			const int oldlen = strlen(argv[argc - 1]), tlen = strlen(t);
@@ -672,8 +680,8 @@ int pickle_eval(pickle_t *i, const char *t) {
 			argv[argc - 1] = arg;
 			memcpy(argv[argc - 1] + oldlen, t, tlen);
 			argv[argc - 1][oldlen + tlen]='\0';
-			FREE(i, t);
 		}
+		FREE(i, t);
 		prevtype = p.type;
 	}
 err:
@@ -852,10 +860,12 @@ static void picolVarFree(pickle_t *i, struct pickle_var *v) {
 static void picolDropCallFrame(pickle_t *i) {
 	assert(i);
 	struct pickle_call_frame *cf = i->callframe;
+	assert(i->level >= 0);
 	i->level--;
 	if (cf) {
 		struct pickle_var *v = cf->vars, *t = NULL;
 		while (v) {
+			assert(v != v->next);
 			t = v->next;
 			picolVarFree(i, v);
 			v = t;
@@ -863,6 +873,12 @@ static void picolDropCallFrame(pickle_t *i) {
 		i->callframe = cf->parent;
 	}
 	FREE(i, cf);
+}
+
+static void picolDropAllCallFrames(pickle_t *i) {
+	assert(i);
+	while (i->callframe)
+		picolDropCallFrame(i);
 }
 
 static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -1107,12 +1123,15 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "catch",     picolCommandCatch,     NULL },
 	};
 	static const char *unary[] = { "!", "~", "abs", "bool" };
-	static const char *operations[] = { "+", "-", "*", "/", ">", ">=", "<", "<=", "==", "!=", /*"<<", ">>", "&", "|", "^", "min", "max" */ };
+	static const char *binary[] = { 
+		"+", "-", "*", "/", ">", ">=", "<", "<=", "==", "!=", 
+		/*"<<", ">>", "&", "|", "^", "min", "max" */ 
+	};
 	for (size_t j = 0; j < sizeof(unary)/sizeof(char*); j++)
 		if (pickle_register_command(i, unary[j], picolCommandMathUnary, NULL) != PICKLE_OK)
 			return -1;
-	for (size_t j = 0; j < sizeof(operations)/sizeof(char*); j++)
-		if (pickle_register_command(i, operations[j], picolCommandMath, NULL) != PICKLE_OK)
+	for (size_t j = 0; j < sizeof(binary)/sizeof(char*); j++)
+		if (pickle_register_command(i, binary[j], picolCommandMath, NULL) != PICKLE_OK)
 			return -1;
 	for (size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
 		if (pickle_register_command(i, commands[j].name, commands[j].func, commands[j].data) != PICKLE_OK)
@@ -1120,48 +1139,49 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 	return 0;
 }
 
-static void pickleFreeCmd(pickle_allocator_t *a, struct pickle_command *p) {
-	assert(a);
+static void pickleFreeCmd(pickle_t *i, struct pickle_command *p) {
+	assert(i);
 	if (!p)
 		return;
 	if (p->func == picolCommandCallProc) {
 		char **procdata = (char**) p->privdata;
 		if (procdata) {
-			a->free(a->arena, procdata[0]);
-			a->free(a->arena, procdata[1]);
+			FREE(i, procdata[0]);
+			FREE(i, procdata[1]);
 		}
-		a->free(a->arena, procdata);
+		FREE(i, procdata);
 	}
-	a->free(a->arena, p->name);
-	a->free(a->arena, p);
+	FREE(i, p->name);
+	FREE(i, p);
 }
 
 int pickle_deinitialize(pickle_t *i) {
 	assert(i);
-	pickle_allocator_t *a = &i->allocator;
-	i->initialized = 0;
-	picolDropCallFrame(i);
+	picolDropAllCallFrames(i);
+	assert(!(i->callframe));
 	picolFreeResult(i);
-	i->static_result = 0;
 	struct pickle_command *c = i->commands, *p = NULL;
-	for (; c; p = c, c = c->next)
-		pickleFreeCmd(a, p);
-	pickleFreeCmd(a, p);
+	for (; c; p = c, c = c->next) {
+		pickleFreeCmd(i, p);
+		assert(c != c->next);
+	}
+	pickleFreeCmd(i, p);
+	memset(i, 0, sizeof *i);
 	return 0;
 }
 
 static void *pmalloc(void *arena, const size_t size) {
-	UNUSED(arena);
+	UNUSED(arena); assert(arena == NULL);
 	return malloc(size);
 }
 
 static void *prealloc(void *arena, void *ptr, const size_t size) {
-	UNUSED(arena);
+	UNUSED(arena); assert(arena == NULL);
 	return realloc(ptr, size);
 }
 
 static void pfree(void *arena, void *ptr) {
-	UNUSED(arena);
+	UNUSED(arena); assert(arena == NULL);
 	free(ptr);
 }
 

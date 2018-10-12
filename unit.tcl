@@ -58,15 +58,18 @@ proc fib {x} {
 	}
 }
 
+proc n2 {} { upvar 1 h u; set u [+ $u 1]; }
+proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }
+
 puts "\[Pickle Tests\]"
 
 test {== 2 2}
 test {+ 2 2}
 test "< 3 4"
-test "== 16 \[square 4\]"
-test "== 3  \[length 123\]"
+test {== 16 [square 4]}
+test {== 3  [length 123]}
 test {eq a a}
-test "eq \"a b\" \[concat a b\]"
+test {eq "a b" [concat a b]}
 test "eq \"a,b,c\" \[join , a b c\]"
 test {match %% %}
 test {match "%?" "?"}
@@ -83,6 +86,15 @@ test {match "*" "ahoy!"}
 test {match "*abc*c?d" "xxxxxabcxxxxc3d"}
 test {match "*abc*c?d" "xxxxxabcxxxxc?d"}
 test {== 89 [fib 10]}
+set u 5
+puts "u = $u"
+puts "[n1]"
+test "== $u 7"
+unset u
+
+puts "[n1]"
+test "== $u 2"
+unset u
 
 assert [<= $passed $total]
 

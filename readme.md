@@ -389,7 +389,7 @@ this increases the complexity of the build system, adds more options, and adds
 more code. Instead you can use [rlwrap][], or an alternative, as a wrapper
 around your program.
 
-## Custom Allocator
+## Custom Allocator / C Library usage
 
 To aid in porting the system to embedded platforms, [pickle.c][] contains no
 Input and Output functions (they are added in by registering commands in
@@ -398,12 +398,19 @@ Input and Output functions (they are added in by registering commands in
 embedded platform, unlike a language like [FORTH][], is memory allocation. It
 is unavoidable that some kind of dynamic memory allocation is required. For
 this purpose it is possible to provide your own allocator to the pickle
-library. 
+library. If an allocator is not provided, malloc will be used, you can remove
+this from the initialization function in to stop your build system pulling in
+your platforms allocator.
 
 The block allocation library provided in [block.c][] can be optionally
 used, but unlike [malloc][] will require tweaking to suite your purposes. The
 maximum block size available to the allocator will also determine the maximum
 string size that can be used by pickle.
+
+Apart from snprintf, and sscanf, the other functions pulled in from the C
+library are quite easy to implement. They include (but are not necessarily
+limited to); strlen, memcpy, memchr, memset and abort.
+
 
 ## Interacting with the library and extension
 
