@@ -36,7 +36,7 @@
 #define DEBUGGING (1)
 #endif
 
-#define MALLOC(I, SZ)      (assert((SZ) > 0 && (SZ) < PICKLE_MAX_STRING), (I)->allocator.malloc((I)->allocator.arena,      (SZ)))
+#define MALLOC(I, SZ)      (assert((SZ) > 0 && (SZ) < PICKLE_MAX_STRING), (I)->allocator.malloc((I)->allocator.arena, (SZ)))
 #define REALLOC(I, P, SZ) ((I)->allocator.realloc((I)->allocator.arena, (P), (SZ)))
 #define FREE(I, P)           ((I)->allocator.free((I)->allocator.arena, (P)))
 
@@ -72,6 +72,8 @@ struct pickle_var { /* strings are stored as either pointers, or as 'small' stri
 };
 
 struct pickle_command {
+	/* If online help in the form of help strings were to be added, we
+	 * could add another field for it here */
 	char *name;
 	pickle_command_func_t func;
 	void *privdata;
@@ -325,7 +327,8 @@ static int picolSetResultEmpty(pickle_t *i) {
 	return PICKLE_OK;
 }
 
-int pickle_set_result(pickle_t *i, const char *s) {
+/* NB. This would be more useful if it accepted a printf style format string */
+int pickle_set_result(pickle_t *i, const char *s) { 
 	assert(i);
 	assert(i->result);
 	assert(s);
@@ -349,7 +352,7 @@ static struct pickle_var *picolGetVar(pickle_t *i, const char *name, int link) {
 		if (!strcmp(n, name)) {
 			if (link) /**@todo resolve link chain at variable creation, not here */
 				while (v->type == PV_LINK) {
-					assert(v != v->data.link);
+					assert(v != v->data.link); /* Cycle? */
 					v = v->data.link;
 				}
 			implies(v->type == PV_STRING, v->data.val.ptr);
@@ -358,7 +361,7 @@ static struct pickle_var *picolGetVar(pickle_t *i, const char *name, int link) {
 		/* See <https://en.wikipedia.org/wiki/Cycle_detection>,
 		 * <https://stackoverflow.com/questions/2663115>, or "Floyd's
 		 * cycle-finding algorithm" for proper loop detection */
-		assert(v != v->next);
+		assert(v != v->next); /* Cycle? */
 		v = v->next;
 	}
 	return NULL;
@@ -465,7 +468,7 @@ static struct pickle_command *picolGetCommand(pickle_t *i, const char *name) {
 		assert(c->name);
 		if (!strcmp(c->name, name))
 			return c;
-		assert(c != c->next);
+		assert(c != c->next); /* Cycle? */
 		c = c->next;
 	}
 	return NULL;
@@ -558,7 +561,7 @@ static int picolUnEscape(char *inout) {
 			case  'x': {
 				if (!inout[j+1] || !inout[j+2])
 					return -1;
-				char v[3] = { inout[j + 1], inout[j + 2], 0 };
+				const char v[3] = { inout[j + 1], inout[j + 2], 0 };
 				unsigned d = 0;
 				int pos = 0;
 				if (sscanf(v, "%x%n", &d, &pos) != 1)
@@ -865,7 +868,7 @@ static void picolDropCallFrame(pickle_t *i) {
 	if (cf) {
 		struct pickle_var *v = cf->vars, *t = NULL;
 		while (v) {
-			assert(v != v->next);
+			assert(v != v->next); /* Cycle? */
 			t = v->next;
 			picolVarFree(i, v);
 			v = t;
@@ -1101,6 +1104,50 @@ static int picolCommandUnSet(pickle_t *i, const int argc, char **argv, void *pd)
 	return PICKLE_OK;
 }
 
+static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	if (argc == 1) {
+		long r = 0;
+		struct pickle_command *c = i->commands;
+		while (c) {
+			r++;
+			assert(c != c->next); /* Cycle? */
+			c = c->next;
+		}
+		char v[64];
+		const int snr = snprintf(v, sizeof v, "%ld", r); (void)snr;
+		assert(snr > 0 && snr < (int)sizeof(v));
+		return pickle_set_result(i, v);
+	}
+
+	if (argc != 3) /**@todo argc == 2, get command index */
+		return pickle_arity_error(i, 3, argc, argv);
+	long r = atol(argv[2]), j = 0;
+	struct pickle_command *c = i->commands;
+	for (j = 0; j < r && c; j++, c = c->next)
+		/* do nothing */;
+	if (r != j || !c)
+		return pickle_error(i, "Invalid command index '%ld'", r);
+	assert(c);
+	int defined = c->func == picolCommandCallProc;
+	const char *rq = argv[1];
+	if (!strcmp(rq, "args")) { 
+		if (!defined)
+			return pickle_set_result(i, "built-in");
+		char **procdata = c->privdata;
+		return pickle_set_result(i, procdata[0]);
+	} else if (!strcmp(rq, "body")) {
+		if (!defined)
+			return pickle_set_result(i, "built-in");
+		char **procdata = c->privdata;
+		return pickle_set_result(i, procdata[1]);
+	} else if (!strcmp(rq, "name")) {
+		return pickle_set_result(i, c->name);
+	}
+
+	return pickle_error(i, "Unknown command request '%s'", rq);
+}
+
 static int picolRegisterCoreCommands(pickle_t *i) {
 	assert(i);
 	/* NOTE: to save on memory we could do command lookup against this
@@ -1121,6 +1168,7 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "join",      picolCommandJoin,      NULL },
 		{ "eval",      picolCommandEval,      NULL },
 		{ "catch",     picolCommandCatch,     NULL },
+		{ "command",   picolCommandCommand,   NULL },
 	};
 	static const char *unary[] = { "!", "~", "abs", "bool" };
 	static const char *binary[] = { 
@@ -1186,6 +1234,7 @@ static void pfree(void *arena, void *ptr) {
 }
 
 int pickle_initialize(pickle_t *i, pickle_allocator_t *a) {
+	static_assertions();
 	assert(i);
 	assert(!(i->initialized));
 	memset(i, 0, sizeof *i);

@@ -199,6 +199,25 @@ back to strings.
 There are also the following unary mathematical operators defined: '!', '~',
 'abs', 'bool'.
 
+* catch expr varname
+
+This allows arbitrary codes to be caught, 'catch' evaluates an expression and
+puts the return code into 'varname', the string returned is the result of the
+evaluation of 'expr'.
+
+* command item number *OR* command
+
+This function is used to inspect the currently defined commands in the system.
+
+If no arguments are given then the number of commands defined is returned. If
+an item is given a number indicates which command that it applies to. Commands
+are indexed by numbers. Defining new command may change the index of other
+commands. Commands are either user defined or built in commands.
+
+ - args: get a functions arguments (returns 'built-in' for built in commands)
+ - body: get a functions body (returns 'built-in' for built in commands)
+ - name: get a functions name
+
 ### Extension Commands
 
 [main.c][] extends the interpreter with some commands that make the language
@@ -338,9 +357,9 @@ file in the current interpreter context and is *not* a safe operation.
 Retrieve information about the system. Information items include, and are
 but are limited to:
 
-  - level, call stack level
-  - line, current line number
-  - heap, information about the heap, if available, see 'heap' command
+ - level, call stack level
+ - line, current line number
+ - heap, information about the heap, if available, see 'heap' command
 
 The 'heap' information can also be queried.
 

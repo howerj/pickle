@@ -45,9 +45,6 @@ proc test {x} {
 	unset t
 }
 
-# proc waste {x} { set loop $x; while {!= 0 $loop} { decr loop } }
-# puts [clock]; waste 999999; puts [clock]; 
-
 proc square {x} { * $x $x }
 
 proc fib {x} {
@@ -86,6 +83,8 @@ test {match "*" "ahoy!"}
 test {match "*abc*c?d" "xxxxxabcxxxxc3d"}
 test {match "*abc*c?d" "xxxxxabcxxxxc?d"}
 test {== 89 [fib 10]}
+
+# Test upvar links
 set u 5
 puts "u = $u"
 puts "[n1]"
@@ -100,7 +99,6 @@ assert [<= $passed $total]
 
 set failed [!= $passed $total]
 set emphasize [green]
-
 
 if {!= $failed 0} {
 	set emphasize [red]
@@ -123,11 +121,12 @@ set m 0
 set i 0
 
 while {< $i $heaps} { 
-	set blk   [heap arena-block $i]
-	set sz    [heap arena-size $i]
-	set used  [heap arena-used $i]
+	set blk   [heap arena-block  $i]
+	set sz    [heap arena-size   $i]
+	set used  [heap arena-active $i]
+	set max   [heap arena-max    $i]
 	set m [+ $m [* $blk $sz]]
-	puts "ARENA($i):   $blk $sz $used"
+	puts "ARENA($i):   $blk $sz $used $max"
 	incr i
 }
 
@@ -149,5 +148,4 @@ puts "line: [info line]"
 
 # exit $failed
 return "" $failed
-
 

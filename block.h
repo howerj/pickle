@@ -48,6 +48,7 @@ typedef struct {
 	size_t blocksz;    /* size of a block: 1, 2, 4, 8, ... */
 	size_t lastfree;   /* last freed block */
 	void *memory;      /* memory backing this allocator, should be aligned! */
+	long active, max;  /* current active, maximum on heap at any one time */
 } block_arena_t;
 
 typedef struct {
@@ -97,7 +98,9 @@ void *pool_calloc(pool_t *p, size_t length);
 			.map  = (bitmap_unit_t [BLOCK_COUNT/sizeof(bitmap_unit_t)]) { 0 }\
 		},\
 		.blocksz = BLOCK_SIZE,\
-		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE / sizeof(uint64_t))]) { 0 })\
+		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE / sizeof(uint64_t))]) { 0 }),\
+		.active  = 0,\
+		.max     = 0,\
 	}
 
 int block_tests(void);

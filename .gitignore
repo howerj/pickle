@@ -1,6 +1,7 @@
-picol
-pickle
-*.o
 *.a
-*.log
 block
+dict
+*.log
+*.o
+pickle
+picol

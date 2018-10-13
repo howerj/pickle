@@ -27,6 +27,25 @@ proc red    {} { color "\x1b\[31;1m" }
 proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
 
+proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
+
+# Hold over from Forth
+proc words {} {
+	set i 0
+	set m [command]
+	while {< $i $m} {
+		puts -nonewline "[command name $i] "
+		incr i
+	}
+	puts ""
+}
+
+# puts "Commands defined:"
+# words
+
+puts "For help, type 'help', for a list of commands type 'words'"
+puts "To quit, type 'exit', or press CTRL+D on a Unix (or CTRL-Z in Windows)"
+
 puts -nonewline $prompt
 set line [gets]
 

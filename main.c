@@ -231,15 +231,10 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 		const int pool = atoi(argv[2]);
 		if((pool >= 0) && (pool < (int)p->count)) {
 			block_arena_t *a = p->arenas[pool];
-			if(!strcmp(rq, "arena-size"))       { info = a->freelist.bits; }
-			else if(!strcmp(rq, "arena-block")) { info = a->blocksz; }
-			else if(!strcmp(rq, "arena-used"))  { 
-				info = 0;
-				const size_t bits = a->freelist.bits;
-				for(size_t j = 0; j < bits; j++)
-					if(bitmap_get(&a->freelist, j))
-						info++;
-			}
+			if(!strcmp(rq, "arena-size"))        { info = a->freelist.bits; }
+			else if(!strcmp(rq, "arena-block"))  { info = a->blocksz; }
+			else if(!strcmp(rq, "arena-active")) { info = a->active; }
+			else if(!strcmp(rq, "arena-max"))    { info = a->max; }
 			else { /* do nothing */ }
 		}
 	}
@@ -331,6 +326,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 		{ "system",   pickleCommandSystem,    NULL },
 		{ "exit",     pickleCommandExit,      NULL },
 		{ "quit",     pickleCommandExit,      NULL },
+		{ "bye",      pickleCommandExit,      NULL }, // hold over from Forth
 		{ "getenv",   pickleCommandGetEnv,    NULL },
 		{ "random",   pickleCommandRandom,    NULL },
 		{ "clock",    pickleCommandClock,     NULL },
@@ -441,9 +437,9 @@ int main(int argc, char **argv) {
 		{ 8,   512 }, /* most allocations are quite small */
 		{ 16,  256 },
 		{ 32,  128 },
-		{ 64,   32 },
-		{ 128,  16 },
-		{ 256,   8 },
+		{ 64,   64 },
+		{ 128,  32 },
+		{ 256,  16 },
 		{ 512,   8 }, /* maximum string length is bounded by this */
 	};
 
