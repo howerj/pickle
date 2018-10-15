@@ -3,8 +3,6 @@
  * @copyright Richard James Howe (2018)
  * @license BSD
  *
- * @todo Add maximum number of blocks allocated in a specific arena
- *
  * This file contains a simple memory pool allocator, and contains three main
  * sections as well as some optional tests. The sections are a bitmap data
  * structure used to store the free list, an allocator that can return fixed
@@ -42,6 +40,10 @@
 
 size_t bitmap_units(size_t bits) {
 	return bits/BITS + !!(bits & MASK);
+}
+
+static inline size_t bitmap_unit_index(size_t bits) {
+	return bits/BITS;
 }
 
 size_t bitmap_bits(bitmap_t *b) {
@@ -110,38 +112,40 @@ static inline size_t block_count(block_arena_t *a) {
 	return bitmap_bits(&a->freelist);
 }
 
-static long block_find_free(block_arena_t *a) {
+static inline long block_find_free(block_arena_t *a) {
 	assert(a);
 	if (FIND_BY_BIT) { /* much slower, simpler */
 		bitmap_t *b = &a->freelist;
-		long r = -1, max = block_count(a);
+		const long max = block_count(a);
 		for (long i = 0; i < max; i++)
 			if (!bitmap_get(b, i))
 				return i;
+		return -1;
+	}
+	if (a->lastfree) {
+		const long r = a->lastfree;
+		a->lastfree = 0;
+		bitmap_get(&a->freelist, r);
 		return r;
 	}
 	bitmap_t *b = &a->freelist;
 	bitmap_unit_t *u = b->map;
-	long r = -1;
-	const long max = bitmap_units(b->bits), start = 0; // start = bitmap_units(a->lastfree);
-	if (a->lastfree) {
-		const long i = a->lastfree;
-		a->lastfree = 0;
-		if (!bitmap_get(b, i))
-			return i;
-	}
-	for (long i = start; i < max; i++) /**@todo start at last position, wrap around */
+	size_t max = bitmap_unit_index(b->bits), start = bitmap_unit_index(a->lastalloc);
+	for (size_t c = 0, i = start; c <= max; i = (i + 1) % max /*& (max - 1)*/, c++) 
 		if (u[i] != (bitmap_unit_t)-1uLL) {
 			const size_t index = i * BITS;
 			const size_t end = MIN(b->bits, (index + BITS));
-			for (long j = index; j < (long)end; j++)
-				if (!bitmap_get(b, j))
+			for (size_t j = index; j < end; j++)
+				if (!bitmap_get(b, j)) {
+					a->lastalloc = j;
 					return j;
+				}
 		}
-	return r;
+	return -1;
 }
 
 static inline bool is_aligned(void *v) {
+	assert(v);
 	uintptr_t p = (uintptr_t)v;
 	if (sizeof(p) == 2)
 		return !(p & 1);
@@ -177,6 +181,7 @@ void *block_malloc(block_arena_t *a, size_t length) {
 }
 
 void *block_calloc(block_arena_t *a, size_t length) {
+	assert(a);
 	void *r = block_malloc(a, length);
 	if (!r)
 		return r;
@@ -185,6 +190,7 @@ void *block_calloc(block_arena_t *a, size_t length) {
 }
 
 static inline int block_arena_valid_pointer(block_arena_t *a, void *v) {
+	assert(a);
 	const size_t max = block_count(a);
 	if (v < a->memory || (char*)v > ((char*)a->memory + (max * a->blocksz))) 
 		return 0;
@@ -370,6 +376,8 @@ int block_tests(void) { return 0; }
 BLOCK_DECLARE(block_arena, BLK_COUNT, BLK_SIZE);
 
 static uintptr_t diff(void *a, void *b) {
+	assert(a);
+	assert(b);
 	return a > b ? (char*)a - (char*)b : (char*)b - (char*)a;
 }
 

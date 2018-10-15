@@ -46,7 +46,7 @@ typedef struct {
 typedef struct {
 	bitmap_t freelist; /* list of free blocks */
 	size_t blocksz;    /* size of a block: 1, 2, 4, 8, ... */
-	size_t lastfree;   /* last freed block */
+	size_t lastalloc, lastfree;   /* last freed block */
 	void *memory;      /* memory backing this allocator, should be aligned! */
 	long active, max;  /* current active, maximum on heap at any one time */
 } block_arena_t;
