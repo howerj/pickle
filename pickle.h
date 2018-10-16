@@ -58,7 +58,7 @@ typedef struct {
 	void *arena;
 } pickle_allocator_t;
 
-enum { PICKLE_OK, PICKLE_ERR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
+enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
 
 struct pickle_command;
 struct pickle_call_frame;
@@ -90,12 +90,16 @@ int pickle_eval(pickle_t *i, const char *t);
 int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) default allocator used */
 int pickle_deinitialize(pickle_t *i);
 
-int pickle_arity_error(pickle_t *i, int expected, int argc, char **argv); /* use within registered command if wrong number of args given */
-int pickle_error(pickle_t *i, const char *fmt, ...); /* use within registered command to return an error */
-int pickle_set_result(pickle_t *i, const char *s);   /* set result within registered command */
+int pickle_arity_error(pickle_t *i, int expected, int argc, char **argv); /* common error: use within registered command if wrong number of args given */
+int pickle_error_out_of_memory(pickle_t *i);                /* common error: out of memory, does not allocate */
+int pickle_error(pickle_t *i, const char *fmt, ...);        /* use within registered command to return an error */
 
-const char *pickle_get_var(pickle_t *i, const char *name);
-int pickle_set_var(pickle_t *i, const char *name, const char *val);
+int pickle_set_result_string(pickle_t *i, const char *s);   /* set result within registered command */
+int pickle_set_result_integer(pickle_t *i, long result);
+
+const char *pickle_get_var_string(pickle_t *i, const char *name);
+int pickle_set_var_string(pickle_t *i, const char *name, const char *val);
+int pickle_set_var_integer(pickle_t *i, const char *name, long r);
 
 int pickle_tests(void);
 

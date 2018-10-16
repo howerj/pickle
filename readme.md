@@ -11,15 +11,15 @@
 | Website   | <https://github.com/howerj/pickle>         |
 
 
-	   ▄███████▄  ▄█   ▄████████    ▄█   ▄█▄  ▄█          ▄████████ 
-	  ███    ███ ███  ███    ███   ███ ▄███▀ ███         ███    ███ 
-	  ███    ███ ███▌ ███    █▀    ███▐██▀   ███         ███    █▀  
-	  ███    ███ ███▌ ███         ▄█████▀    ███        ▄███▄▄▄     
-	▀█████████▀  ███▌ ███        ▀▀█████▄    ███       ▀▀███▀▀▀     
-	  ███        ███  ███    █▄    ███▐██▄   ███         ███    █▄  
-	  ███        ███  ███    ███   ███ ▀███▄ ███▌    ▄   ███    ███ 
-	 ▄████▀      █▀   ████████▀    ███   ▀█▀ █████▄▄██   ██████████ 
-				       ▀         ▀                     
+	   ▄███████▄  ▄█   ▄████████    ▄█   ▄█▄  ▄█          ▄████████
+	  ███    ███ ███  ███    ███   ███ ▄███▀ ███         ███    ███
+	  ███    ███ ███▌ ███    █▀    ███▐██▀   ███         ███    █▀
+	  ███    ███ ███▌ ███         ▄█████▀    ███        ▄███▄▄▄
+	▀█████████▀  ███▌ ███        ▀▀█████▄    ███       ▀▀███▀▀▀
+	  ███        ███  ███    █▄    ███▐██▄   ███         ███    █▄
+	  ███        ███  ███    ███   ███ ▀███▄ ███▌    ▄   ███    ███
+	 ▄████▀      █▀   ████████▀    ███   ▀█▀ █████▄▄██   ██████████
+				       ▀         ▀
 
 This is a copy, and modification, of a small interpreter written by Antirez in
 about 500 lines of C, this interpreter is for a small TCL like language. The
@@ -47,11 +47,11 @@ run the built in unit tests and the unit tests in [test.tcl][].
 The internals of the interpreter do not deviate from the original interpreter,
 so the document on the [picol][] language still applies. The language is like a
 simplified version of [TCL][], where everything is a command and the primary
-data structure is the string. 
+data structure is the string.
 
-Some programmers seem to an obsessive interest in their language of choice, 
-do not become one of those programmers. This language, like any other 
-language, will not solve all of your problems and may be entirely unsuitable 
+Some programmers seem to an obsessive interest in their language of choice,
+do not become one of those programmers. This language, like any other
+language, will not solve all of your problems and may be entirely unsuitable
 for the task you want to achieve. It is up to you to evaluate whether this
 language, and implementation of it, is suitable.
 
@@ -82,7 +82,7 @@ Potential Improvements:
 
 * Many, many more commands could be written in order to make this interpreter
 more usable.
-* A hash library could be integrate. It would not have to that big or complex 
+* A hash library could be integrate. It would not have to that big or complex
 to greatly speed up moderately complex programs.
 * The following small library can be used to either extend or modify the
 interpreter to suite your purposes:
@@ -97,7 +97,7 @@ Picol, and [TCL][], are dynamic languages with only one real data type, the
 string. This might seem inefficient but it is fine for a glue language whose
 main purpose is to bind lots of things written in C together. It is similar to
 [lisp][], it is [homoiconic][], and is simple with very little in the way of
-syntax. 
+syntax.
 
 
 	string  called if first argument
@@ -171,7 +171,7 @@ down through the call stack, however only '#0' is supported.
 
 Form a link from myVar to otherVar in the scope specified by number. A
 special case is '#0', which is the global context, see 'uplevel' for a
-description of the scoping traversal rules implied by the number argument. 
+description of the scoping traversal rules implied by the number argument.
 
 * unset string
 
@@ -227,10 +227,17 @@ Shell.
 
 The following commands are defined:
 
-* puts string
+* puts -nonewline? string
 
 Write a string, followed by a newline, to the standard output stream,
-[stdout][].
+[stdout][]. If an EOF is encountered, a return code of '1' is sent and the
+string 'EOF' is returned. '-nonewline' can be given as an optional argument, to
+suppress the newline.
+
+* error string
+
+Write an error message to the standard error stream, followed by a newline and
+return '1' for the return code.
 
 * gets
 
@@ -253,7 +260,7 @@ commands registered with 'atexit' will be called.
 
 *quit* is a synonym for *exit*. It performs exactly the same function and is
 only there because it is common to type either *quit* or *exit* in order to
-leave an interpreter (I find it absurd that if you type 'exit' or 'quit' 
+leave an interpreter (I find it absurd that if you type 'exit' or 'quit'
 into [python][] it knows exactly what you intended to do then does not do it.
 Instead it taunts you with the correct answer).
 
@@ -328,9 +335,9 @@ no signals have been detected, is returned. A subsequent call with zero
 arguments will return zero (if a signal has not be fired since). Signal events
 are not queued and can be lost.
 
-If two arguments are given, the first is treated as a signal number and 
-the second is the action to perform.  There are three possible actions; 
-"ignore", "default" and "catch". A caught signal will set a variable 
+If two arguments are given, the first is treated as a signal number and
+the second is the action to perform.  There are three possible actions;
+"ignore", "default" and "catch". A caught signal will set a variable
 which can be queried by calling signal with no arguments, as already described.
 An "ignored" signal will be ignored and a signal with "default" behavior will
 use the systems defaults. On successful installation of the handler, a "1" is

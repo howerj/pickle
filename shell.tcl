@@ -1,4 +1,4 @@
-#!./pickle
+#!./pickle -a
 # Simple Shell
 # Before this is usable, several things need to be done:
 # - Evaluation could be done in a sandbox
@@ -17,9 +17,9 @@ puts $HOME
 source $HOME/.picklerc
 
 set colorize [getenv COLOR]
-proc color {x} { 
-	upvar #0 colorize c; 
-	if {eq $c on} { return $x } else { return "" } 
+proc color {x} {
+	upvar #0 colorize c;
+	if {eq $c on} { return $x } else { return "" }
 }
 
 proc normal {} { color "\x1b\[0m" }
@@ -46,15 +46,27 @@ proc words {} {
 puts "For help, type 'help', for a list of commands type 'words'"
 puts "To quit, type 'exit', or press CTRL+D on a Unix (or CTRL-Z in Windows)"
 
-puts -nonewline $prompt
-set line [gets]
+proc io {} {
+	upvar #0 prompt p
+	upvar #0 line l
+	puts -nonewline $p
+	set e ""
+	catch {set l [gets]} e
+	if {== $e 1} {
+		if {== $l EOF} {
+			exit 0
+		}
+		exit 1
+	}
+}
+
+io
 
 while {ne $line ""} {
 	set result [catch {eval $line} retcode]
 	set fail [red]
 	if {== $retcode 0} { set fail [green] }
 	puts "\[$fail$retcode[normal]\] $result"
-	puts -nonewline $prompt
-	set line [gets]
+	io
 }
 

@@ -15,8 +15,8 @@
  * by your system.
  *
  * NOTE: As the structures needed to define a memory pool are available in
- * the header it is possible to allocate pools on the statically, or even 
- * on the stack, as you see fit. You do not have to use 'pool_new' to create 
+ * the header it is possible to allocate pools on the statically, or even
+ * on the stack, as you see fit. You do not have to use 'pool_new' to create
  * a new pool. */
 
 #include "block.h"
@@ -112,6 +112,13 @@ static inline size_t block_count(block_arena_t *a) {
 	return bitmap_bits(&a->freelist);
 }
 
+/* NOTES: Speeding up this function increases the speed of allocation,
+ * deallocation is very fast as it is just clearing a bit field, but for
+ * allocation it the allocator has to find a free bit which can mean traversing
+ * the entire bitfield. Some potential operations include keeping a stack of
+ * values just recently freed (like keeping a free list), or micro
+ * optimizations such as using a highly optimized version of 'memchr' if your
+ * library provides one. */
 static inline long block_find_free(block_arena_t *a) {
 	assert(a);
 	if (FIND_BY_BIT) { /* much slower, simpler */
@@ -131,7 +138,7 @@ static inline long block_find_free(block_arena_t *a) {
 	bitmap_t *b = &a->freelist;
 	bitmap_unit_t *u = b->map;
 	size_t max = bitmap_unit_index(b->bits), start = bitmap_unit_index(a->lastalloc);
-	for (size_t c = 0, i = start; c <= max; i = (i + 1) % max /*& (max - 1)*/, c++) 
+	for (size_t c = 0, i = start; c <= max; i = (i + 1) % max /*& (max - 1)*/, c++)
 		if (u[i] != (bitmap_unit_t)-1uLL) {
 			const size_t index = i * BITS;
 			const size_t end = MIN(b->bits, (index + BITS));
@@ -192,7 +199,7 @@ void *block_calloc(block_arena_t *a, size_t length) {
 static inline int block_arena_valid_pointer(block_arena_t *a, void *v) {
 	assert(a);
 	const size_t max = block_count(a);
-	if (v < a->memory || (char*)v > ((char*)a->memory + (max * a->blocksz))) 
+	if (v < a->memory || (char*)v > ((char*)a->memory + (max * a->blocksz)))
 		return 0;
 	return 1;
 }

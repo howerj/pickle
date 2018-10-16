@@ -1,7 +1,7 @@
 /**@file block.h
  * @brief Memory pool and bitmap related functions
  * @license BSD (2 clause)
- * @copyright Richard James Howe (2018) 
+ * @copyright Richard James Howe (2018)
  *
  * Copyright (c) 2018, Richard James Howe <howe.r.j.89@gmail.com>
  * All rights reserved.

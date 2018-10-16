@@ -20,9 +20,9 @@ proc decr {x} { upvar 1 $x i; set i [- $i 1] }
 
 # Set environment variable COLOR to 'on' to turn on color
 set colorize [getenv COLOR]
-proc color {x} { 
-	upvar #0 colorize c; 
-	if {eq $c on } { return $x } else { return "" } 
+proc color {x} {
+	upvar #0 colorize c;
+	if {eq $c on } { return $x } else { return "" }
 }
 
 proc normal {} { color "\x1b\[0m" }
@@ -120,7 +120,7 @@ set heaps [heap arenas]
 set m 0
 set i 0
 
-while {< $i $heaps} { 
+while {< $i $heaps} {
 	set blk   [heap arena-block  $i]
 	set sz    [heap arena-size   $i]
 	set used  [heap arena-active $i]

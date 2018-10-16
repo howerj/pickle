@@ -20,18 +20,6 @@
 
 typedef struct { int argc; char **argv; } argument_t;
 
-static int pickle_set_result_int(pickle_t *i, long r) {
-	char v[64];
-	snprintf(v, sizeof v, "%ld", r);
-	return pickle_set_result(i, v);
-}
-
-static int pickle_set_var_int(pickle_t *i, const char *name, long r) {
-	char v[64];
-	snprintf(v, sizeof v, "%ld", r);
-	return pickle_set_var(i, name, v);
-}
-
 static int pickleCommandPuts(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	if (argc != 2 && argc != 3)
@@ -43,11 +31,14 @@ static int pickleCommandPuts(pickle_t *i, const int argc, char **argv, void *pd)
 		if (!strcmp(argv[1], "-nonewline")) { newline = 0; }
 		else return pickle_error(i, "Unknown puts command %s", argv[1]);
 	}
+	int r1 = 0;
 	if(newline)
-		fprintf((FILE*)pd, "%s\n", line);
+		r1 = fprintf((FILE*)pd, "%s\n", line);
 	else
-		fputs(line, (FILE*)pd);
-	fflush((FILE*)pd);
+		r1 = fputs(line, (FILE*)pd);
+	const int r2 = fflush((FILE*)pd);
+	if (r1 < 0 || r2 < 0)
+		return pickle_error(i, "I/O error: %d/%d", r1, r2);
 	return PICKLE_OK;
 }
 
@@ -56,8 +47,23 @@ static int pickleCommandGets(pickle_t *i, const int argc, char **argv, void *pd)
 	if (argc != 1)
 		return pickle_arity_error(i, 1, argc, argv);
 	char buf[PICKLE_MAX_STRING] = { 0 };
-	(void)/*ignore result*/fgets(buf, sizeof buf, (FILE*)pd);
-	return pickle_set_result(i, buf);
+	if(!fgets(buf, sizeof buf, (FILE*)pd)) {
+		if (pickle_set_result_string(i, "EOF") != PICKLE_OK)
+			return pickle_error_out_of_memory(i);
+		return PICKLE_ERROR;
+	}
+	return pickle_set_result_string(i, buf);
+}
+
+static int pickleCommandError(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(pd);
+	if (argc != 2)
+		return pickle_arity_error(i, 2, argc, argv);
+	const int r1 = fprintf((FILE*)pd, "%s\n", argv[1]);
+	const int r2 = fflush((FILE*)pd);
+	if (r1 < 0 || r2 < 0)
+		return pickle_error(i, "I/O error: %d/%d", r1, r2);
+	return PICKLE_ERROR;
 }
 
 static int pickleCommandSystem(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -65,7 +71,7 @@ static int pickleCommandSystem(pickle_t *i, const int argc, char **argv, void *p
 	if (argc != 2 && argc != 1)
 		return pickle_arity_error(i, 2, argc, argv);
 	const int r = system(argc == 1 ? NULL : argv[1]);
-	return pickle_set_result_int(i, r);
+	return pickle_set_result_integer(i, r);
 }
 
 static int pickleCommandRandom(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -76,7 +82,7 @@ static int pickleCommandRandom(pickle_t *i, const int argc, char **argv, void *p
 		srand(atol(argv[1]));
 		return PICKLE_OK;
 	}
-	return pickle_set_result_int(i, rand());
+	return pickle_set_result_integer(i, rand());
 }
 
 static int pickleCommandExit(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -93,14 +99,14 @@ static int pickleCommandGetEnv(pickle_t *i, const int argc, char **argv, void *p
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	const char *env = getenv(argv[1]);
-	return pickle_set_result(i, env ? env : "");
+	return pickle_set_result_string(i, env ? env : "");
 }
 
 static int pickleCommandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc == 1) {
 		const long t = (((double)(clock()) / (double)CLOCKS_PER_SEC) * 1000.0);
-		return pickle_set_result_int(i, t);
+		return pickle_set_result_integer(i, t);
 	}
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
@@ -109,7 +115,7 @@ static int pickleCommandClock(pickle_t *i, const int argc, char **argv, void *pd
 	time(&rawtime);
 	struct tm *timeinfo = gmtime(&rawtime);
 	strftime(buf, sizeof buf, argv[1], timeinfo);
-	return pickle_set_result(i, buf);
+	return pickle_set_result_string(i, buf);
 }
 
 /*Based on: <http://c-faq.com/lib/regex.html>*/
@@ -147,35 +153,35 @@ static int pickleCommandMatch(pickle_t *i, const int argc, char **argv, void *pd
 	const int r = match(argv[1], argv[2], PICKLE_MAX_RECURSION);
 	if(r < 0)
 		return pickle_error(i, "Regex error: %d", r);
-	return pickle_set_result(i, r ? "1" : "0");
+	return pickle_set_result_string(i, r ? "1" : "0");
 }
 
 static int pickleCommandEqual(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_arity_error(i, 3, argc, argv);
-	return pickle_set_result(i, !strcmp(argv[1], argv[2]) ? "1" : "0");
+	return pickle_set_result_string(i, !strcmp(argv[1], argv[2]) ? "1" : "0");
 }
 
 static int pickleCommandNotEqual(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_arity_error(i, 3, argc, argv);
-	return pickle_set_result(i, strcmp(argv[1], argv[2]) ? "1" : "0");
+	return pickle_set_result_string(i, strcmp(argv[1], argv[2]) ? "1" : "0");
 }
 
 static int pickleCommandLength(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
-	return pickle_set_result_int(i, strlen(argv[1])/*strnlen(argv[2], PICKLE_MAX_STRING)*/);
+	return pickle_set_result_integer(i, strlen(argv[1])/*strnlen(argv[2], PICKLE_MAX_STRING)*/);
 }
 
 static int pickleCommandRaise(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
-	return pickle_set_result_int(i, raise(atoi(argv[1])));
+	return pickle_set_result_integer(i, raise(atoi(argv[1])));
 }
 
 static int signal_variable = 0;
@@ -191,15 +197,15 @@ static int pickleCommandSignal(pickle_t *i, const int argc, char **argv, void *p
 	if (argc == 1) {
 		int sig = signal_variable;
 		signal_variable = 0;
-		return pickle_set_result_int(i, sig);
+		return pickle_set_result_integer(i, sig);
 	}
-	int r = PICKLE_ERR, sig = atoi(argv[1]);
+	int r = PICKLE_ERROR, sig = atoi(argv[1]);
 	char *rq = argv[2];
 	if (!strcmp(rq, "ignore"))  { r = SIG_ERR == signal(sig, SIG_IGN) ? r : PICKLE_OK; }
 	if (!strcmp(rq, "default")) { r = SIG_ERR == signal(sig, SIG_DFL) ? r : PICKLE_OK; }
 	if (!strcmp(rq, "catch"))   { r = SIG_ERR == signal(sig, signal_handler) ? r : PICKLE_OK; }
-	if (pickle_set_result_int(i, r == PICKLE_OK) != PICKLE_OK)
-		return PICKLE_ERR;
+	if (pickle_set_result_integer(i, r == PICKLE_OK) != PICKLE_OK)
+		return PICKLE_ERROR;
 	return r;
 }
 
@@ -214,7 +220,7 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 	}
 
 	if (!pd)
-		return pickle_set_result(i, "unknown");
+		return pickle_set_result_string(i, "unknown");
 	const char *const rq = argv[1];
 
 	if(argc == 2) {
@@ -239,7 +245,7 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 		}
 	}
 done:
-	return pickle_set_result_int(i, info);
+	return pickle_set_result_integer(i, info);
 }
 
 static void help(FILE *output, const char *arg0);
@@ -251,8 +257,8 @@ static int pickleCommandInfo(pickle_t *i, const int argc, char **argv, void *pd)
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	const char *rq = argv[1];
-	if(!strcmp(rq, "level")) { return pickle_set_result_int(i, i->level); }
-	if(!strcmp(rq, "line"))  { return pickle_set_result_int(i, i->line); }
+	if(!strcmp(rq, "level")) { return pickle_set_result_integer(i, i->level); }
+	if(!strcmp(rq, "line"))  { return pickle_set_result_integer(i, i->line); }
 	return pickle_error(i, "Unknown info option '%s'", rq);
 }
 
@@ -274,12 +280,12 @@ static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd)
 	if(argc != 1 && argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	if(argc == 1)
-		return pickle_set_result_int(i, global_argc);
+		return pickle_set_result_integer(i, global_argc);
 	const int j = atoi(argv[1]);
 	if(j < 0 || j >= global_argc)
-		return pickle_set_result(i, "");
+		return pickle_set_result_string(i, "");
 	else
-		return pickle_set_result(i, global_argv[j]);
+		return pickle_set_result_string(i, global_argv[j]);
 }
 
 /* retrieve and process those pickles you filed away for safe keeping */
@@ -313,7 +319,7 @@ static int pickleCommandSource(pickle_t *i, const int argc, char **argv, void *p
 	if (argc != 2)
 		return pickle_arity_error(i, 2, argc, argv);
 	if (file(i, argv[1], pd, 1) < 0)
-		return PICKLE_ERR;
+		return PICKLE_ERROR;
 	return PICKLE_OK;
 }
 
@@ -323,6 +329,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 	const pickle_register_command_t commands[] = {
 		{ "puts",     pickleCommandPuts,      stdout },
 		{ "gets",     pickleCommandGets,      stdin },
+		{ "error",    pickleCommandError,     stderr },
 		{ "system",   pickleCommandSystem,    NULL },
 		{ "exit",     pickleCommandExit,      NULL },
 		{ "quit",     pickleCommandExit,      NULL },
@@ -342,9 +349,9 @@ static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 		{ "help",     pickleCommandHelp,      stdout },
 		{ "heap",     pickleCommandHeapUsage, i->allocator.arena },
 	};
-	if (pickle_set_var_int(i, "argc", args->argc) != PICKLE_OK)
+	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
 		return -1;
-	if (pickle_set_var(i, "prompt", prompt ? "pickle> " : "") != PICKLE_OK)
+	if (pickle_set_var_string(i, "prompt", prompt ? "pickle> " : "") != PICKLE_OK)
 		return -1;
 	for (size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
 		if(pickle_register_command(i, commands[j].name, commands[j].func, commands[j].data) != 0)
@@ -360,7 +367,7 @@ static int interactive(pickle_t *i, FILE *input, FILE *output) { /**@todo rewrit
 	i->line = 0;
 	for(;;) {
 		char clibuf[LINE_SZ];
-		const char *prompt = pickle_get_var(i, "prompt");
+		const char *prompt = pickle_get_var_string(i, "prompt");
 		prompt = prompt ? prompt : "";
 		fputs(prompt, output);
 		fflush(output);

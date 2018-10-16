@@ -1,5 +1,5 @@
 /* https://stackoverflow.com/questions/4384359/
- * The C Programming language 
+ * The C Programming language
  *
  * @todo integrate this small dictionary library into 'pickle.c',
  * replacing the (slow) command lookup */
@@ -106,7 +106,7 @@ int hash_test(hash_table_t *h, const test_t *ts, size_t length) {
 				pass = 0;
 			expected = "(null)";
 		}
-		printf("%s dict['%s'] = '%s', expected '%s'\n", 
+		printf("%s dict['%s'] = '%s', expected '%s'\n",
 				pass ? "   ok:" : " fail:",
 				t->name, actual, expected);
 		if (!pass)
