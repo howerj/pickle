@@ -137,7 +137,7 @@ static inline int picolParseSep(struct picolParser *p) {
 	p->start = p->p;
 	while (picolIsSpaceChar(*p->p))
 		advance(p);
-	p->end = p->p - 1;
+	p->end  = p->p - 1;
 	p->type = PT_SEP;
 	return PICKLE_OK;
 }
@@ -147,7 +147,7 @@ static inline int picolParseEol(struct picolParser *p) {
 	p->start = p->p;
 	while (picolIsSpaceChar(*p->p) || *p->p == ';')
 		advance(p);
-	p->end = p->p - 1;
+	p->end  = p->p - 1;
 	p->type = PT_EOL;
 	return PICKLE_OK;
 }
@@ -207,10 +207,10 @@ static inline int picolParseBrace(struct picolParser *p) {
 		} else if (p->len == 0 || *p->p == '}') {
 			level--;
 			if (level == 0 || p->len == 0) {
-				p->end = p->p - 1;
+				p->end  = p->p - 1;
+				p->type = PT_STR;
 				if (p->len)
 					advance(p); /* Skip final closed brace */
-				p->type = PT_STR;
 				return PICKLE_OK;
 			}
 		} else if (*p->p == '{') {
@@ -238,19 +238,19 @@ static int picolParseString(struct picolParser *p) {
 				advance(p);
 			break;
 		case '$': case '[':
-			p->end = p->p - 1;
+			p->end  = p->p - 1;
 			p->type = PT_ESC;
 			return PICKLE_OK;
 		case '\n': case ' ': case '\t': case '\r': case ';':
 			if (!p->insidequote) {
-				p->end = p->p - 1;
+				p->end  = p->p - 1;
 				p->type = PT_ESC;
 				return PICKLE_OK;
 			}
 			break;
 		case '"':
 			if (p->insidequote) {
-				p->end = p->p - 1;
+				p->end  = p->p - 1;
 				p->type = PT_ESC;
 				p->insidequote = 0;
 				advance(p);
@@ -276,11 +276,11 @@ static int picolGetToken(struct picolParser *p) {
 	assert(p);
 	for (;p->len;) {
 		switch(*p->p) {
-		case ' ': case '\t': case '\r':
+		case ' ': case '\t': 
 			if (p->insidequote)
 				return picolParseString(p);
 			return picolParseSep(p);
-		case '\n': case ';':
+		case '\r': case '\n': case ';':
 			if (p->insidequote)
 				return picolParseString(p);
 			return picolParseEol(p);
@@ -290,7 +290,8 @@ static int picolGetToken(struct picolParser *p) {
 			return picolParseVar(p);
 		case '#':
 			if (p->type == PT_EOL) {
-				picolParseComment(p);
+				if (picolParseComment(p) != PICKLE_OK)
+					return PICKLE_ERROR;
 				continue;
 			}
 			return picolParseString(p);
@@ -381,7 +382,7 @@ static void picolFreeVarVal(pickle_t *i, struct pickle_var *v) {
 		FREE(i, v->data.val.ptr);
 }
 
-static int picolIsSmallString(const char *val) {
+static inline int picolIsSmallString(const char *val) {
 	assert(val);
 	return !!memchr(val, 0, sizeof(char*));
 }
@@ -400,7 +401,7 @@ static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val)
 	return (v->data.val.ptr = picolStrdup(&i->allocator, val)) ? 0 : -1;
 }
 
-static int picolSetVarName(pickle_t *i, struct pickle_var *v, const char *name) {
+static inline int picolSetVarName(pickle_t *i, struct pickle_var *v, const char *name) {
 	assert(i);
 	assert(v);
 	assert(name);
@@ -540,7 +541,7 @@ static inline void picolAssertCommandPreConditions(pickle_t *i, const int argc, 
 }
 
 static inline void picolAssertCommandPostConditions(pickle_t *i, const int retcode) {
-	UNUSED(i);       assert(i);
+	UNUSED(i);  assert(i);
 	assert(i->initialized);
 	assert(i->result);
 	assert(i->level >= 0);
@@ -608,7 +609,8 @@ int pickle_eval(pickle_t *i, const char *t) {
 	picolInitParser(&p, t, &i->line, &i->ch);
 	for (;;) {
 		int prevtype = p.type;
-		picolGetToken(&p);
+		if (picolGetToken(&p) != PICKLE_OK)
+			return pickle_error(i, "parser error");
 		if (p.type == PT_EOF)
 			break;
 		int tlen = p.end - p.start + 1;
@@ -903,8 +905,8 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 		FREE(i, cf);
 		return pickle_error_out_of_memory(i);
 	}
-	cf->vars = NULL;
-	cf->parent = i->callframe;
+	cf->vars     = NULL;
+	cf->parent   = i->callframe;
 	i->callframe = cf;
 	i->level++;
 	tofree = p;
@@ -1060,7 +1062,6 @@ static int picolCommandUpVar(pickle_t *i, const int argc, char **argv, void *pd)
 	}
 	myVar->type = PV_LINK;
 	myVar->data.link = otherVar;
-
 end:
 	i->callframe = cf;
 	return retcode;
@@ -1324,23 +1325,23 @@ static int picolTestUnescape(void) {
 		char *res;
 		int r;
 	} ts[] = {
-		{ "", "", 0 },
-		{ "a", "a", 1 },
-		{ "\\z", "N/A", -3 },
-		{ "\\t", "\t", 1 },
-		{ "\\ta", "\ta", 2 },
-		{ "a\\[", "a[", 2 },
-		{ "a\\[\\[", "a[[", 3 },
-		{ "a\\[z\\[a", "a[z[a", 5 },
-		{ "\\\\", "\\", 1 },
-		{ "\\x30", "0", 1 },
-		{ "\\xZ",  "N/A", -1 },
-		{ "\\xZZ", "N/A", -2 },
-		{ "\\x9Z", "\011Z", 2 },
-		{ "\\x300", "00", 2 },
-		{ "\\x310", "10", 2 },
-		{ "\\x31\\x312", "112", 3 },
-		{ "x\\x31\\x312", "x112", 4 },
+		{  "",              "",       0   },
+		{  "a",             "a",      1   },
+		{  "\\z",           "N/A",    -3  },
+		{  "\\t",           "\t",     1   },
+		{  "\\ta",          "\ta",    2   },
+		{  "a\\[",          "a[",     2   },
+		{  "a\\[\\[",       "a[[",    3   },
+		{  "a\\[z\\[a",     "a[z[a",  5   },
+		{  "\\\\",          "\\",     1   },
+		{  "\\x30",         "0",      1   },
+		{  "\\xZ",          "N/A",    -1  },
+		{  "\\xZZ",         "N/A",    -2  },
+		{  "\\x9Z",         "\011Z",  2   },
+		{  "\\x300",        "00",     2   },
+		{  "\\x310",        "10",     2   },
+		{  "\\x31\\x312",   "112",    3   },
+		{  "x\\x31\\x312",  "x112",   4   },
 	};
 
 	printf("Unescape Tests\n");

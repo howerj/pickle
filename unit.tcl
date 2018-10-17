@@ -60,6 +60,7 @@ proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }
 
 puts "\[Pickle Tests\]"
 
+test {bool 4}
 test {== 2 2}
 test {+ 2 2}
 test "< 3 4"
