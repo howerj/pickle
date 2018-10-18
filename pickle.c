@@ -394,7 +394,7 @@ static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val)
 	if (picolIsSmallString(val)) {
 		v->type = PV_SMALL_STRING;
 		memset(v->data.val.small, 0, sizeof(v->data.val.small));
-		strcat(v->data.val.small, val);
+		strncat(v->data.val.small, val, sizeof(v->data.val.small) - 1);
 		return 0;
 	}
 	v->type = PV_STRING;
@@ -605,7 +605,8 @@ int pickle_eval(pickle_t *i, const char *t) {
 	struct picolParser p;
 	int retcode = PICKLE_OK, argc = 0;
 	char **argv = NULL;
-	picolSetResultEmpty(i);
+	if (picolSetResultEmpty(i) != PICKLE_OK)
+		return PICKLE_ERROR;
 	picolInitParser(&p, t, &i->line, &i->ch);
 	for (;;) {
 		int prevtype = p.type;
@@ -712,7 +713,7 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 	assert(i);
 	assert(join);
 	assert(argc >= 0);
-	implies(argc > 0, argv);
+	implies(argc > 0, argv != NULL);
 	if (argc > (int)PICKLE_MAX_ARGS)
 		return NULL;
 	const size_t jl = strlen(join);
@@ -934,7 +935,7 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 		p++;
 	}
 	FREE(i, tofree);
-	if (arity != argc - 1)
+	if (arity != (argc - 1))
 		goto arityerr;
 	errcode = pickle_eval(i, body);
 	if (errcode == PICKLE_RETURN)
@@ -995,7 +996,6 @@ static int doJoin(pickle_t *i, const char *join, const int argc, char **argv) { 
 
 static int picolCommandConcat(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	assert(argc >= 1);
 	return doJoin(i, " ", argc - 1, argv + 1);
 }
 

@@ -267,7 +267,26 @@ static int pickleCommandHelp(pickle_t *i, const int argc, char **argv, void *pd)
 	UNUSED(argc);
 	UNUSED(argv);
 	help(pd, "pickle");
-	static const char *tutorial = "\n\n";
+	static const char *tutorial = "\n\
+For a full tutorial on the pickle language, please consult the online\n\
+manual. Pickle, and picol, is based on TCL, which is a highly dynamic\n\
+language designed to be embedded in other programs for scripting. It\n\
+has some simple core concepts; the string is primary data structure\n\
+and everything is a command.\n\
+\n\
+Some simple examples:\n\
+\n\
+\t# Comments are commands that begin with '#'\n\
+\t+ 2 2\n\
+\tset result [* 3 4]\n\
+\tif {== 2 3} { puts \"Something is very wrong\" } else { puts \"All is okay.\" }\n\
+\tset a 3; puts \"a is equal to $a\";\n\
+\tproc square {x} { * $x $x }\n\
+\tputs \"square of 4 is [square 4]\"\n\
+\tproc example {x} { set a 0; while {< $a $x} { puts \"a = $a\"; set a [+ $a 1]; } }\n\
+\texample 4\n\
+\tputs \"What is your name?\"; set name [gets]; puts \"Hello, $name\"\n\
+\n\n";
 	fputs(tutorial, pd);
 	return PICKLE_OK;
 }
@@ -294,7 +313,7 @@ static int file(pickle_t *i, const char *name, FILE *output, int command) {
 	assert(file);
 	assert(output);
 	errno = 0;
-	FILE *fp = fopen(name, "r"); /**@bug interpreter does not handle 'rb' mode */
+	FILE *fp = fopen(name, "rb");
 	if (!fp) {
 		if (command)
 			return pickle_error(i, "Failed to open file %s (rb): %s\n", name, strerror(errno));

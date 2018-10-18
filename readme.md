@@ -82,8 +82,8 @@ Potential Improvements:
 
 * Many, many more commands could be written in order to make this interpreter
 more usable.
-* A hash library could be integrate. It would not have to that big or complex
-to greatly speed up moderately complex programs.
+* A hash library could be integrated. It would not have to that big or complex
+to greatly speed up the interpreter.
 * The following small library can be used to either extend or modify the
 interpreter to suite your purposes:
   - UTF-8: <https://www.cprogramming.com/tutorial/unicode.html>
@@ -99,13 +99,27 @@ main purpose is to bind lots of things written in C together. It is similar to
 [lisp][], it is [homoiconic][], and is simple with very little in the way of
 syntax.
 
+The following table sums up the different language constructs:
 
 	string  called if first argument
 	{ }     quote
 	[ ]     command substitution
 	" "     string
 	$var    variable lookup
-	\c      escape
+	\c      escape a character
+
+A Picol program consists of a series of commands and arguments to those
+commands. Before a command is evaluated, variables are looked up and strings
+substituted. 
+
+Examples of commands:
+
+	puts "Hello, World"
+	"puts" "Hello, World"
+	set cmd puts
+	$cmd "Hello, World"
+	+ 2 2 
+	- 4 5
 
 
 ### Internally Defined Commands
@@ -437,7 +451,6 @@ Apart from snprintf, and sscanf, the other functions pulled in from the C
 library are quite easy to implement. They include (but are not necessarily
 limited to); strlen, memcpy, memchr, memset and abort.
 
-
 ## Interacting with the library and extension
 
 The language can be extended by defining new commands in [C][] and registering
@@ -446,13 +459,9 @@ those commands with the *pickle\_register\_command* function.
 ## To Do
 
 * Add documentation here; building, command line use, command list, syntax
-and semantics.
-* Profile, profile, profile!
-* More assertions!
+and semantics. Make a nice manual page.
 * Add a hash table implementation to speed things up to the max; this would
 primarily affect command and variable search.
-* BUG: Trailing space causes extra argument to appear in argument list. This is
-probably related to other white space bugs.
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h
