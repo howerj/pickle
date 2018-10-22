@@ -103,7 +103,7 @@ way of syntax.
 The following table sums up the different language constructs:
 
 	string  called if first argument
-	{ }     quote
+	{ }     quote, used to prevent evaluation
 	[ ]     command substitution
 	" "     string
 	$var    variable lookup
@@ -155,18 +155,21 @@ All strings can be coerced into numbers, whether they are willing or not, for
 example the strings 'iamnotanumber' becomes 0 (not 6), '3d20' to 3, and '-50'
 to -50.
 
-Truth is represented as a non zero string, false as a string that evaluates to
-zero.
+Truth is represented as a string that evaluates to a non zero number, false 
+as a string that evaluates to zero.
 
 * set variable value?
 
 Create a variable, or overwrite an existing variable, with a value. If only one
-argument is given, it returns that value if it exists or an error if it does
-not.
+argument is given, it returns the value of that variable if it exists or an error 
+if it does not.
 
 * if {condition} {true clause}  *OR*  if {condition} {true clause} else {false clause}
 
-*if* has two forms.
+*if* is the command used to implement conditional execution of either one
+clause, or one clause or (exclusive or) another clause. Like in every other
+programming language ever (or more accurately the languages with more than one
+user, the implementer).
 
 * while {condition} {clause}
 
@@ -174,7 +177,8 @@ Keep executing the while clause whilst the condition is true (ie. is non-zero).
 
 * break
 
-Break out of a while loop.
+Break out of a while loop. This will continue to break out of a things until
+the return code is caught by a loop, or 'catch'.
 
 * continue
 
@@ -207,6 +211,9 @@ down through the call stack, however only '#0' is supported.
 Form a link from myVar to otherVar in the scope specified by number. A
 special case is '#0', which is the global context, see 'uplevel' for a
 description of the scoping traversal rules implied by the number argument.
+
+You may have noticed that 'upvar' and 'uplevel', which come from [TCL][], are
+strange, very strange. No arguments from me.
 
 * unset string
 
@@ -481,6 +488,13 @@ those commands with the *pickle\_register\_command* function.
 
 * Add documentation here; building, command line use, command list, syntax
 and semantics. Make a nice manual page.
+* Reorganize hashing code so it can be reused (and potentially reused as a
+data structure within the interpreter).
+* Add more commands in 'pickle.c' for command introspection, specifically so
+that variables can be directly inspected and manipulated. Also allow
+procedures to be renamed and deleted.
+* Make an example application (integrate with an MQTT library, jsmn and maybe
+sqlite3, to make an Internet Of Things shell).
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h

@@ -43,9 +43,9 @@ extern "C" {
 
 #include <stddef.h>
 
-#define PICKLE_MAX_STRING    (512)
-#define PICKLE_MAX_RECURSION (128)
-#define PICKLE_MAX_ARGS      (128)
+#define PICKLE_MAX_STRING    (512) /* Max string/Data structure size */
+#define PICKLE_MAX_RECURSION (128) /* Recursion limit */
+#define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
 
 typedef void *(*pickle_malloc_t)(void *arena,  size_t bytes);
 typedef void *(*pickle_realloc_t)(void *arena, void *ptr, size_t bytes);
@@ -58,7 +58,7 @@ typedef struct {
 	void *arena;
 } pickle_allocator_t;
 
-enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
+enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
 struct pickle_command;    /* opaque; registered pickle command */
 struct pickle_call_frame; /* opaque; call frame */

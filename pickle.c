@@ -1117,7 +1117,7 @@ static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *p
 	UNUSED(pd);
 	if (argc == 1) {
 		long r = 0;
-		for(long j = 0; j < i->length; j++) {
+		for (long j = 0; j < i->length; j++) {
 			struct pickle_command *c = i->table[j];
 			for (; c; c = c->next) {
 				r++;
@@ -1128,7 +1128,7 @@ static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *p
 	}
 	if (argc == 2) {
 		long j = 0;
-		for(; j < i->length; j++) {
+		for (; j < i->length; j++) {
 			struct pickle_command *c = i->table[j];
 			for (; c; c = c->next)
 				if (!strcmp(argv[1], c->name))
@@ -1143,7 +1143,7 @@ static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *p
 	long r = atol(argv[2]), j = 0;
 	struct pickle_command *c = NULL;
 
-	for(long k = 0; k < i->length; k++) {
+	for (long k = 0; k < i->length; k++) {
 		struct pickle_command *p = i->table[k];
 		for (; p; p = p->next) {
 			if (j == r) {
@@ -1235,7 +1235,7 @@ int pickle_deinitialize(pickle_t *i) {
 	picolDropAllCallFrames(i);
 	assert(!(i->callframe));
 	picolFreeResult(i);
-	for(long j = 0; j < i->length; j++) {
+	for (long j = 0; j < i->length; j++) {
 		struct pickle_command *c = i->table[j], *p = NULL;
 		for (; c; p = c, c = c->next) {
 			pickleFreeCmd(i, p);
