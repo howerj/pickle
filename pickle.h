@@ -60,19 +60,20 @@ typedef struct {
 
 enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, PICKLE_LAST_ENUM };
 
-struct pickle_command;
-struct pickle_call_frame;
+struct pickle_command;    /* opaque; registered pickle command */
+struct pickle_call_frame; /* opaque; call frame */
 
 struct pickle_interpreter {
-	pickle_allocator_t allocator; /* custom allocator, if desired */
-	struct pickle_call_frame *callframe;
-	struct pickle_command    *commands;
-	const char *result;        /* result of an evaluation */
-	const char *ch;            /* text position; set if line != 0 */
-	int level;                 /* level of nesting */
-	int line;                  /* current line number */
-	unsigned initialized   :1; /* if true, interpreter is initialized and ready to use */
-	unsigned static_result :1; /* internal use only: if true, result should not be freed */
+	pickle_allocator_t allocator;        /* custom allocator, if desired */
+	struct pickle_call_frame *callframe; /* internal use only; call stack */
+	long length;                         /* internal use only; buckets in hash table */
+	struct pickle_command **table;       /* internal use only; hash table */
+	const char *result;                  /* result of an evaluation */
+	const char *ch;                      /* the current text position; set if line != 0 */
+	int level;                           /* internal use only; level of nesting */
+	int line;                            /* current line number */
+	unsigned initialized   :1;           /* if true, interpreter is initialized and ready to use */
+	unsigned static_result :1;           /* internal use only: if true, result should not be freed */
 };
 
 typedef struct pickle_interpreter pickle_t;

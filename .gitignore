@@ -1,6 +1,5 @@
 *.a
 block
-dict
 *.log
 *.o
 pickle

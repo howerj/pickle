@@ -1,4 +1,4 @@
-#!./pickle
+#!./pickle -a
 # This file contains unit tests for the Pickle Interpreter
 # TODO:
 # - implement full test suite
@@ -30,16 +30,16 @@ proc red    {} { color "\x1b\[31;1m" }
 proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
 
-proc test {x} {
+proc test {result x} {
 	set r [eval $x]
 	upvar #0 total t
 	incr t
 
-	if {!= $r "0"} {
+	if {eq $r $result} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:   "
 	} else {
-		set f "[red]FAIL[normal]: "
+		set f "[red]FAIL[normal]: (expected $result) "
 	}
 	puts "$f$x = $r"
 	unset t
@@ -60,40 +60,51 @@ proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }
 
 puts "\[Pickle Tests\]"
 
-test {bool 4}
-test {== 2 2}
-test {+ 2 2}
-test "< 3 4"
-test {== 16 [square 4]}
-test {== 3  [length 123]}
-test {eq a a}
-test {eq "a b" [concat a b]}
-test "eq \"a,b,c\" \[join , a b c\]"
-test {match %% %}
-test {match "%?" "?"}
-test {match "???" "abc"}
-test {match "???" "abc"}
-test {== 0 {match "???" "abcd"}}
-test {== 0 {match "abc" "abcd"}}
-test {match "abc" "abc"}
-test {match "abc*" "abc"}
-test {== 0 {match "abc*d" "abc"}}
-test {match "abc*d" "abcd"}
-test {match "abc*d" "abcXXXXd"}
-test {match "*" "ahoy!"}
-test {match "*abc*c?d" "xxxxxabcxxxxc3d"}
-test {match "*abc*c?d" "xxxxxabcxxxxc?d"}
-test {== 89 [fib 10]}
+test 1 {bool 4}
+test 1 {== 2 2}
+test 4 {+ 2 2}
+test 1 "< 3 4"
+test 16 {square 4}
+test 3  {length 123}
+test 1 {eq a a}
+test 1 {eq "a b" [concat a b]}
+test 1 "eq \"a,b,c\" \[join , a b c\]"
+test 1 {match %% %}
+test 1 {match "%?" "?"}
+test 1 {match "???" "abc"}
+test 1 {match "???" "abc"}
+test 0 {match "???" "abcd"}
+test 0 {match "abc" "abcd"}
+test 1 {match "abc" "abc"}
+test 1 {match "abc*" "abc"}
+test 0 {match "abc*d" "abc"}
+test 1 {match "abc*d" "abcd"}
+test 1 {match "abc*d" "abcXXXXd"}
+test 1 {match "*" "ahoy!"}
+test 1 {match "*abc*c?d" "xxxxxabcxxxxc3d"}
+test 1 {match "*abc*c?d" "xxxxxabcxxxxc?d"}
+test 89 {fib 10}
+test 4 {<< 1 2}
+test 9 {min 90 9}
+test -4 {max -5 -4}
+test 4 {abs 4}
+test 4 {abs -4}
+test -1 {+ [~ 1] 1}
+test 255 {| 85 170}
+test 0   {& 85 170}
+test 0 {! 3}
+test 1 {! 0}
+test 1 {! x}
 
 # Test upvar links
 set u 5
 puts "u = $u"
 puts "[n1]"
-test "== $u 7"
+test 1 "== $u 7"
 unset u
 
 puts "[n1]"
-test "== $u 2"
+test 1 "== $u 2"
 unset u
 
 assert [<= $passed $total]

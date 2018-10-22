@@ -32,7 +32,5 @@ pickle: main.o block.o libpickle.a
 	${CC} ${CFLAGS} $^ -o $@
 	# strip $@
 
-dict: dict.o
-
 clean:
-	rm -rf picol pickle dict *.o *.a
+	rm -rf picol pickle *.o *.a

@@ -62,6 +62,7 @@ programs
 * Fairly good at string handling
 * Can be ported to a variety of platforms
 * Customizable
+* Suitable as a command language and shell
 
 Disadvantages:
 
@@ -96,8 +97,8 @@ interpreter to suite your purposes:
 Picol, and [TCL][], are dynamic languages with only one real data type, the
 string. This might seem inefficient but it is fine for a glue language whose
 main purpose is to bind lots of things written in C together. It is similar to
-[lisp][], it is [homoiconic][], and is simple with very little in the way of
-syntax.
+[lisp][] in ways, it is [homoiconic][], and is simple with very little in the 
+way of syntax.
 
 The following table sums up the different language constructs:
 
@@ -107,20 +108,40 @@ The following table sums up the different language constructs:
 	" "     string
 	$var    variable lookup
 	\c      escape a character
+	#       comment
 
 A Picol program consists of a series of commands and arguments to those
 commands. Before a command is evaluated, variables are looked up and strings
 substituted. 
 
+You may have noticed that things such as 'if' or 'while', and even procedure 
+definition, are not part of the languages syntax. Instead, they are built in
+commands and are called like any other command.
+
 Examples of commands:
 
 	puts "Hello, World"
 	"puts" "Hello, World"
+
+	# prints "Hello, World"
 	set cmd puts
 	$cmd "Hello, World"
+
+	# prints "Hello, World"
+	set a pu
+	set b ts
+	$a$b "Hello, World"
+
 	+ 2 2 
 	- 4 5
+	if {bool 4} { puts "TRUE"}
 
+	proc x {a b} { + $a $b }
+	puts "x(3, 9) == [x 3 9]"
+
+	# prints 4 to 10 inclusive
+	set z 3
+	while {< $z 10} { set z [+ $z 1]; puts $z }
 
 ### Internally Defined Commands
 
@@ -460,8 +481,6 @@ those commands with the *pickle\_register\_command* function.
 
 * Add documentation here; building, command line use, command list, syntax
 and semantics. Make a nice manual page.
-* Add a hash table implementation to speed things up to the max; this would
-primarily affect command and variable search.
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h

@@ -195,7 +195,7 @@ static int pickleCommandSignal(pickle_t *i, const int argc, char **argv, void *p
 	if (argc != 1 && argc != 3)
 		return pickle_arity_error(i, 2, argc, argv);
 	if (argc == 1) {
-		int sig = signal_variable;
+		const int sig = signal_variable;
 		signal_variable = 0;
 		return pickle_set_result_integer(i, sig);
 	}
@@ -222,7 +222,6 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 	if (!pd)
 		return pickle_set_result_string(i, "unknown");
 	const char *const rq = argv[1];
-
 	if(argc == 2) {
 		if(!strcmp(rq, "freed"))         { info = p->freed; }
 		else if(!strcmp(rq, "allocs"))   { info = p->allocs;  }
@@ -280,17 +279,16 @@ Some simple examples:\n\
 \t+ 2 2\n\
 \tset result [* 3 4]\n\
 \tif {== 2 3} { puts \"Something is very wrong\" } else { puts \"All is okay.\" }\n\
-\tset a 3; puts \"a is equal to $a\";\n\
+\tset a 3; puts \"a is equal to $a\";\n\n\
 \tproc square {x} { * $x $x }\n\
-\tputs \"square of 4 is [square 4]\"\n\
-\tproc example {x} { set a 0; while {< $a $x} { puts \"a = $a\"; set a [+ $a 1]; } }\n\
-\texample 4\n\
-\tputs \"What is your name?\"; set name [gets]; puts \"Hello, $name\"\n\
+\tputs \"square of 4 is [square 4]\"\n\n\
+\tproc example {x} {\n\t\tset a 0\n\t\twhile {< $a $x} {\n\t\t\tputs \"a = $a\"\n\t\t\tset a [+ $a 1]\n\t\t}\n\t}\n\
+\texample 4\n\n\
+\tputs \"What is your name?\";\n\tset name [gets];\n\tputs \"Hello, $name\"\n\
 \n\n";
 	fputs(tutorial, pd);
 	return PICKLE_OK;
 }
-
 
 static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
@@ -379,7 +377,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, int prompt) {
 }
 
 /* an interactive pickle - the things you can do with it! */
-static int interactive(pickle_t *i, FILE *input, FILE *output) { /**@todo rewrite this a pickle program? */
+static int interactive(pickle_t *i, FILE *input, FILE *output) { /* NB. This could be rewritten as a script now */
 	assert(i);
 	assert(input);
 	assert(output);

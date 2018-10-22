@@ -1,4 +1,4 @@
-#!./pickle
+#!./pickle -a
 
 proc square {x} {
 	* $x $x

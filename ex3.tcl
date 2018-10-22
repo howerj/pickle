@@ -1,4 +1,4 @@
-#!./pickle
+#!./pickle -a
 # Performance Test
 
 proc decr {x} { upvar 1 $x i; set i [- $i 1] }
