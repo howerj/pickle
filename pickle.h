@@ -47,62 +47,43 @@ extern "C" {
 #define PICKLE_MAX_RECURSION (128) /* Recursion limit */
 #define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
 
-typedef void *(*pickle_malloc_t)(void *arena,  size_t bytes);
-typedef void *(*pickle_realloc_t)(void *arena, void *ptr, size_t bytes);
-typedef void  (*pickle_free_t)(void *arena,    void *ptr);
-
 typedef struct {
-	pickle_malloc_t  malloc;
-	pickle_realloc_t realloc;
-	pickle_free_t    free;
+	void *(*malloc)  (void *arena, size_t bytes);
+	void *(*realloc) (void *arena, void *ptr, size_t bytes);
+	void  (*free)    (void *arena, void *ptr);
 	void *arena;
-} pickle_allocator_t;
+} pickle_allocator_t; /* optional */
 
 enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
-struct pickle_command;    /* opaque; registered pickle command */
-struct pickle_call_frame; /* opaque; call frame */
-
-struct pickle_interpreter {
-	pickle_allocator_t allocator;        /* custom allocator, if desired */
-	struct pickle_call_frame *callframe; /* internal use only; call stack */
-	long length;                         /* internal use only; buckets in hash table */
-	struct pickle_command **table;       /* internal use only; hash table */
-	const char *result;                  /* result of an evaluation */
-	const char *ch;                      /* the current text position; set if line != 0 */
-	int level;                           /* internal use only; level of nesting */
-	int line;                            /* current line number */
-	unsigned initialized   :1;           /* if true, interpreter is initialized and ready to use */
-	unsigned static_result :1;           /* internal use only: if true, result should not be freed */
-};
-
+struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
 
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
-typedef struct {
-	const char *name;
-	pickle_command_func_t func;
-	void *data;
-} pickle_register_command_t;
-
-int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
+int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) default allocator used */
+int pickle_delete(pickle_t *i);
 int pickle_eval(pickle_t *i, const char *t);
-int pickle_initialize(pickle_t *i, pickle_allocator_t *a); /* if(a == NULL) default allocator used */
-int pickle_deinitialize(pickle_t *i);
+int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 
-int pickle_arity_error(pickle_t *i, int expected, int argc, char **argv); /* common error: use within registered command if wrong number of args given */
-int pickle_error_out_of_memory(pickle_t *i);                /* common error: out of memory, does not allocate */
-int pickle_error(pickle_t *i, const char *fmt, ...);        /* use within registered command to return an error */
+int pickle_error(pickle_t *i, const char *fmt, ...);
+int pickle_error_out_of_memory(pickle_t *i); /* does not allocate */
+int pickle_error_arity(pickle_t *i, int expected, int argc, char **argv);
 
-int pickle_set_result_string(pickle_t *i, const char *s);   /* set result within registered command */
+int pickle_set_result_string(pickle_t *i, const char *s);
 int pickle_set_result_integer(pickle_t *i, long result);
+int pickle_get_result_string(pickle_t *i, const char **s);
+int pickle_get_result_integer(pickle_t *i, long *val);
 
-const char *pickle_get_var_string(pickle_t *i, const char *name);
 int pickle_set_var_string(pickle_t *i, const char *name, const char *val);
 int pickle_set_var_integer(pickle_t *i, const char *name, long r);
+int pickle_get_var_string(pickle_t *i, const char *name, const char **val);
+int pickle_get_var_integer(pickle_t *i, const char *name, long *val);
 
-int pickle_tests(void);
+int pickle_get_line_number(pickle_t *i, int *line);
+int pickle_get_call_depth(pickle_t *i, int *depth);
+
+int pickle_tests(void); /* returns: test passed || defined(NDEBUG) */
 
 #ifdef __cplusplus
 }

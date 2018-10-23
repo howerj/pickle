@@ -15,9 +15,9 @@
  * by your system.
  *
  * NOTE: As the structures needed to define a memory pool are available in
- * the header it is possible to allocate pools on the statically, or even
- * on the stack, as you see fit. You do not have to use 'pool_new' to create
- * a new pool. */
+ * the header it is possible to allocate pools statically, or even on the
+ * stack, as you see fit. You do not have to use 'pool_new' to create a new
+ * pool. */
 
 #include "block.h"
 #include <assert.h>

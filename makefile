@@ -32,5 +32,9 @@ pickle: main.o block.o libpickle.a
 	${CC} ${CFLAGS} $^ -o $@
 	# strip $@
 
+check:
+	cppcheck --enable=all *.c
+	clang-tidy *.c
+
 clean:
 	rm -rf picol pickle *.o *.a

@@ -97,7 +97,7 @@ interpreter to suite your purposes:
 Picol, and [TCL][], are dynamic languages with only one real data type, the
 string. This might seem inefficient but it is fine for a glue language whose
 main purpose is to bind lots of things written in C together. It is similar to
-[lisp][] in ways, it is [homoiconic][], and is simple with very little in the 
+[lisp][] in ways, it is [homoiconic][], and is simple with very little in the
 way of syntax.
 
 The following table sums up the different language constructs:
@@ -112,9 +112,9 @@ The following table sums up the different language constructs:
 
 A Picol program consists of a series of commands and arguments to those
 commands. Before a command is evaluated, variables are looked up and strings
-substituted. 
+substituted.
 
-You may have noticed that things such as 'if' or 'while', and even procedure 
+You may have noticed that things such as 'if' or 'while', and even procedure
 definition, are not part of the languages syntax. Instead, they are built in
 commands and are called like any other command.
 
@@ -132,7 +132,7 @@ Examples of commands:
 	set b ts
 	$a$b "Hello, World"
 
-	+ 2 2 
+	+ 2 2
 	- 4 5
 	if {bool 4} { puts "TRUE"}
 
@@ -142,6 +142,9 @@ Examples of commands:
 	# prints 4 to 10 inclusive
 	set z 3
 	while {< $z 10} { set z [+ $z 1]; puts $z }
+
+To best understand the language, play around with it, and look at the source,
+there really is not that much there.
 
 ### Internally Defined Commands
 
@@ -155,13 +158,13 @@ All strings can be coerced into numbers, whether they are willing or not, for
 example the strings 'iamnotanumber' becomes 0 (not 6), '3d20' to 3, and '-50'
 to -50.
 
-Truth is represented as a string that evaluates to a non zero number, false 
+Truth is represented as a string that evaluates to a non zero number, false
 as a string that evaluates to zero.
 
 * set variable value?
 
 Create a variable, or overwrite an existing variable, with a value. If only one
-argument is given, it returns the value of that variable if it exists or an error 
+argument is given, it returns the value of that variable if it exists or an error
 if it does not.
 
 * if {condition} {true clause}  *OR*  if {condition} {true clause} else {false clause}
@@ -482,10 +485,17 @@ limited to); strlen, memcpy, memchr, memset and abort.
 ## Interacting with the library and extension
 
 The language can be extended by defining new commands in [C][] and registering
-those commands with the *pickle\_register\_command* function.
+those commands with the *pickle\_register\_command* function. The internal
+structures used are mostly opaque and can be interacted with from within the
+language. As stated a custom allocator can be used and a block allocator is
+provided, it is possible to do quite a bit with this scripting language whilst
+only allocating about 32KiB of memory total on a 64-bit machine (for example
+all of the unit tests and example programs run within that amount).
 
 ## To Do
 
+* Add more internal unit tests, that test against the internals and against the
+public facing API.
 * Add documentation here; building, command line use, command list, syntax
 and semantics. Make a nice manual page.
 * Reorganize hashing code so it can be reused (and potentially reused as a
@@ -494,7 +504,11 @@ data structure within the interpreter).
 that variables can be directly inspected and manipulated. Also allow
 procedures to be renamed and deleted.
 * Make an example application (integrate with an MQTT library, jsmn and maybe
-sqlite3, to make an Internet Of Things shell).
+sqlite3 (or CDB <https://cr.yp.to/cdb.html>, to make an Internet Of Things shell).
+* C++ Example, integrating the interpreter in ways which make sense with the
+language.
+* Static code analysis, dynamic code analysis (gcov, valgrind, American fuzzy
+lop).
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h
