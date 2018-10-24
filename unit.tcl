@@ -1,8 +1,5 @@
 #!./pickle -a
 # This file contains unit tests for the Pickle Interpreter
-# TODO:
-# - implement full test suite
-# - implement ANSI Terminal Color Codes
 
 proc die {x} { puts $x; exit 1 }
 
@@ -60,13 +57,23 @@ proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }
 
 puts "\[Pickle Tests\]"
 
+test hello {if {bool 1} { concat "hello" }}
 test 1 {bool 4}
+test 0 {bool 0}
+test 0 {bool 0b1}
+test 1 {bool 9b1}
 test 1 {== 2 2}
 test 4 {+ 2 2}
 test 1 "< 3 4"
 test 16 {square 4}
 test 3  {length 123}
+test 4  {length 1234}
+test 4  {length abcd}
+test 0  {length ""}
 test 1 {eq a a}
+test 0 {eq a b}
+test 1 {ne abc ""}
+test 1 {eq "" ""}
 test 1 {eq "a b" [concat a b]}
 test 1 "eq \"a,b,c\" \[join , a b c\]"
 test 1 {match %% %}
@@ -84,17 +91,30 @@ test 1 {match "*" "ahoy!"}
 test 1 {match "*abc*c?d" "xxxxxabcxxxxc3d"}
 test 1 {match "*abc*c?d" "xxxxxabcxxxxc?d"}
 test 89 {fib 10}
+test 0 {< 5 -5}
+test -25 {* 5 -5}
+test 1 {< 6  9}
+test 0 {> 6  9}
+test 0 {> -6  9}
+test 1 {>= -6  -6}
+test 1 {>= 6  -6}
+test 0 {>= -6  6}
 test 4 {<< 1 2}
+test 5 {>> 10 1}
 test 9 {min 90 9}
+test -9 {min 90 -9}
 test -4 {max -5 -4}
 test 4 {abs 4}
 test 4 {abs -4}
 test -1 {+ [~ 1] 1}
 test 255 {| 85 170}
+test 255 {^ 85 170}
 test 0   {& 85 170}
 test 0 {! 3}
 test 1 {! 0}
 test 1 {! x}
+test 3 {/ 12 4}
+test 120 {set cnt 5; set acc 1; while {> $cnt 1} { set acc [* $acc $cnt]; decr cnt }; set acc; };
 
 # Test upvar links
 set u 5
@@ -115,7 +135,6 @@ set emphasize [green]
 if {!= $failed 0} {
 	set emphasize [red]
 }
-
 
 puts "$emphasize   pass[normal]/[blue]total $emphasize$passed[normal]/[blue]$total[normal]"
 puts "\[[blue]DONE[normal]\]"

@@ -34,7 +34,9 @@ pickle: main.o block.o libpickle.a
 
 check:
 	cppcheck --enable=all *.c
-	clang-tidy *.c
+	clang-tidy pickle.c
+	clang-tidy block.c
+	clang-tidy main.c
 
 clean:
 	rm -rf picol pickle *.o *.a

@@ -29,7 +29,7 @@ proc blue   {} { color "\x1b\[34;1m" }
 
 proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
 
-# Hold over from Forth
+# Hold over from Forth; list defined commands
 proc words {} {
 	set i 0
 	set m [command]
@@ -38,6 +38,20 @@ proc words {} {
 		incr i
 	}
 	puts ""
+}
+
+# Is a variable defined, and if so, is it a command or a variable?
+proc defined {x} {
+	set i 0
+	set m [command]
+	set r 0:undefined
+	while {< $i $m} {
+		if {eq $x [command name $i]} { return 1:command }
+		incr i
+	}
+	catch {uplevel 1 "set $x"} e
+	if {== 0 $e} { return 2:variable }
+	return $r
 }
 
 # puts "Commands defined:"
