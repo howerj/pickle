@@ -388,10 +388,6 @@ An "ignored" signal will be ignored and a signal with "default" behavior will
 use the systems defaults. On successful installation of the handler, a "1" is
 returned, and on failure "0".
 
-* help ...
-
-Display a help message. It discards all arguments given to it.
-
 * argv number?
 
 'argv' is a function at the moment, it could be made into a variable. If given
@@ -509,6 +505,7 @@ sqlite3 (or CDB <https://cr.yp.to/cdb.html>, to make an Internet Of Things shell
 language.
 * Static code analysis, dynamic code analysis (gcov, valgrind, American fuzzy
 lop).
+* Profile, Profile, Profile!
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h

@@ -295,35 +295,6 @@ static int pickleCommandInfo(pickle_t *i, const int argc, char **argv, void *pd)
 	return pickle_error(i, "Unknown info option '%s'", rq);
 }
 
-static int pickleCommandHelp(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(i);
-	UNUSED(argc);
-	UNUSED(argv);
-	help(pd, "pickle");
-	static const char *tutorial = "\n\
-For a full tutorial on the pickle language, please consult the online\n\
-manual. Pickle, and picol, is based on TCL, which is a highly dynamic\n\
-language designed to be embedded in other programs for scripting. It\n\
-has some simple core concepts; the string is primary data structure\n\
-and everything is a command.\n\
-\n\
-Some simple examples:\n\
-\n\
-\t# Comments are commands that begin with '#'\n\
-\t+ 2 2\n\
-\tset result [* 3 4]\n\
-\tif {== 2 3} { puts \"Something is very wrong\" } else { puts \"All is okay.\" }\n\
-\tset a 3; puts \"a is equal to $a\";\n\n\
-\tproc square {x} { * $x $x }\n\
-\tputs \"square of 4 is [square 4]\"\n\n\
-\tproc example {x} {\n\t\tset a 0\n\t\twhile {< $a $x} {\n\t\t\tputs \"a = $a\"\n\t\t\tset a [+ $a 1]\n\t\t}\n\t}\n\
-\texample 4\n\n\
-\tputs \"What is your name?\";\n\tset name [gets];\n\tputs \"Hello, $name\"\n\
-\n\n";
-	fputs(tutorial, pd);
-	return PICKLE_OK;
-}
-
 static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	char **global_argv = ((argument_t*)pd)->argv;
@@ -400,7 +371,6 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "argv",     pickleCommandArgv,      args },
 		{ "source",   pickleCommandSource,    stdout },
 		{ "info",     pickleCommandInfo,      p },
-		{ "help",     pickleCommandHelp,      stdout },
 		{ "heap",     pickleCommandHeapUsage, p },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)

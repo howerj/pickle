@@ -54,6 +54,8 @@ proc defined {x} {
 	return $r
 }
 
+proc help {} { source help.tcl }
+
 # puts "Commands defined:"
 # words
 

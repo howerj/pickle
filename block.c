@@ -10,9 +10,12 @@
  * allocators of varying block widths.
  *
  * There are some restrictions on the block sizes, counts and alignment. The
- * block sizes and counts both need to be a power of two. All memory used by
- * the block allocator must be aligned to the strictest alignment required
- * by your system.
+ * block sizes need to be a power of two. All memory used by the block 
+ * allocator must be aligned to the strictest alignment required by your 
+ * system.
+ *
+ * @bug If block count is not a multiple or the sizeof bitmap_unit_t then
+ * not all memory can be allocated.
  *
  * NOTE: As the structures needed to define a memory pool are available in
  * the header it is possible to allocate pools statically, or even on the
@@ -138,7 +141,7 @@ static inline long block_find_free(block_arena_t *a) {
 	bitmap_t *b = &a->freelist;
 	bitmap_unit_t *u = b->map;
 	size_t max = bitmap_unit_index(b->bits), start = bitmap_unit_index(a->lastalloc);
-	for (size_t c = 0, i = start; c <= max; i = (i + 1) % max /*& (max - 1)*/, c++)
+	for (size_t c = 0, i = start; c <= max; i = (i + 1) % (max ? max : 1) /*& (max - 1)*/, c++)
 		if (u[i] != (bitmap_unit_t)-1uLL) {
 			const size_t index = i * BITS;
 			const size_t end = MIN(b->bits, (index + BITS));
@@ -169,8 +172,6 @@ static bool is_power_of_2(unsigned long long x) {
 
 void *block_malloc(block_arena_t *a, size_t length) {
 	assert(a);
-	assert(is_power_of_2(a->blocksz));
-	assert((block_count(a) % sizeof(bitmap_unit_t)) == 0);
 	if (a->blocksz < length)
 		return NULL;
 	const long f = block_find_free(a);
@@ -245,7 +246,7 @@ block_arena_t *block_new(size_t blocksz, size_t count) {
 	block_arena_t *a = NULL;
 	if (blocksz < sizeof(intptr_t))
 		goto fail;
-	if (!is_power_of_2(blocksz) || !is_power_of_2(count))
+	if (!is_power_of_2(blocksz))
 		goto fail;
 	if (!(a = calloc(sizeof(*a), 1)))
 		goto fail;
@@ -377,7 +378,7 @@ int block_tests(void) { return 0; }
 #else
 #include <stdio.h>
 
-#define BLK_COUNT (32) /* must be power of 2! */
+#define BLK_COUNT (16)
 #define BLK_SIZE  (32) /* must be power of 2! */
 
 BLOCK_DECLARE(block_arena, BLK_COUNT, BLK_SIZE);

@@ -38,8 +38,7 @@
 #define BUILD_BUG_ON(condition)  ((void)sizeof(char[1 - 2*!!(condition)]))
 #define implies(P, Q)            assert(!(P) || (Q)) /* material implication, immaterial if NDEBUG define */
 #define verify(X)                do { if (!(X)) { abort(); } } while (0)
-
-#define MALLOC(I, SZ)      (assert((SZ) > 0 && (SZ) <= PICKLE_MAX_STRING), (I)->allocator.malloc((I)->allocator.arena, (SZ)))
+#define MALLOC(I, SZ)      (assert((SZ) > 0), (I)->allocator.malloc((I)->allocator.arena, (SZ)))
 #define REALLOC(I, P, SZ) ((I)->allocator.realloc((I)->allocator.arena, (P), (SZ)))
 #define FREE(I, P)           ((I)->allocator.free((I)->allocator.arena, (P)))
 
@@ -114,6 +113,7 @@ static inline void static_assertions(void) {
 	BUILD_BUG_ON(PICKLE_MAX_STRING    < 128);
 	BUILD_BUG_ON(PICKLE_MAX_RECURSION < 8);
 	BUILD_BUG_ON(PICKLE_MAX_ARGS      < 8);
+	BUILD_BUG_ON(PICKLE_OK != 0);
 }
 
 static char *picolStrdup(pickle_allocator_t *a, const char *s) {
@@ -180,7 +180,7 @@ static void advance(struct picolParser *p) {
 	assert(p->len >= 0);
 }
 
-static inline void picolInitParser(struct picolParser *p, const char *text, int *line, const char **ch) {
+static inline void picolParserInitialize(struct picolParser *p, const char *text, int *line, const char **ch) {
 	assert(p);
 	assert(text);
 	assert(line);
@@ -682,7 +682,7 @@ static int picolEval(pickle_t *i, const char *t) {
 	char **argv = NULL;
 	if (picolSetResultEmpty(i) != PICKLE_OK)
 		return PICKLE_ERROR;
-	picolInitParser(&p, t, &i->line, &i->ch);
+	picolParserInitialize(&p, t, &i->line, &i->ch);
 	int prevtype = p.type;
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
@@ -1406,8 +1406,9 @@ int pickle_delete(pickle_t *i) {
 #ifdef NDEBUG
 int pickle_tests(void) { return PICKLE_OK; }
 #else
+/**@todo The parser needs unit test writing for it */
 
-static const char *failed(int n) { if (n == 0) return "PASS"; return "FAIL"; }
+static inline const char *failed(int n) { if (n == 0) return "PASS"; return "FAIL"; }
 
 static int test(const char *eval, const char *result, int retcode) {
 	assert(eval);
@@ -1499,8 +1500,7 @@ static int picolTestUnescape(void) {
 static int picolTestConcat(void) {
 	int r = 0;
 	pickle_t *p = NULL;
-	const int retcode = pickle_new(&p, NULL);
-	if (retcode != PICKLE_OK || !p)
+	if (pickle_new(&p, NULL) != PICKLE_OK || !p)
 		return -100;
 	char *f = NULL;
 	printf("Concatenate Tests\n");
@@ -1520,9 +1520,11 @@ static int picolTestConcat(void) {
 	if (!(f = concatenate(p, "", 0, NULL))) { r = -9; }
 	else { if (strcmp(f, "")) { r = -10; } FREE(p, f); }
 
+	if (pickle_delete(p) != PICKLE_OK)
+		r = -10;
+
 	printf("Concatenate Test: %s/%d\n", failed(r), r);
 
-	pickle_delete(p);
 	return r;
 }
 
@@ -1546,6 +1548,79 @@ static int picolTestEval(void) {
 	return r;
 }
 
+/**@bug Use this test suite to investigate Line-Feed/Line-Number bug */
+static int picolTestLineNumber(void) {
+	static const struct test_t {
+		int line;
+		char *eval;
+	} ts[] = {
+		{ 1, "+  2 2", },
+		{ 2, "+  2 2\n", },
+		{ 3, "\n\n\n", },
+		{ 4, "* 4 4\nset a 3\n\n", },
+		{ 3, "* 4 4\r\nset a 3\r\n", },
+	};
+
+	int r = 0, line = 0;
+	printf("Line Number Tests\n");
+	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
+		pickle_t *p = NULL;
+		if (pickle_new(&p, NULL) != PICKLE_OK || !p) {
+			r = r ? r : -1001;
+			break;
+		}
+		if (pickle_eval(p, ts[i].eval) != PICKLE_OK)
+			r = r ? r : -2001;
+
+		if (pickle_get_line_number(p, &line) != PICKLE_OK)
+			r = r ? r : -3001;
+
+		if (line != ts[i].line)
+			r = r ? r : -(int)(i+1);
+
+		printf("%u: %d/%d\n", (unsigned)i, line, ts[i].line);
+
+		if (pickle_delete(p) != PICKLE_OK)
+			r = r ? r : -4001;
+	}
+	printf("Line Number Test: %s/%d\n", failed(r), r);
+	return r;
+}
+
+int picolTestGetSetVar(void) {
+	long val = 0;
+	int r = 0;
+	pickle_t *p = NULL;
+
+	printf("Get/Set Variable Tests\n");
+	if (pickle_new(&p, NULL) != PICKLE_OK || !p)
+		return -1;
+
+	if (pickle_eval(p, "set a 54; set b 3; set c -4x") != PICKLE_OK)
+		r = -1;
+
+	if (pickle_get_var_integer(p, "a", &val) != PICKLE_OK || val != 54)
+		r = -2;
+	printf("a: %ld\n", val);
+
+	if (pickle_get_var_integer(p, "c", &val) != PICKLE_OK || val != -4)
+		r = -3;
+	printf("c: %ld\n", val);
+
+	printf("d: set d = 123\n");
+	if (pickle_set_var_string(p, "d", "123") != PICKLE_OK)
+		r = -4;
+
+	if (pickle_get_var_integer(p, "d", &val) != PICKLE_OK || val != 123)
+		r = -3;
+	printf("d: %ld\n", val);
+
+	if (pickle_delete(p) != PICKLE_OK)
+		r = -4;
+	printf("Get/Set Variable Test: %s/%d\n", failed(r), r);
+	return r;
+}
+
 int pickle_tests(void) {
 	printf("Pickle Tests\n");
 	typedef int (*test_func)(void);
@@ -1554,10 +1629,12 @@ int pickle_tests(void) {
 		picolTestUnescape,
 		picolTestConcat,
 		picolTestEval,
+		picolTestGetSetVar,
+		picolTestLineNumber,
 	};
 	int r = 0;
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++)
-		if (ts[i]() < 0)
+		if (ts[i]() != 0)
 			r = -1;
 	printf("[DONE: %s]\n\n", r < 0 ? "FAIL" : "PASS");
 	return r != 0 ? PICKLE_ERROR : PICKLE_OK;

@@ -95,10 +95,10 @@ void *pool_calloc(pool_t *p, size_t length);
 	block_arena_t NAME = {\
 		.freelist = {\
 			.bits = BLOCK_COUNT,\
-			.map  = (bitmap_unit_t [BLOCK_COUNT/sizeof(bitmap_unit_t)]) { 0 }\
+			.map  = (bitmap_unit_t [BLOCK_COUNT/sizeof(bitmap_unit_t) + !(BLOCK_COUNT/sizeof(bitmap_unit_t))]) { 0 }\
 		},\
 		.blocksz = BLOCK_SIZE,\
-		.memory  = (void*)((uint64_t [BLOCK_COUNT * (BLOCK_SIZE / sizeof(uint64_t))]) { 0 }),\
+		.memory  = (void*)((uint64_t [BLOCK_COUNT * ((BLOCK_SIZE / sizeof(uint64_t)) + !(BLOCK_COUNT/sizeof(bitmap_unit_t)))]) { 0 }),\
 		.active  = 0,\
 		.max     = 0,\
 	}
