@@ -14,6 +14,7 @@
 #include <string.h>
 #include <limits.h>
 #include <time.h>
+#include <ctype.h>
 
 #define LINE_SZ (1024)
 #define FILE_SZ (1024 * 16)
@@ -139,44 +140,6 @@ static int pickleCommandClock(pickle_t *i, const int argc, char **argv, void *pd
 	return pickle_set_result_string(i, buf);
 }
 
-/*Based on: <http://c-faq.com/lib/regex.html>*/
-static int match(const char *pat, const char *str, size_t depth) {
-	if (!depth) return -1;
- again:
-        switch (*pat) {
-	case '\0': return !*str;
-	case '*': { /* match any number of characters: normally '.*' */
-		const int r = match(pat + 1, str, depth - 1);
-		if (r) return r;
-		if (!*(str++)) return 0;
-		goto again;
-	}
-	case '?':  /* match any single characters: normally '.' */
-		if (!*str) return 0;
-		pat++, str++;
-		goto again;
-	case '%': /* escape character: normally backslash */
-		if (!*(++pat)) return -2; /* missing escaped character */
-		if (!*str)     return 0;
-		/* fall through */
-	default:
-		if (*pat != *str) return 0;
-		pat++, str++;
-		goto again;
-	}
-	return -3; /* not reached */
-}
-
-static int pickleCommandMatch(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(pd);
-	if (argc != 3)
-		return pickle_error_arity(i, 3, argc, argv);
-	const int r = match(argv[1], argv[2], PICKLE_MAX_RECURSION);
-	if (r < 0)
-		return pickle_error(i, "Regex error: %d", r);
-	return pickle_set_result_string(i, r ? "1" : "0");
-}
-
 static int pickleCommandEqual(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 3)
@@ -189,13 +152,6 @@ static int pickleCommandNotEqual(pickle_t *i, const int argc, char **argv, void 
 	if (argc != 3)
 		return pickle_error_arity(i, 3, argc, argv);
 	return pickle_set_result_string(i, strcmp(argv[1], argv[2]) ? "1" : "0");
-}
-
-static int pickleCommandLength(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(pd);
-	if (argc != 2)
-		return pickle_error_arity(i, 2, argc, argv);
-	return pickle_set_result_integer(i, strlen(argv[1])/*strnlen(argv[2], PICKLE_MAX_STRING)*/);
 }
 
 static int pickleCommandRaise(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -362,10 +318,8 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "getenv",   pickleCommandGetEnv,    NULL },
 		{ "random",   pickleCommandRandom,    NULL },
 		{ "clock",    pickleCommandClock,     NULL },
-		{ "match",    pickleCommandMatch,     NULL },
 		{ "eq",       pickleCommandEqual,     NULL },
 		{ "ne",       pickleCommandNotEqual,  NULL },
-		{ "length",   pickleCommandLength,    NULL },
 		{ "raise",    pickleCommandRaise,     NULL },
 		{ "signal",   pickleCommandSignal,    NULL },
 		{ "argv",     pickleCommandArgv,      args },

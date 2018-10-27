@@ -95,10 +95,14 @@ A list of defined commands in no particular order:
 
 set i 0
 set m [command]
+puts -nonewline "\t"
 while {< $i $m} {
-	puts -nonewline "[command name $i] "
+	set nl ""
+	if {! [% [+ $i 1] 16]} { set nl "\n\t"}
+	puts -nonewline "[command name $i] $nl"
 	set i [+ $i 1]
 }
+
 puts ""
 
 puts {

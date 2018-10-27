@@ -18,12 +18,12 @@
  *   - Use asserts wherever you can for as many preconditions, postconditions
  *   and invariants that you can think of. */
 #include "pickle.h"
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
-#include <stdarg.h>
+#include <assert.h>  /* !defined(NDEBUG): assert */
+#include <ctype.h>   /* toupper, tolower, isalnum, isalpha, ... */
+#include <stdarg.h>  /* va_list, va_start, va_end */
+#include <stdio.h>   /* vsnprintf, snprintf. !defined(NDEBUG): puts, printf */
+#include <stdlib.h>  /* strtol. !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
+#include <string.h>  /* memcpy, memset, memchr, strstr, compare, strncat, strlen */
 
 #ifdef NDEBUG
 #define DEBUGGING (0)
@@ -33,6 +33,7 @@
 
 #define VERSION                  (1989)
 #define DEFINE_MATHS             (1)
+#define DEFINE_STRING            (1)
 #define DEFAULT_ALLOCATOR        (1)
 #define UNUSED(X)                ((void)(X))
 #define BUILD_BUG_ON(condition)  ((void)sizeof(char[1 - 2*!!(condition)]))
@@ -116,6 +117,12 @@ static inline void static_assertions(void) {
 	BUILD_BUG_ON(PICKLE_OK != 0);
 }
 
+static inline int compare(const char *a, const char *b) {
+	assert(a);
+	assert(b);
+	return strncmp(a, b, PICKLE_MAX_STRING);
+}
+
 static char *picolStrdup(pickle_allocator_t *a, const char *s) {
 	assert(a);
 	assert(s);
@@ -139,7 +146,7 @@ static inline struct pickle_command *picolGetCommand(pickle_t *i, const char *s)
 	assert(i);
 	struct pickle_command *np;
 	for (np = i->table[hash(s, strlen(s)) % i->length]; np != NULL; np = np->next)
-		if (!strcmp(s, np->name))
+		if (!compare(s, np->name))
 			return np; /* found */
 	return NULL; /* not found */
 }
@@ -450,7 +457,7 @@ static struct pickle_var *picolGetVar(pickle_t *i, const char *name, int link) {
 	while (v) {
 		const char *n = v->smallname ? &v->name.small[0] : v->name.ptr;
 		assert(n);
-		if (!strcmp(n, name)) {
+		if (!compare(n, name)) {
 			if (link)
 				while (v->type == PV_LINK) { /* NB. Could resolve link at creation? */
 					assert(v != v->data.link); /* Cycle? */
@@ -574,7 +581,7 @@ int pickle_get_var_integer(pickle_t *i, const char *name, long *val) {
 	return PICKLE_OK;
 }
 
-int pickle_error(pickle_t *i, const char *fmt, ...) {
+int pickle_error(pickle_t *i, const char *fmt, ...) { /* NB. C line/func info would be useful...*/
 	assert(i);
 	assert(fmt);
 	size_t off = 0;
@@ -835,6 +842,241 @@ int pickle_error_arity(pickle_t *i, const int expected, const int argc, char **a
 	return r;
 }
 
+/*Based on: <http://c-faq.com/lib/regex.html>*/
+static int match(const char *pat, const char *str, size_t depth) {
+	if (!depth) return -1;
+ again:
+        switch (*pat) {
+	case '\0': return !*str;
+	case '*': { /* match any number of characters: normally '.*' */
+		const int r = match(pat + 1, str, depth - 1);
+		if (r) return r;
+		if (!*(str++)) return 0;
+		goto again;
+	}
+	case '?':  /* match any single characters: normally '.' */
+		if (!*str) return 0;
+		pat++, str++;
+		goto again;
+	case '%': /* escape character: normally backslash */
+		if (!*(++pat)) return -2; /* missing escaped character */
+		if (!*str)     return 0;
+		/* fall through */
+	default:
+		if (*pat != *str) return 0;
+		pat++, str++;
+		goto again;
+	}
+	return -3; /* not reached */
+}
+
+static const char *trimleft(const char *class, const char *s) { /* Returns pointer to s */
+	assert(class);
+	assert(s);
+	size_t j = 0, k = 0;
+	while (s[j] && strchr(class, s[j++]))
+		k = j;
+	return &s[k];
+}
+
+static void trimright(const char *class, char *s) { /* Modifies argument */
+	assert(class);
+	assert(s);
+	const size_t length = strlen(s);
+	size_t j = length - 1;
+	if (j > length)
+		return;
+	while (j > 0 && strchr(class, s[j]))
+		j--;
+	if (s[j])
+		s[j + !strchr(class, s[j])] = 0;
+}
+
+static inline void swap(char *a, char *b) {
+	assert(a);
+	assert(b);
+	char t = *a;
+	*a = *b;
+	*b = t;
+}
+
+static char *reverse(char *s, size_t length) {
+	assert(s);
+	for (size_t i = 0; i < (length/2); i++)
+		swap(&s[i], &s[(length - i) - 1]);
+	return s;
+}
+
+static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	if (argc < 3)
+		return pickle_error_arity(i, 3, argc, argv);
+	const char *rq = argv[1];
+	char buf[PICKLE_MAX_STRING];
+	if (argc == 3) {
+		const char *arg1 = argv[2];
+		static const char *space = " \t\n\r\v";
+		if (!compare(rq, "trimleft"))
+			return pickle_set_result_string(i, trimleft(space, arg1)); 
+		if (!compare(rq, "trimright")) { 
+			strncpy(buf, arg1, PICKLE_MAX_STRING); 
+			trimright(space, buf); 
+			return pickle_set_result_string(i, buf); 
+		}
+		if (!compare(rq, "trim"))      { 
+			strncpy(buf, arg1, PICKLE_MAX_STRING); 
+			trimright(space, buf); 
+			return pickle_set_result_string(i, trimleft(space, buf)); 
+		}
+		if (!compare(rq, "length"))
+			return pickle_set_result_integer(i, strlen(arg1));
+		if (!compare(rq, "toupper")) {
+			size_t j;
+			for (j = 0; arg1[j]; j++)
+				buf[j] = toupper(arg1[j]);
+			buf[j] = 0;
+			return pickle_set_result_string(i, buf);
+		}
+		if (!compare(rq, "tolower")) {
+			size_t j;
+			for (j = 0; arg1[j]; j++)
+				buf[j] = tolower(arg1[j]);
+			buf[j] = 0;
+			return pickle_set_result_string(i, buf);
+		}
+		if (!compare(rq, "reverse")) {
+			const size_t l = strlen(arg1);
+			memcpy(buf, arg1, l + 1);
+			return pickle_set_result_string(i, reverse(buf, l));
+		}
+		if (!compare(rq, "ordinal"))
+			return pickle_set_result_integer(i, arg1[0]);
+		if (!compare(rq, "char")) {
+			buf[0] = atoi(arg1);
+			buf[1] = 0;
+			return pickle_set_result_string(i, buf);
+		}
+		if (!compare(rq, "dec2hex")) {
+			if (snprintf(buf, sizeof buf, "%lx", atol(arg1)) < 1)
+				return pickle_error(i, "snprintf format error '%%lX'");
+			return pickle_set_result_string(i, buf);
+		}
+		if (!compare(rq, "hex2dec")) {
+			char *ep = NULL;
+			const long l = strtol(arg1, &ep, 16);
+			if (*arg1 && !*ep)
+				return pickle_set_result_integer(i, l);
+			return pickle_error(i, "Invalid hexadecimal value: %s", arg1);
+		}
+	} else if (argc == 4) {
+		const char *arg1 = argv[2], *arg2 = argv[3];
+		if (!compare(rq, "trimleft"))
+			return pickle_set_result_string(i, trimleft(arg2, arg1));
+		if (!compare(rq, "trimright")) { 
+			strncpy(buf, arg1, PICKLE_MAX_STRING); 
+			trimright(arg2, buf); 
+			return pickle_set_result_string(i, buf); 
+		}
+		if (!compare(rq, "trim"))   { 
+			strncpy(buf, arg1, PICKLE_MAX_STRING); 
+			trimright(arg2, buf); 
+			return pickle_set_result_string(i, trimleft(arg2, buf)); 
+		}
+		if (!compare(rq, "match"))  { 
+			const int r = match(arg1, arg2, PICKLE_MAX_RECURSION - i->level);
+			if (r < 0)
+				return pickle_error(i, "Regex error: %d", r);
+			return pickle_set_result_integer(i, r);
+		}
+		if (!compare(rq, "equal"))
+			return pickle_set_result_integer(i, !compare(arg1, arg2));
+		if (!compare(rq, "compare"))
+			return pickle_set_result_integer(i, compare(arg1, arg2));
+		if (!compare(rq, "index"))   {
+			char ch[2] = { 0 };
+			long index = atol(arg2);
+			const long length = strlen(arg1);
+			if (index < 0)
+				index = length + index;
+			if (index > length)
+				index = length - 1;
+			if (index < 0)
+				index = 0;
+			ch[0] = arg1[index];
+			return pickle_set_result_string(i, ch);
+		}
+		if (!compare(rq, "is")) {
+			if (!compare(arg1, "alnum"))  { while (isalnum(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "alpha"))  { while (isalpha(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "digit"))  { while (isdigit(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "graph"))  { while (isgraph(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "lower"))  { while (islower(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "print"))  { while (isprint(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "punct"))  { while (ispunct(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "space"))  { while (isspace(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "upper"))  { while (isupper(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "xdigit")) { while (isxdigit(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "ascii"))  { while (*arg2 && !(0x80 & *arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "control")) { while (*arg2 && iscntrl(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "integer")) { 
+				char *ep = NULL; 
+				(void)strtol(arg2, &ep, 10); 
+				return pickle_set_result_integer(i, *arg2 && !isspace(*arg2) && !*ep);
+			}
+			/* Missing: double, Boolean, true, false */
+		}
+		if (!compare(rq, "repeat")) {
+			long count = atol(arg2), j = 0;
+			const size_t length = strlen(arg1);
+			if (count < 0)
+				return pickle_error(i, "'string' repeat count negative: %ld", count);
+			if ((count * length) > (PICKLE_MAX_STRING - 1))
+				return pickle_error_out_of_memory(i);
+			for (; j < count; j++) {
+				assert(((j * length) + length) < PICKLE_MAX_STRING);
+				memcpy(&buf[j * length], arg1, length);
+			}
+			buf[j * length] = 0;
+			return pickle_set_result_string(i, buf);
+		}
+		if (!compare(rq, "first"))      { 
+			const char *f = strstr(arg2, arg1); 
+			if (!f)
+				return pickle_set_result_integer(i, -1);
+			return pickle_set_result_integer(i, f - arg2);
+		}
+	} else if (argc == 5) {
+		const char *arg1 = argv[2], *arg2 = argv[3], *arg3 = argv[4];
+		if (!compare(rq, "first"))      { 
+			const long length = strlen(arg2);
+			const long start  = atol(arg3);
+			if (start < 0 || start >= length)
+				return pickle_set_result_string(i, "");
+			const char *f = strstr(arg2 + start, arg1); 
+			if (!f)
+				return pickle_set_result_integer(i, -1);
+			return pickle_set_result_integer(i, f - arg2);
+		}
+		if (!compare(rq, "range")) {
+			const long length = strlen(arg1);
+			long first = atol(arg2);
+			long last  = atol(arg3);
+			if (first > last)
+				return pickle_set_result_string(i, "");
+			if (first < 0)
+				first = 0;
+			if (last > length)
+				last = length;
+			long diff = last - first;
+			assert((diff + 1) < PICKLE_MAX_STRING);
+			memcpy(buf, &arg1[first], diff + 1);
+			buf[diff + 1] = 0;
+			return pickle_set_result_string(i, buf);
+		}
+	}
+	return pickle_error_arity(i, 3, argc, argv);
+}
+
 static int picolCommandMathUnary(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
@@ -843,8 +1085,8 @@ static int picolCommandMathUnary(pickle_t *i, const int argc, char **argv, void 
 	long a = atol(argv[1]);
 	if (op[0] == '!')             { a = !a; }
 	else if (op[0] == '~')        { a = ~a; }
-	else if (!strcmp(op, "abs"))  { a = a < 0 ? -a : a; }
-	else if (!strcmp(op, "bool")) { a = !!a; }
+	else if (!compare(op, "abs"))  { a = a < 0 ? -a : a; }
+	else if (!compare(op, "bool")) { a = !!a; }
 	else return pickle_error(i, "Unknown operator %s", op);
 	return pickle_set_result_integer(i, a);
 }
@@ -859,6 +1101,7 @@ static int picolCommandMath(pickle_t *i, const int argc, char **argv, void *pd) 
 	else if (op[0] == '-') c = a - b;
 	else if (op[0] == '*') c = a * b;
 	else if (op[0] == '/') { if (b) { c = a / b; } else { return pickle_error(i, "Division by 0"); } }
+	else if (op[0] == '%') { if (b) { c = a % b; } else { return pickle_error(i, "Division by 0"); } }
 	else if (op[0] == '>' && op[1] == '\0') c = a >  b;
 	else if (op[0] == '>' && op[1] == '=')  c = a >= b;
 	else if (op[0] == '<' && op[1] == '\0') c = a <  b;
@@ -870,8 +1113,8 @@ static int picolCommandMath(pickle_t *i, const int argc, char **argv, void *pd) 
 	else if (op[0] == '&') c = a & b;
 	else if (op[0] == '|') c = a | b;
 	else if (op[0] == '^') c = a ^ b;
-	else if (!strcmp(op, "min")) c = a < b ? a : b;
-	else if (!strcmp(op, "max")) c = a > b ? a : b;
+	else if (!compare(op, "min")) c = a < b ? a : b;
+	else if (!compare(op, "max")) c = a > b ? a : b;
 	else return pickle_error(i, "Unknown operator %s", op);
 	return pickle_set_result_integer(i, c);
 }
@@ -1103,14 +1346,10 @@ static int picolCommandEval(pickle_t *i, const int argc, char **argv, void *pd) 
 static int picolSetLevel(pickle_t *i, const char *levelStr) {
 	const int top = levelStr[0] == '#';
 	int level = atol(top ? &levelStr[1] : levelStr);
+	if (top)
+		level = i->level - level;
 	if (level < 0)
-		return pickle_error(i, "Negative level passed to 'uplevel/upvar': %d", level);
-
-	if (top) {
-		if (level != 0)
-			return pickle_error(i, "Only #0 supported for 'uplevel/upvar'");
-		level = INT_MAX;
-	}
+		return pickle_error(i, "Invalid level passed to 'uplevel/upvar': %d", level);
 
 	for (int j = 0; j < level && i->callframe->parent; j++) {
 		assert(i->callframe != i->callframe->parent);
@@ -1211,7 +1450,7 @@ static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *p
 		for (; j < i->length; j++) {
 			struct pickle_command *c = i->table[j];
 			for (; c; c = c->next)
-				if (!strcmp(argv[1], c->name))
+				if (!compare(argv[1], c->name))
 					goto done;
 		}
 	done:
@@ -1240,17 +1479,17 @@ located:
 	assert(c);
 	const int defined = c->func == picolCommandCallProc;
 	const char *rq = argv[1];
-	if (!strcmp(rq, "args")) {
+	if (!compare(rq, "args")) {
 		if (!defined)
 			return pickle_set_result_string(i, "built-in");
 		char **procdata = c->privdata;
 		return pickle_set_result_string(i, procdata[0]);
-	} else if (!strcmp(rq, "body")) {
+	} else if (!compare(rq, "body")) {
 		if (!defined)
 			return pickle_set_result_string(i, "built-in");
 		char **procdata = c->privdata;
 		return pickle_set_result_string(i, procdata[1]);
-	} else if (!strcmp(rq, "name")) {
+	} else if (!compare(rq, "name")) {
 		return pickle_set_result_string(i, c->name);
 	}
 	return pickle_error(i, "Unknown command request '%s'", rq);
@@ -1278,10 +1517,13 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "catch",     picolCommandCatch,     NULL },
 		{ "command",   picolCommandCommand,   NULL },
 	};
+	if (DEFINE_STRING)
+		if (pickle_register_command(i, "string", picolCommandString, NULL) != PICKLE_OK)
+			return PICKLE_ERROR;
 	if (DEFINE_MATHS) {
 		static const char *unary[] = { "!", "~", "abs", "bool" };
 		static const char *binary[] = {
-			"+", "-", "*", "/", ">", ">=", "<", "<=", "==", "!=",
+			"+", "-", "*", "/", "%", ">", ">=", "<", "<=", "==", "!=",
 			"<<", ">>", "&", "|", "^", "min", "max"
 		};
 		for (size_t j = 0; j < sizeof(unary)/sizeof(char*); j++)
@@ -1420,7 +1662,7 @@ static int test(const char *eval, const char *result, int retcode) {
 		return -1;
 	if ((actual = picolEval(p, eval)) != retcode) { r = -2; goto end; }
 	if (!(p->result))                               { r = -3; goto end; }
-	if (strcmp(p->result, result))                  { r = -4; goto end; }
+	if (compare(p->result, result))                  { r = -4; goto end; }
 end:
 	if (r == 0) {
 		printf("        ok %d : %s  = %s\n", retcode, eval, result);
@@ -1486,7 +1728,7 @@ static int picolTestUnescape(void) {
 			printf("ok (code)\n");
 			continue;
 		}
-		if (strcmp(m, ts[i].res)) {
+		if (compare(m, ts[i].res)) {
 			printf("not equal: %s\n", m);
 			r = -2;
 			continue;
@@ -1506,19 +1748,19 @@ static int picolTestConcat(void) {
 	printf("Concatenate Tests\n");
 
 	if (!(f = concatenate(p, "", 2, (char*[2]){"a", "c"}))) { r = -1; }
-	else { if (strcmp(f, "ac")) { r = -2; } FREE(p, f); }
+	else { if (compare(f, "ac")) { r = -2; } FREE(p, f); }
 
 	if (!(f = concatenate(p, ",", 2, (char*[2]){"a", "c"}))) { r = -3; }
-	else { if (strcmp(f, "a,c")) { r = -4; } FREE(p, f); }
+	else { if (compare(f, "a,c")) { r = -4; } FREE(p, f); }
 
 	if (!(f = concatenate(p, ",", 3, (char*[3]){"a", "b", "c"}))) { r = -5; }
-	else { if (strcmp(f, "a,b,c")) { r = -6; } FREE(p, f); }
+	else { if (compare(f, "a,b,c")) { r = -6; } FREE(p, f); }
 
 	if (!(f = concatenate(p, "X", 1, (char*[1]){"a"}))) { r = -7; }
-	else { if (strcmp(f, "a")) { r = -8; } FREE(p, f); }
+	else { if (compare(f, "a")) { r = -8; } FREE(p, f); }
 
 	if (!(f = concatenate(p, "", 0, NULL))) { r = -9; }
-	else { if (strcmp(f, "")) { r = -10; } FREE(p, f); }
+	else { if (compare(f, "")) { r = -10; } FREE(p, f); }
 
 	if (pickle_delete(p) != PICKLE_OK)
 		r = -10;

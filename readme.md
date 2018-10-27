@@ -263,6 +263,62 @@ commands. Commands are either user defined or built in commands.
  - body: get a functions body (returns 'built-in' for built in commands)
  - name: get a functions name
 
+* string option arg *OR* string option arg arg
+
+The 'string' command in [TCL][] implements nearly every string command you
+could possibly want, however this version of 'string' is more limited and
+behaves differently in many circumstances. 'string' also pulls in more standard
+C library functions in 'ctype' and 'string.
+
+Some of the commands that are implemented:
+
+  - string match pattern String
+
+This command is a primitive regular expression matcher, as available from
+<http://c-faq.com/lib/regex.html>. What it lacks in functionality, safety and
+usability, it makes up for by being only ten lines long (in the original). It
+is meant more for wildcard expansion of file names (so '?' replaces the meaning
+of '.' is most regular expression languages). '%' is used as an escape
+character, which escapes the next character.
+
+The following operations are supported: '\*' (match any string) and '?' (match
+any character). By default all patterns are anchored to match the entire
+string, but the usual behavior can be emulated by prefixing the suffixing the
+pattern with '\*'.
+
+  - string trimleft  String class?
+  - string trimright String class?
+  - string trim      String class?
+  - string length  String
+  - string tolower String
+  - string toupper String
+  - string equal   String1 String2
+  - string compare String1 String2
+  - string index   String Index
+  - string is Class String
+
+Class can be:
+
+    - alnum
+    - alpha
+    - digit
+    - graph
+    - lower
+    - print
+    - punct
+    - space
+    - upper
+    - xdigit
+    - ascii
+    - control 
+    - integer
+  - string repeat String Count
+  - string first Needle Haystack StartIndex?
+  - string ordinal String
+  - string char Number 
+  - string hex2dec HexString
+  - string dec2hex Number
+
 ### Extension Commands
 
 [main.c][] extends the interpreter with some commands that make the language
@@ -338,20 +394,6 @@ When no argument is given the time since start of program execution is given.
 On some systems this is the CPU time and not the total time that the program
 has been executed.
 
-* match pattern string
-
-This command is a primitive regular expression matcher, as available from
-<http://c-faq.com/lib/regex.html>. What it lacks in functionality, safety and
-usability, it makes up for by being only ten lines long (in the original). It
-is meant more for wildcard expansion of file names (so '?' replaces the meaning
-of '.' is most regular expression languages). '%' is used as an escape
-character, which escapes the next character.
-
-The following operations are supported: '\*' (match any string) and '?' (match
-any character). By default all patterns are anchored to match the entire
-string, but the usual behavior can be emulated by prefixing the suffixing the
-pattern with '\*'.
-
 * eq string string
 
 Returns '0' is two strings are not equal and '1' if they are. Unlike '==' this
@@ -361,10 +403,6 @@ acts on the entire string.
 
 Returns '1' is two strings are not equal and '0' if they are. Unlike '!=' this
 acts on the entire string.
-
-* length string
-
-Returns the length of a string as a number.
 
 * raise number
 
@@ -506,6 +544,14 @@ language.
 * Static code analysis, dynamic code analysis (gcov, valgrind, American fuzzy
 lop).
 * Profile, Profile, Profile!
+* 'string' command <https://www.tcl.tk/man/tcl8.4/TclCmd/string.htm>
+* Add commands to core interpreter to do the following:
+  - Query variables in scopes
+  - Get more run time information
+Once this is done, some functions in the API can be removed, and tests moved to
+the TCL code instead of being in C.
+* Replace unsafe string copying routines with safe version; including 'strncpy'
+(what's the point of this function!?).
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h
