@@ -318,6 +318,7 @@ Class can be:
   - string char Number 
   - string hex2dec HexString
   - string dec2hex Number
+  - string hash String
 
 ### Extension Commands
 

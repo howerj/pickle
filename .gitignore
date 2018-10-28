@@ -1,6 +1,9 @@
 *.a
 block
+*.gcda
+*.gcno
 *.log
 *.o
 pickle
 picol
+*.gcov
