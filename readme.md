@@ -263,6 +263,8 @@ commands. Commands are either user defined or built in commands.
  - body: get a functions body (returns 'built-in' for built in commands)
  - name: get a functions name
 
+#### String Operator
+
 * string option arg *OR* string option arg arg
 
 The 'string' command in [TCL][] implements nearly every string command you
@@ -286,16 +288,65 @@ any character). By default all patterns are anchored to match the entire
 string, but the usual behavior can be emulated by prefixing the suffixing the
 pattern with '\*'.
 
-  - string trimleft  String class?
-  - string trimright String class?
-  - string trim      String class?
+  - string trimleft  String Class?
+
+If 'class' is empty, a white-space class is used. 'trimleft' removes leading
+characters in a Class from the given String.
+
+  - string trimright String Class?
+
+If 'class' is empty, a white-space class is used. 'trimleft' removes trailing
+characters in a class from the given String.
+
+  - string trim      String Class?
+
+If 'class' is empty, a white-space class is used. 'trimleft' removes both
+leading and trailing characters in a class from the given String.
+
   - string length  String
+
+Get the length of String. This is a simple byte length excluding an ASCII NUL
+terminator.
+
   - string tolower String
+
+Convert an ASCII String to lower case.
+
   - string toupper String
+
+Convert an ASCII String to upper case.
+
+  - string reverse String
+
+Reverse a string.
+
   - string equal   String1 String2
+
+Compare two strings for equality. Returns '1' if equal, '0' if not equal. This
+comparison is case sensitive.
+
   - string compare String1 String2
+
+Compare two strings.
+
   - string index   String Index
+
+Retrieve a character from a String at the specified Index. The index starts at
+zero for the first character up to the last character. Indices past the last
+character return the last character. Negative indexes starting counting from
+the last character (the last character being -1) and count downward, negative
+indexes that go before the first character return the first character.
+
   - string is Class String
+
+'is' determines whether a given String belongs to a Class. Most class tests
+accept a zero length string as matching that class with a few exceptions. Most
+class tests test that a class contains only certain characters (such as 'alpha'
+which checks that a string only contains the characters 'a-z' and 'A-Z', or
+'digit', which checks that a string only contains the characters '0-9'. Other
+class tests test that a string matches a specific format, such as 'integer'
+(which does not accept a zero length string), it excepts the string to contain
+a decimal number with an optional '+' or '-' prefix.
 
 Class can be:
 
@@ -312,13 +363,50 @@ Class can be:
     - ascii
     - control 
     - integer
+
+Any other Class is invalid.
+
   - string repeat String Count
+
+Repeat a String 'Count' many times. 'Count' must be positive, inclusive of
+zero.
+
   - string first Needle Haystack StartIndex?
+
+Find a Needle in a Haystack, optionally starting from 'StartIndex'. The index
+into the string where the first character of found of Needle in Haystack is
+returned if the string has been found, negative one if it has not been found.
+
   - string ordinal String
+
+Convert the first character in a string to a number that represents that
+character.
+
   - string char Number 
+
+Convert a number to its character representation.
+
   - string hex2dec HexString
+
+Convert a lower or uppercase hexadecimal number to its decimal representation. 
+
   - string dec2hex Number
+
+Convert a decimal number to its lowercase hexadecimal representation.
+
   - string hash String
+
+Hash a string returning the hash of that string as a number.
+
+  - string range String Index1 Index2
+
+Create a sub-string from Index1 to Index2 from a String. If Index1 is greater
+than Index2 an empty string is returned. If Index1 is less than zero, it is set
+to zero, if Index2 is greater than the index of the last character, it is set
+to the index of the last character. Indexing starts at zero and goes up to one
+less than the strings length (or zero of empty string), which is the index of 
+the last character. The characters from Index1 to Index2 inclusive form the
+sub-string.
 
 ### Extension Commands
 

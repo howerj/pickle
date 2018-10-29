@@ -73,14 +73,6 @@ test -4 {+ 2 -6}
 test -4 {- 2 6}
 test 16 {* -2 -8}
 test 1 "< 3 4"
-test 16 {square 4}
-test 1 {eq a a}
-test 0 {eq a b}
-test 1 {ne abc ""}
-test 1 {eq "" ""}
-test 1 {eq "a b" [concat a b]}
-test 1 "eq \"a,b,c\" \[join , a b c\]"
-test 89 {fib 10}
 test 0 {< 5 -5}
 test -25 {* 5 -5}
 test 1 {< 6  9}
@@ -109,12 +101,30 @@ test 11 {% 11 12}
 test 0 {% 12 12}
 test 1 {% 13 12}
 test 120 {set cnt 5; set acc 1; while {> $cnt 1} { set acc [* $acc $cnt]; decr cnt }; set acc; };
+test 1 {eq a a}
+test 0 {eq a b}
+test 1 {ne abc ""}
+test 1 {eq "" ""}
+test 1 {eq "a b" [concat a b]}
+test 1 "eq \"a,b,c\" \[join , a b c\]"
+test 16 {square 4}
+test 89 {fib 10}
 
 test 3 {string length 123}
 test 4 {string length 1234}
 test 4 {string length abcd}
 test 0 {string length ""}
+test 0 {string length {}}
 test 1 {string match %% %}
+test 1 {string match "" ""}
+test 1 {string match "*" ""}
+test 1 {string match "*" "a"}
+test 1 {string match "*" "aaa"}
+test 0 {string match "%*" ""}
+test 0 {string match "%*" "a"}
+test 0 {string match "%*" "aaa"}
+test 1 {string match "?" "?"}
+test 1 {string match "?" "a"}
 test 1 {string match "%?" "?"}
 test 1 {string match "???" "abc"}
 test 1 {string match "???" "abc"}
@@ -128,22 +138,22 @@ test 1 {string match "abc*d" "abcXXXXd"}
 test 1 {string match "*" "ahoy!"}
 test 1 {string match "*abc*c?d" "xxxxxabcxxxxc3d"}
 test 1 {string match "*abc*c?d" "xxxxxabcxxxxc?d"}
-test "" {string reverse ""}
-test "a" {string reverse "a"}
-test "ba" {string reverse "ab"}
-test "cba" {string reverse "abc"}
+test ""     {string reverse ""}
+test "a"    {string reverse "a"}
+test "ba"   {string reverse "ab"}
+test "cba"  {string reverse "abc"}
 test "dcba" {string reverse "abcd"}
-test "ba0" {string reverse "\x30ab"}
-test "" {string trimleft ""}
-test "" {string trimleft "   "}
-test "x " {string trimleft "  x "}
-test "x b" {string trimleft "  x b"}
+test "ba0"  {string reverse "\x30ab"}
+test ""        {string trimleft ""}
+test ""        {string trimleft "   "}
+test "x "      {string trimleft "  x "}
+test "x b"     {string trimleft "  x b"}
 test "123ABC." {string toupper "123aBc."}
 test "123abc." {string tolower "123aBc."}
 test 0 {string equal a b}
 test 1 {string equal a a}
-test 32 {string compare a A}
-test -32 {string compare bA ba}
+test 1 {< 0 [string compare a A]}
+test 1 {> 0 [string compare bA ba]}
 test h {string index hello 0}
 test e {string index hello 1}
 test l {string index hello 3}
