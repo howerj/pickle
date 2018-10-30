@@ -263,6 +263,12 @@ commands. Commands are either user defined or built in commands.
  - body: get a functions body (returns 'built-in' for built in commands)
  - name: get a functions name
 
+* join {list} String
+
+Given a [TCL][] list, 'join' will flatten that list and return a string by
+inserting a String in-between its elements. For example "join {a b c} ," yields
+"a,b,c".
+
 #### String Operator
 
 * string option arg *OR* string option arg arg

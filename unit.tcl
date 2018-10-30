@@ -106,7 +106,7 @@ test 0 {eq a b}
 test 1 {ne abc ""}
 test 1 {eq "" ""}
 test 1 {eq "a b" [concat a b]}
-test 1 "eq \"a,b,c\" \[join , a b c\]"
+test a,b,c {join {a b c} ,}
 test 16 {square 4}
 test 89 {fib 10}
 

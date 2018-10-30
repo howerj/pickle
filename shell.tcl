@@ -32,9 +32,14 @@ proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
 # Hold over from Forth; list defined commands
 proc words {} {
 	set i 0
-	set m [command]
+	set m [info command]
+	set l 0
 	while {< $i $m} {
-		puts -nonewline "[command name $i] "
+		set n [info command name $i]
+		set l [+ $l [string length $n]]
+		set c " "
+		if {> $l 80} { set c "\n"; set l 0 }
+		puts -nonewline "$n$c"
 		incr i
 	}
 	puts ""
@@ -43,10 +48,10 @@ proc words {} {
 # Is a variable defined, and if so, is it a command or a variable?
 proc defined {x} {
 	set i 0
-	set m [command]
+	set m [info command]
 	set r 0:undefined
 	while {< $i $m} {
-		if {eq $x [command name $i]} { return 1:command }
+		if {eq $x [info command name $i]} { return 1:command }
 		incr i
 	}
 	catch {uplevel 1 "set $x"} e

@@ -225,32 +225,6 @@ done:
 	return pickle_set_result_integer(i, info);
 }
 
-static void help(FILE *output, const char *arg0);
-
-static int pickleCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) {
-	if (argc >= 2 && !strcmp(argv[1], "heap"))
-		return pickleCommandHeapUsage(i, argc - 1, argv + 1, pd);
-	if (argc != 2)
-		return pickle_error_arity(i, 2, argc, argv);
-	const char *rq = argv[1];
-	if (!strcmp(rq, "level")) {
-		int depth = 0;
-		if (pickle_get_call_depth(i, &depth) != PICKLE_OK)
-			return pickle_error(i, "Call depth exceeded: %d", depth);
-		return pickle_set_result_integer(i, depth);
-       	}
-	if (!strcmp(rq, "line"))  {
-		int line = 0;
-		if (pickle_get_line_number(i, &line) != PICKLE_OK)
-			line = -1;
-		return pickle_set_result_integer(i, line);
-	}
-	if (!strcmp(rq, "width")) {
-		return pickle_set_result_integer(i, CHAR_BIT*sizeof(char*));
-	}
-	return pickle_error(i, "Unknown info option '%s'", rq);
-}
-
 static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	char **global_argv = ((argument_t*)pd)->argv;
@@ -324,7 +298,6 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "signal",   pickleCommandSignal,    NULL },
 		{ "argv",     pickleCommandArgv,      args },
 		{ "source",   pickleCommandSource,    stdout },
-		{ "info",     pickleCommandInfo,      p },
 		{ "heap",     pickleCommandHeapUsage, p },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)

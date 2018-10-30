@@ -80,9 +80,6 @@ int pickle_set_var_integer(pickle_t *i, const char *name, long r);
 int pickle_get_var_string(pickle_t *i, const char *name, const char **val);
 int pickle_get_var_integer(pickle_t *i, const char *name, long *val);
 
-int pickle_get_line_number(pickle_t *i, int *line);
-int pickle_get_call_depth(pickle_t *i, int *depth);
-
 int pickle_tests(void); /* returns: test passed || defined(NDEBUG) */
 
 #ifdef __cplusplus
