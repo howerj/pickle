@@ -32,7 +32,7 @@ is a sequence of commands which are executed).
 }
 
 puts {
-	# Comments are commands that begin with '#'
+	# Comments are commands (sort of) that begin with '#'
 	# Comments cannot be on the same line as a command!
 	+ 2 2
 	- -3 4

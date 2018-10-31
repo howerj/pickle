@@ -54,12 +54,14 @@ typedef struct {
 	void *arena;
 } pickle_allocator_t; /* optional */
 
-enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
-
 struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
 
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
+
+/* NOTES: All functions return one of the pickle error statuses; PICKLE_OK,
+ * PICKLE_ERROR, ...*/
+enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
 int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) default allocator used */
 int pickle_delete(pickle_t *i);
@@ -67,7 +69,6 @@ int pickle_eval(pickle_t *i, const char *t);
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 
 int pickle_error(pickle_t *i, const char *fmt, ...);
-int pickle_error_out_of_memory(pickle_t *i); /* does not allocate */
 int pickle_error_arity(pickle_t *i, int expected, int argc, char **argv);
 
 int pickle_set_result_string(pickle_t *i, const char *s);

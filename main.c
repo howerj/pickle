@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <time.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #define LINE_SZ (1024)
 #define FILE_SZ (1024 * 16)
@@ -70,8 +71,7 @@ static int pickleCommandGets(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_error_arity(i, 1, argc, argv);
 	char buf[PICKLE_MAX_STRING] = { 0 };
 	if (!fgets(buf, sizeof buf, (FILE*)pd)) {
-		if (pickle_set_result_string(i, "EOF") != PICKLE_OK)
-			return pickle_error_out_of_memory(i);
+		pickle_set_result_string(i, "EOF");
 		return PICKLE_ERROR;
 	}
 	return pickle_set_result_string(i, buf);
@@ -186,6 +186,17 @@ static int pickleCommandSignal(pickle_t *i, const int argc, char **argv, void *p
 	return r;
 }
 
+static void memory_tracer(void *file, const char *fmt, ...) {
+	assert(file);
+	assert(fmt);
+	FILE *out = file;
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(out, fmt, ap);
+	va_end(ap);
+	fputc('\n', out);
+}
+
 static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) {
 	pool_t *p = pd;
 	long info = -1;
@@ -209,6 +220,8 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 		else if (!strcmp(rq, "total"))    { info = p->total;  }
 		else if (!strcmp(rq, "blocks"))   { info = p->blocks; }
 		else if (!strcmp(rq, "arenas"))   { info = p->count; }
+		else if (!strcmp(rq, "tron"))     { p->tracer = memory_tracer; p->tracer_arg = stdout; return PICKLE_OK; }
+		else if (!strcmp(rq, "troff"))    { p->tracer = NULL; p->tracer_arg = NULL; return PICKLE_OK; }
 		else { /* do nothing */ }
 	} else if (argc == 3) {
 		const int pool = atoi(argv[2]);

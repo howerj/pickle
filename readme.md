@@ -647,6 +647,9 @@ Once this is done, some functions in the API can be removed, and tests moved to
 the TCL code instead of being in C.
 * Replace unsafe string copying routines with safe version; including 'strncpy'
 (what's the point of this function!?).
+* Currently there is no way to serialize the interpreter state, this could
+actually be done from within the interpreter if methods for analyzing variables
+were available.
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h

@@ -265,6 +265,8 @@ fail:
 void pool_delete(pool_t *p) {
 	if (!p)
 		return;
+	if (p->tracer)
+		p->tracer(p->tracer_arg, "{delete %p}", (void*)p);
 	if (p->arenas)
 		for (size_t i = 0; i < p->count; i++)
 			block_delete(p->arenas[i]);
@@ -299,8 +301,11 @@ void *pool_malloc(pool_t *p, size_t length) {
 	assert(p);
 	void *r = NULL;
 	if (RANDOM_FAIL)
-		if (rand() < FAIL_PROBABILITY)
+		if (rand() < FAIL_PROBABILITY) {
+			if (p->tracer)
+				p->tracer(p->tracer_arg, "{malloc %p: random fail}", (void*)p);
 			return NULL;
+		}
 	if (STATISTICS)
 		p->allocs++, p->total += length;
 	for (size_t i = 0; i < p->count; i++)
@@ -312,10 +317,13 @@ void *pool_malloc(pool_t *p, size_t length) {
 				if (p->max < p->active)
 					p->max = p->active;
 			}
-			return r;
+			goto end;
 		}
 	if (FALLBACK)
-		return malloc(length);
+		r = malloc(length);
+end:
+	if (p->tracer)
+		p->tracer(p->tracer_arg, "{malloc %p: %p %6zu}", (void*)p, r, length);
 	return r;
 }
 
@@ -326,6 +334,8 @@ void *pool_calloc(pool_t *p, size_t length) {
 
 void pool_free(pool_t *p, void *v) {
 	assert(p);
+	if (p->tracer)
+		p->tracer(p->tracer_arg, "{free   %p: %p}", (void*)p, v);
 	if (!v)
 		return;
 	if (STATISTICS)

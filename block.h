@@ -51,6 +51,8 @@ typedef struct {
 	long active, max;  /* current active, maximum on heap at any one time */
 } block_arena_t;
 
+typedef void (*pool_tracer_func_t)(void *v, const char *fmt, ...);
+
 typedef struct {
 	size_t count;
 	block_arena_t **arenas;
@@ -59,12 +61,16 @@ typedef struct {
 	long freed, allocs, relocations; /* non NULL frees, malloc/callocs, reallocs */
 	long active, max; /* current active, maximum on heap at any one time */
 	long total, blocks; /* total memory allocations, total memory allocations of blocks */
+	/* common sense: do not allocate anything in the tracer... */
+	pool_tracer_func_t tracer; /* optional tracing routine; if NULL, tracing is turned off */
+	void *tracer_arg; /* passed to tracing routine, if used */
 } pool_t;
 
 typedef struct {
 	size_t blocksz;
 	size_t count;
 } pool_specification_t;
+
 
 size_t bitmap_units(size_t bits);
 size_t bitmap_bits(bitmap_t *b);
@@ -90,6 +96,8 @@ void *pool_malloc(pool_t *p, size_t length);
 void pool_free(pool_t *p, void *v);
 void *pool_realloc(pool_t *p, void *v, size_t length);
 void *pool_calloc(pool_t *p, size_t length);
+
+
 
 #define BLOCK_DECLARE(NAME, BLOCK_COUNT, BLOCK_SIZE)\
 	block_arena_t NAME = {\
