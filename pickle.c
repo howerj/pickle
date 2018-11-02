@@ -118,11 +118,15 @@ static inline void static_assertions(void) {
 static inline void *picolMalloc(pickle_t *i, size_t size) {
 	assert(i);
 	assert(size > 0); /* we should not allocate any zero length objects here */
+	if (size > PICKLE_MAX_STRING)
+		return NULL;
 	return i->allocator.malloc(i->allocator.arena, size);
 }
 
 static inline void *picolRealloc(pickle_t *i, void *p, size_t size) {
 	assert(i);
+	if (size > PICKLE_MAX_STRING)
+		return NULL;
 	return i->allocator.realloc(i->allocator.arena, p, size);
 }
 
@@ -221,8 +225,12 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 	return PICKLE_OK;
 }
 
-static void advance(struct picolParser *p) {
+static int advance(struct picolParser *p) {
 	assert(p);
+	if (p->len <= 0)
+		return PICKLE_ERROR;
+	if (p->len && !(*p->p))
+		return PICKLE_ERROR;
 	if (p->line && *p->line/*0 disables line count*/ && *p->ch < p->p) {
 		*p->ch = p->p;
 		if (*p->p == '\n')
@@ -230,7 +238,9 @@ static void advance(struct picolParser *p) {
 	}
 	p->p++;
 	p->len--;
-	assert(p->len >= 0);
+	if (p->len && !(*p->p))
+		return PICKLE_ERROR;
+	return PICKLE_OK;
 }
 
 static inline void picolParserInitialize(struct picolParser *p, const char *text, int *line, const char **ch) {
@@ -253,7 +263,8 @@ static inline int picolParseSep(struct picolParser *p) {
 	assert(p);
 	p->start = p->p;
 	while (picolIsSpaceChar(*p->p))
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	p->end  = p->p - 1;
 	p->type = PT_SEP;
 	return PICKLE_OK;
@@ -263,7 +274,8 @@ static inline int picolParseEol(struct picolParser *p) {
 	assert(p);
 	p->start = p->p;
 	while (picolIsSpaceChar(*p->p) || *p->p == ';')
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	p->end  = p->p - 1;
 	p->type = PT_EOL;
 	return PICKLE_OK;
@@ -271,27 +283,32 @@ static inline int picolParseEol(struct picolParser *p) {
 
 static inline int picolParseCommand(struct picolParser *p) {
 	assert(p);
-	advance(p);
+	if (advance(p) != PICKLE_OK)
+		return PICKLE_ERROR;
 	p->start = p->p;
-	for (int level = 1, blevel = 0; p->len; advance(p)) {
+	for (int level = 1, blevel = 0; p->len;) {
 		if (*p->p == '[' && blevel == 0) {
 			level++;
 		} else if (*p->p == ']' && blevel == 0) {
 			if (!--level)
 				break;
 		} else if (*p->p == '\\') {
-			advance(p);
+			if (advance(p) != PICKLE_OK)
+				return PICKLE_ERROR;
 		} else if (*p->p == '{') {
 			blevel++;
 		} else if (*p->p == '}') {
 			if (blevel != 0)
 				blevel--;
 		}
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	}
 	p->end  = p->p - 1;
 	p->type = PT_CMD;
 	if (*p->p == ']')
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	return PICKLE_OK;
 }
 
@@ -301,10 +318,12 @@ static inline int picolIsVarChar(const int ch) {
 
 static inline int picolParseVar(struct picolParser *p) {
 	assert(p);
-	advance(p); /* skip the $ */
+	if (advance(p) != PICKLE_OK) /* skip the $ */
+		return PICKLE_ERROR;
 	p->start = p->p;
 	for (;picolIsVarChar(*p->p);)
-	       	advance(p);
+	       	if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	if (p->start == p->p) { /* It's just a single char string "$" */
 		p->start = p->p - 1;
 		p->end   = p->p - 1;
@@ -318,24 +337,27 @@ static inline int picolParseVar(struct picolParser *p) {
 
 static inline int picolParseBrace(struct picolParser *p) {
 	assert(p);
-	advance(p);
+	if (advance(p) != PICKLE_OK)
+		return PICKLE_ERROR;
 	p->start = p->p;
 	for (int level = 1;;) {
 		if (p->len >= 2 && *p->p == '\\') {
-			advance(p);
+			if (advance(p) != PICKLE_OK)
+				return PICKLE_ERROR;
 		} else if (p->len == 0 || *p->p == '}') {
 			level--;
 			if (level == 0 || p->len == 0) {
 				p->end  = p->p - 1;
 				p->type = PT_STR;
 				if (p->len)
-					advance(p); /* Skip final closed brace */
+					return advance(p); /* Skip final closed brace */
 				return PICKLE_OK;
 			}
 		} else if (*p->p == '{') {
 			level++;
 		}
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	}
 	return PICKLE_OK; /* unreached */
 }
@@ -347,14 +369,16 @@ static int picolParseString(struct picolParser *p) {
 		return picolParseBrace(p);
 	} else if (newword && *p->p == '"') {
 		p->insidequote = 1;
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	}
 	p->start = p->p;
 	for (;p->len;) {
 		switch (*p->p) {
 		case '\\':
 			if (p->len >= 2)
-				advance(p);
+				if (advance(p) != PICKLE_OK)
+					return PICKLE_ERROR;
 			break;
 		case '$': case '[':
 			p->end  = p->p - 1;
@@ -372,12 +396,12 @@ static int picolParseString(struct picolParser *p) {
 				p->end  = p->p - 1;
 				p->type = PT_ESC;
 				p->insidequote = 0;
-				advance(p);
-				return PICKLE_OK;
+				return advance(p);
 			}
 			break;
 		}
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	}
 	p->end = p->p - 1;
 	p->type = PT_ESC;
@@ -387,7 +411,8 @@ static int picolParseString(struct picolParser *p) {
 static inline int picolParseComment(struct picolParser *p) {
 	assert(p);
 	while (p->len && *p->p != '\n')
-		advance(p);
+		if (advance(p) != PICKLE_OK)
+			return PICKLE_ERROR;
 	return PICKLE_OK;
 }
 
