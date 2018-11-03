@@ -371,6 +371,7 @@ Options:\n\
 \t-h, --help   display this help message and exit\n\
 \t-t, --test   run built in self tests and exit (return code 0 is success)\n\
 \t-a           use custom block allocator, for testing purposes\n\
+\t-A           enable debugging of the custom allocator, implies '-a'\n\
 \t-s, --silent suppress prompt printing\n\
 \n\
 If no arguments are given then input is taken from stdin. Otherwise\n\
@@ -394,7 +395,7 @@ static void cleanup(void) {
 }
 
 int main(int argc, char **argv) {
-	int r = 0, prompt_on = 1, j;
+	int r = 0, prompt_on = 1, memory_debug = 0, j;
 	argument_t args = { .argc = argc, .argv = argv };
 
 	static const pool_specification_t specs[] = {
@@ -416,6 +417,9 @@ int main(int argc, char **argv) {
 		if (!strcmp(argv[j], "--")) {
 			j++;
 			break;
+		} else if (!strcmp(argv[j], "-A")) {
+			use_custom_allocator = 1;
+			memory_debug = 1;
 		} else if (!strcmp(argv[j], "-a")) {
 			use_custom_allocator = 1;
 		} else if (!strcmp(argv[j], "-s") || !strcmp(argv[j], "--silent")) {
@@ -432,11 +436,18 @@ int main(int argc, char **argv) {
 	argc -= j;
 	argv += j;
 
-	if (use_custom_allocator)
-		if (!(block_allocator.arena = pool_new(sizeof(specs)/sizeof(specs[0]), &specs[0]))) {
+	if (use_custom_allocator) {
+		pool_t *p = pool_new(sizeof(specs)/sizeof(specs[0]), &specs[0]);
+		if (!(block_allocator.arena = p)) {
 			fputs("memory pool allocation failure\n", stderr);
 			return EXIT_FAILURE;
+		} else {
+			if (memory_debug) {
+				p->tracer     = memory_tracer ;
+				p->tracer_arg = stdout;
+			}
 		}
+	}
 
 	if ((r = pickle_new(&interp, use_custom_allocator ? &block_allocator : NULL)) != PICKLE_OK)
 		goto end;

@@ -364,6 +364,14 @@ size_t pool_block_size(pool_t *p, void *v) {
 	return 0;
 }
 
+static inline bool pool_valid_pointer(pool_t *p, void *v) {
+	assert(p);
+	for (size_t i = 0; i < p->count; i++)
+		if (block_arena_valid_pointer(p->arenas[i], v))
+			return true;
+	return false;
+}
+
 void *pool_realloc(pool_t *p, void *v, size_t length) {
 	assert(p);
 	if (STATISTICS)
@@ -374,11 +382,17 @@ void *pool_realloc(pool_t *p, void *v, size_t length) {
 	}
 	if (!v)
 		return pool_malloc(p, length);
+	if (FALLBACK)
+		if (!pool_valid_pointer(p, v))
+			return realloc(v, length);
+	const size_t oldsz = pool_block_size(p, v);
+	const size_t minsz = MIN(oldsz, length);
+	if (length > (oldsz/2) && length < oldsz)
+		return v;
 	void *n = pool_malloc(p, length);
 	if (!n)
 		return NULL;
-	const size_t size = pool_block_size(p, v);
-	memcpy(n, v, size);
+	memcpy(n, v, minsz);
 	pool_free(p, v);
 	return n;
 }
