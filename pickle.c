@@ -1,16 +1,43 @@
 /**@file pickle.c
  * @brief Pickle: A tiny TCL like interpreter
  *
- *  This is a copy and extension of a tiny TCL interpreter called 'picol', by
- *  Antirez, under the BSD license, available at:
+ * A small TCL interpreter, called Pickle, that is basically just a copy
+ * of the original written by Antirez, the original is available at
  *
  * <http://oldblog.antirez.com/post/picol.html>
  * <http://antirez.com/picol/picol.c.txt>
  *
- * The BSD license has been moved to the header.
+ * Original Copyright notice:
+ *
+ * Tcl in ~ 500 lines of code.
+ *
+ * Copyright (c) 2007-2016, Salvatore Sanfilippo <antirez at gmail dot com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE. 
  *
  * Extensions/Changes by Richard James Howe, available at:
  * <https://github.com/howerj/pickle>
+ * Also licensed under the same BSD license.
  *
  * Style and coding guide lines:
  *   - 'pickle_' and snake_case is used for exported functions/variables/types
@@ -1930,7 +1957,7 @@ static int picolTestLineNumber(void) {
 	return r;
 }
 
-int picolTestGetSetVar(void) {
+static int picolTestGetSetVar(void) {
 	long val = 0;
 	int r = 0;
 	pickle_t *p = NULL;
@@ -1964,7 +1991,7 @@ int picolTestGetSetVar(void) {
 	return r;
 }
 
-int picolTestParser(void) { /**@todo The parser needs unit test writing for it */
+static int picolTestParser(void) { /**@todo The parser needs unit test writing for it */
 	int r = 0;
 	struct picolParser p;
 

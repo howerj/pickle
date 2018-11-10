@@ -5,7 +5,7 @@ AR=ar
 ARFLAGS=rcs
 RANLIB=ranlib
 
-.PHONY: all run test wrap clean
+.PHONY: all run test wrap clean cpp
 
 all: pickle
 
@@ -33,6 +33,9 @@ pickle: main.o block.o libpickle.a
 	${CC} ${CFLAGS} $^ -o $@
 	# strip $@
 
+cpp: libpickle.a
+	make -C cpp
+
 check:
 	cppcheck --enable=all *.c
 	clang-tidy pickle.c
@@ -41,3 +44,4 @@ check:
 
 clean:
 	rm -rf picol pickle *.o *.a
+	make -C cpp clean

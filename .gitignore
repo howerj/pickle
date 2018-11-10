@@ -9,3 +9,4 @@ picol
 *.gcov
 afl/
 afl/*
+cpp
