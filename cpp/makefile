@@ -14,5 +14,5 @@ libpickle.a:
 	cp ../libpickle.a .
 
 clean:
-	rm -v cpp libpickle.a
+	rm -vf cpp libpickle.a
 
