@@ -568,6 +568,16 @@ arena to query for information.
  - "arena-block": Size of a block
  - "arena-used": Number of blocks currently in use
 
+* getch
+
+Read a single character from standard in, returning the result as a number (you
+can use "string char" to convert this to a character). -1 is returned on EOF.
+
+* putch number
+
+Write a character, represented numerically, to standard output. The original
+character is returned if there is no error in doing this.
+
 ## Compile Time Options
 
 I am not a big fan of using the [C Preprocessor][] to define a myriad of

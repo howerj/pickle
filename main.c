@@ -54,11 +54,7 @@ static int pickleCommandPuts(pickle_t *i, const int argc, char **argv, void *pd)
 		if (!strcmp(argv[1], "-nonewline")) { newline = 0; }
 		else return pickle_error(i, "Unknown puts command %s", argv[1]);
 	}
-	int r1 = 0;
-	if (newline)
-		r1 = fprintf((FILE*)pd, "%s\n", line);
-	else
-		r1 = fputs(line, (FILE*)pd);
+	const int r1 = newline ? fprintf((FILE*)pd, "%s\n", line) : fputs(line, (FILE*)pd);
 	const int r2 = fflush((FILE*)pd);
 	if (r1 < 0 || r2 < 0)
 		return pickle_error(i, "I/O error: %d/%d", r1, r2);
@@ -159,6 +155,21 @@ static int pickleCommandRaise(pickle_t *i, const int argc, char **argv, void *pd
 	if (argc != 2)
 		return pickle_error_arity(i, 2, argc, argv);
 	return pickle_set_result_integer(i, raise(atoi(argv[1])));
+}
+
+static int pickleCommandGetCh(pickle_t *i, const int argc, char **argv, void *pd) {
+	FILE *f = pd;
+	if (argc != 1)
+		return pickle_error_arity(i, 1, argc, argv);
+	return pickle_set_result_integer(i, fgetc(f));
+}
+
+static int pickleCommandPutCh(pickle_t *i, const int argc, char **argv, void *pd) {
+	FILE *f = pd;
+	assert(f);
+	if (argc != 2)
+		return pickle_error_arity(i, 2, argc, argv);
+	return pickle_set_result_integer(i, fputc(atoi(argv[1]), f));
 }
 
 static int signal_variable = 0;
@@ -312,6 +323,8 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "argv",     pickleCommandArgv,      args },
 		{ "source",   pickleCommandSource,    stdout },
 		{ "heap",     pickleCommandHeapUsage, p },
+		{ "putch",    pickleCommandPutCh,     stdout },
+		{ "getch",    pickleCommandGetCh,     stdin },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
 		return -1;
@@ -358,6 +371,7 @@ static int tests(void) {
 }
 
 static void help(FILE *output, const char *arg0) {
+	assert(output);
 	assert(arg0);
 	static const char *msg = "\
 Usage: %s file.tcl...\n\n\
@@ -437,7 +451,7 @@ int main(int argc, char **argv) {
 	argv += j;
 
 	if (use_custom_allocator) {
-		pool_t *p = pool_new(sizeof(specs)/sizeof(specs[0]), &specs[0]);
+		pool_t *p = pool_new(sizeof(specs) / sizeof(specs[0]), &specs[0]);
 		if (!(block_allocator.arena = p)) {
 			fputs("memory pool allocation failure\n", stderr);
 			return EXIT_FAILURE;

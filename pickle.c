@@ -102,6 +102,14 @@ struct pickle_var { /* strings are stored as either pointers, or as 'small' stri
 		struct pickle_var *link; /* link to another variable */
 	} data;
 	struct pickle_var *next;
+	/* NOTE: 
+	 * - On a 32 machine type, two bits could merged into the lowest bits
+	 *   on the 'next' pointer, as these pointers are most likely aligned
+	 *   on a 4 byte boundary, leaving the lowest bits free. However, this
+	 *   would be non-portable. There is nothing to be gained from this,
+	 *   as we have one bit left over.
+	 * - On a 64 bit machine, all three bits could be merged with a
+	 *   pointer, saving space in this structure. */
 	unsigned type      :2; /* type of data; string (pointer/small), or link (NB. Could add number type) */
 	unsigned smallname :1; /* if true, name is stored as small string */
 };
@@ -197,6 +205,71 @@ static int power(long base, long exp, long *r) {
 	}
 	*r = result * negative;
 	return PICKLE_OK;
+}
+
+/* Adapted from: <https://stackoverflow.com/questions/10404448>
+ * 
+ * TODO:
+ *  - Remove need for 'init' field in opt argument
+ *  - refactor so PICKLE_OK/PICKLE_ERROR/PICKLE_CONTINUE is used
+ *  - more assertions */
+int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], const char *fmt) {
+	assert(opt);
+	assert(fmt);
+	assert(argv);
+	enum { BADARG_E = ':', BADCH_E = '?' };
+
+	if (!(opt->init)) {
+		opt->place = string_empty; /* option letter processing */
+		opt->init = 1;
+	}
+
+	if (opt->reset || !*opt->place) { /* update scanning pointer */
+		opt->reset = 0;
+		if (opt->index >= argc || *(opt->place = argv[opt->index]) != '-') {
+			opt->place = string_empty;
+			return -1;
+		}
+		if (opt->place[1] && *++opt->place == '-') { /* found "--" */
+			opt->index++;
+			opt->place = string_empty;
+			return -1;
+		}
+	} 
+
+	const char *oli; /* option letter list index */
+	if ((opt->option = *opt->place++) == ':' || !(oli = strchr(fmt, opt->option))) { /* option letter okay? */
+		 /* if the user didn't specify '-' as an option, assume it means -1.  */
+		if (opt->option == '-')
+			return -1;
+		if (!*opt->place)
+			opt->index++;
+		/*if (opt->error && *fmt != ':')
+			(void)fprintf(stderr, "illegal option -- %c\n", opt->option);*/
+		return BADCH_E;
+	}
+
+	if (*++oli != ':') { /* don't need argument */
+		opt->arg = NULL;
+		if (!*opt->place)
+			opt->index++;
+	} else {  /* need an argument */
+		if (*opt->place) { /* no white space */
+			opt->arg = opt->place;
+		} else if (argc <= ++opt->index) { /* no arg */
+			opt->place = string_empty;
+			if (*fmt == ':')
+				return BADARG_E;
+			/*if (opt->error)
+				(void)fprintf(stderr, "option requires an argument -- %c\n", opt->option);*/
+			return BADCH_E;
+		} else	{ /* white space */
+			opt->arg = argv[opt->index];
+		}
+		opt->place = string_empty;
+		opt->index++;
+	}
+	return opt->option; /* dump back option letter */
 }
 
 static char *picolStrdup(pickle_t *i, const char *s) {
@@ -665,7 +738,7 @@ int pickle_error(pickle_t *i, const char *fmt, ...) { /* NB. C line/func info wo
 	size_t off = 0;
 	char errbuf[PICKLE_MAX_STRING] = { 0 };
 	if (i->line)
-		off = snprintf(errbuf, sizeof(errbuf)/2, "line %d: ", i->line);
+		off = snprintf(errbuf, sizeof(errbuf) / 2, "line %d: ", i->line);
 	assert(off < PICKLE_MAX_STRING);
 	va_list ap;
 	va_start(ap, fmt);
@@ -871,6 +944,7 @@ err:
 
 int pickle_eval(pickle_t *i, const char *t) {
 	assert(i);
+	assert(t);
 	i->line = 1;
 	i->ch   = t;
 	return picolEval(i, t);
@@ -2032,6 +2106,40 @@ static int picolTestParser(void) { /**@todo The parser needs unit test writing f
 	return r;
 }
 
+int picolTestGetOpt(void) {
+	pickle_getopt_t opt = { .init = 0 };
+
+	char *argv[] = {
+		/*"./program",*/
+		"-h",
+		"-f",
+		"argument-to-f",
+		"-c",
+		"file",
+	};
+	const int argc = sizeof(argv) / sizeof(argv[0]);
+	char *argument_to_f = NULL;
+	int ch = 0, r = 0, result = 0;
+	printf("GetOpt Tests\n");
+	while ((ch = pickle_getopt(&opt, argc, argv, "hf:c")) != -1) {
+		switch (ch) {
+		case 'h': if (result & 1) r = -1; result |= 1; break;
+		case 'f': if (result & 2) r = -2; result |= 2; argument_to_f = opt.arg; break;
+		case 'c': if (result & 4) r = -4; result |= 4; break;
+		default:
+			r = -8;
+		}
+	}
+	printf("argc: %d, result: %d\n", argc, result);
+	r += result == 7 ? 0 : -8;
+	if (argument_to_f)
+		r += !strcmp("argument-to-f", argument_to_f) ? 0 : -16;
+	else
+		r += -32;
+	printf("GetOpt Test: %s/%d\n", failed(r), r);
+	return r;
+}
+
 int pickle_tests(void) {
 	printf("Pickle Tests\n");
 	typedef int (*test_func)(void);
@@ -2043,6 +2151,7 @@ int pickle_tests(void) {
 		picolTestGetSetVar,
 		picolTestLineNumber,
 		picolTestParser,
+		picolTestGetOpt,
 	};
 	int r = 0;
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++)

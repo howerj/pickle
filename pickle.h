@@ -16,18 +16,31 @@ extern "C" {
 #define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
 
 typedef struct {
-	void *(*malloc)  (void *arena, size_t bytes);
-	void *(*realloc) (void *arena, void *ptr, size_t bytes);
-	void  (*free)    (void *arena, void *ptr);
-	void *arena;
+	void *(*malloc)  (void *arena, size_t bytes);            /* malloc equivalent */
+	void *(*realloc) (void *arena, void *ptr, size_t bytes); /* realloc equivalent */
+	void  (*free)    (void *arena, void *ptr);               /* free equivalent */
+	void *arena;  /* arena we are allocating in, if any */
 } pickle_allocator_t; /* optional */
+
+typedef struct {
+	char *arg;   /* parsed argument */
+	int error,   /* turn error reporting on/off */
+	    index,   /* index into argument list */
+	    option,  /* parsed option */
+	    reset;   /* set to reset */
+	char *place; /* internal use: scanner position */
+	int  init;   /* internal use: initialized or not */
+} pickle_getopt_t;   /* getopt clone */
 
 struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
 
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
-/* NOTES: All functions return one of the pickle error statuses; PICKLE_OK,
+/* returns -1 when finished, '?' (bad option), ':' (bad argument) on error */
+int pickle_getopt(pickle_getopt_t *opt, int nargc, char *const nargv[], const char *fmt);
+
+/* NOTES: All the following functions return one of the pickle error statuses; PICKLE_OK,
  * PICKLE_ERROR, ...*/
 enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
