@@ -1460,7 +1460,7 @@ static int picolCommandReturn(pickle_t *i, const int argc, char **argv, void *pd
 	if (argc == 3)
 		retcode = atol(argv[2]);
 	if (argc == 1)
-		return picolSetResultEmpty(i);
+		return picolSetResultEmpty(i) != PICKLE_OK ? PICKLE_ERROR : PICKLE_RETURN;
 	if (pickle_set_result_string(i, argv[1]) != PICKLE_OK)
 		return PICKLE_ERROR;
 	return retcode;
@@ -1631,18 +1631,22 @@ static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *p
 				assert(c != c->next);
 			}
 		}
-		return pickle_set_result_integer(i, r++);
+		return pickle_set_result_integer(i, r);
 	}
 	if (argc == 2) {
-		long j = 0;
-		for (; j < i->length; j++) {
-			struct pickle_command *c = i->table[j];
-			for (; c; c = c->next)
-				if (!compare(argv[1], c->name))
+		long r = -1, j = 0;
+		for (long k = 0; k < i->length; k++) {
+			struct pickle_command *c = i->table[k];
+			for (; c; c = c->next) {
+				if (!compare(argv[1], c->name)) {
+					r = j;
 					goto done;
+				}
+				j++;
+			}
 		}
 	done:
-		return pickle_set_result_integer(i, j);
+		return pickle_set_result_integer(i, r);
 	}
 
 	if (argc != 3)

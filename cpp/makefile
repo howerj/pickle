@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-Wall -Wextra -pedantic -O2 -I..
+CXXFLAGS=-Wall -Wextra -pedantic -O2 -std=c++11 -I..
 
 .PHONY: clean test
 

@@ -61,6 +61,24 @@ proc defined {x} {
 
 proc help {} { source help.tcl }
 
+# Decompiler, of sorts. The name 'see' comes from Forth, like the function
+# 'words.
+proc see {w} {
+	if {eq [uplevel 1 "defined $w"] "2:variable"} {
+		puts "set $w [uplevel 1 "set $w"]"
+		return
+	}
+	set widx [info command $w]
+	if {< $widx 0} {
+		return "'$w' not defined" 1
+	}
+
+	set args [info command args $widx]
+	set body [info command body $widx]
+	set name [info command name $widx]
+	puts "proc $name {$args} {$body}"
+}
+
 # puts "Commands defined:"
 # words
 
