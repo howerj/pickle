@@ -49,9 +49,9 @@ int pickle_delete(pickle_t *i);
 int pickle_eval(pickle_t *i, const char *t);
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 
-int pickle_error(pickle_t *i, const char *fmt, ...);
-int pickle_error_arity(pickle_t *i, int expected, int argc, char **argv);
-
+int pickle_set_result(pickle_t *i, const char *fmt, ...);
+int pickle_set_result_error(pickle_t *i, const char *fmt, ...);
+int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, char **argv);
 int pickle_set_result_string(pickle_t *i, const char *s);
 int pickle_set_result_integer(pickle_t *i, long result);
 int pickle_get_result_string(pickle_t *i, const char **s);
