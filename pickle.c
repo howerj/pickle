@@ -33,7 +33,7 @@
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE. 
+ * POSSIBILITY OF SUCH DAMAGE.
  *
  * Extensions/Changes by Richard James Howe, available at:
  * <https://github.com/howerj/pickle>
@@ -102,7 +102,7 @@ struct pickle_var { /* strings are stored as either pointers, or as 'small' stri
 		struct pickle_var *link; /**< link to another variable */
 	} data;
 	struct pickle_var *next;
-	/* NOTE: 
+	/* NOTE:
 	 * - On a 32 machine type, two bits could merged into the lowest bits
 	 *   on the 'next' pointer, as these pointers are most likely aligned
 	 *   on a 4 byte boundary, leaving the lowest bits free. However, this
@@ -210,7 +210,7 @@ static int power(long base, long exp, long *r) {
 }
 
 /* Adapted from: <https://stackoverflow.com/questions/10404448>
- * 
+ *
  * TODO:
  *  - Remove need for 'init' field in opt argument
  *  - refactor so PICKLE_OK/PICKLE_ERROR/PICKLE_CONTINUE is used
@@ -238,7 +238,7 @@ int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], cons
 			opt->place = string_empty;
 			return -1;
 		}
-	} 
+	}
 
 	const char *oli; /* option letter list index */
 	if ((opt->option = *opt->place++) == ':' || !(oli = strchr(fmt, opt->option))) { /* option letter okay? */
@@ -1086,16 +1086,16 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 		const char *arg1 = argv[2];
 		static const char *space = " \t\n\r\v";
 		if (!compare(rq, "trimleft"))
-			return pickle_set_result_string(i, trimleft(space, arg1)); 
-		if (!compare(rq, "trimright")) { 
-			strncpy(buf, arg1, PICKLE_MAX_STRING); 
-			trimright(space, buf); 
-			return pickle_set_result_string(i, buf); 
+			return pickle_set_result_string(i, trimleft(space, arg1));
+		if (!compare(rq, "trimright")) {
+			strncpy(buf, arg1, PICKLE_MAX_STRING);
+			trimright(space, buf);
+			return pickle_set_result_string(i, buf);
 		}
-		if (!compare(rq, "trim"))      { 
-			strncpy(buf, arg1, PICKLE_MAX_STRING); 
-			trimright(space, buf); 
-			return pickle_set_result_string(i, trimleft(space, buf)); 
+		if (!compare(rq, "trim"))      {
+			strncpy(buf, arg1, PICKLE_MAX_STRING);
+			trimright(space, buf);
+			return pickle_set_result_string(i, trimleft(space, buf));
 		}
 		if (!compare(rq, "length"))
 			return pickle_set_result_integer(i, strlen(arg1));
@@ -1143,17 +1143,17 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 		const char *arg1 = argv[2], *arg2 = argv[3];
 		if (!compare(rq, "trimleft"))
 			return pickle_set_result_string(i, trimleft(arg2, arg1));
-		if (!compare(rq, "trimright")) { 
-			strncpy(buf, arg1, PICKLE_MAX_STRING); 
-			trimright(arg2, buf); 
-			return pickle_set_result_string(i, buf); 
+		if (!compare(rq, "trimright")) {
+			strncpy(buf, arg1, PICKLE_MAX_STRING);
+			trimright(arg2, buf);
+			return pickle_set_result_string(i, buf);
 		}
-		if (!compare(rq, "trim"))   { 
-			strncpy(buf, arg1, PICKLE_MAX_STRING); 
-			trimright(arg2, buf); 
-			return pickle_set_result_string(i, trimleft(arg2, buf)); 
+		if (!compare(rq, "trim"))   {
+			strncpy(buf, arg1, PICKLE_MAX_STRING);
+			trimright(arg2, buf);
+			return pickle_set_result_string(i, trimleft(arg2, buf));
 		}
-		if (!compare(rq, "match"))  { 
+		if (!compare(rq, "match"))  {
 			const int r = match(arg1, arg2, PICKLE_MAX_RECURSION - i->level);
 			if (r < 0)
 				return pickle_set_result_error(i, "Regex error: %d", r);
@@ -1188,9 +1188,9 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			if (!compare(arg1, "xdigit")) { while (isxdigit(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
 			if (!compare(arg1, "ascii"))  { while (*arg2 && !(0x80 & *arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
 			if (!compare(arg1, "control")) { while (*arg2 && iscntrl(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "integer")) { 
-				char *ep = NULL; 
-				(void)strtol(arg2, &ep, 10); 
+			if (!compare(arg1, "integer")) {
+				char *ep = NULL;
+				(void)strtol(arg2, &ep, 10);
 				return pickle_set_result_integer(i, *arg2 && !isspace(*arg2) && !*ep);
 			}
 			/* Missing: double, Boolean, true, false */
@@ -1209,20 +1209,20 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			buf[j * length] = 0;
 			return pickle_set_result_string(i, buf);
 		}
-		if (!compare(rq, "first"))      { 
-			const char *found = strstr(arg2, arg1); 
+		if (!compare(rq, "first"))      {
+			const char *found = strstr(arg2, arg1);
 			if (!found)
 				return pickle_set_result_integer(i, -1);
 			return pickle_set_result_integer(i, found - arg2);
 		}
 	} else if (argc == 5) {
 		const char *arg1 = argv[2], *arg2 = argv[3], *arg3 = argv[4];
-		if (!compare(rq, "first"))      { 
+		if (!compare(rq, "first"))      {
 			const long length = strlen(arg2);
 			const long start  = atol(arg3);
 			if (start < 0 || start >= length)
 				return pickle_set_result_string(i, "");
-			const char *found = strstr(arg2 + start, arg1); 
+			const char *found = strstr(arg2 + start, arg1);
 			if (!found)
 				return pickle_set_result_integer(i, -1);
 			return pickle_set_result_integer(i, found - arg2);
@@ -1584,8 +1584,19 @@ static int picolCommandUpVar(pickle_t *i, const int argc, char **argv, void *pd)
 			return picolErrorOutOfMemory(i);
 		otherVar = i->callframe->vars;
 	}
+
+	if (myVar == otherVar) { /* more advance cycle detection should be done here */
+		pickle_set_result_error(i, "Cannot create circular reference variable '%s'", argv[3]);
+		goto end;
+	}
+
 	myVar->type = PV_LINK;
 	myVar->data.link = otherVar;
+
+	/*while (myVar->type == PV_LINK) { // Do we need the PV_LINK Type?
+		assert(myVar != myVar->data.link); // Cycle?
+		myVar = myVar->data.link;
+	}*/
 end:
 	i->callframe = cf;
 	return retcode;
@@ -1871,7 +1882,7 @@ int pickle_delete(pickle_t *i) {
 int pickle_tests(void) { return PICKLE_OK; }
 #else
 
-static inline const char *failed(int n) { 
+static inline const char *failed(int n) {
 	return n == 0 ? "PASS" : "FAIL";
 }
 
