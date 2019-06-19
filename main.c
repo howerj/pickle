@@ -30,7 +30,8 @@ typedef struct {
 typedef struct { int argc; char **argv; } argument_t;
 
 static int use_custom_allocator = 0;
-static pickle_t *interp;
+static pickle_t *interp = NULL;
+static int signal_variable = 0;
 
 void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, length); }
 void custom_free(void *a, void *v)                    { pool_free(a, v); }
@@ -48,7 +49,7 @@ static int pickleCommandPuts(pickle_t *i, const int argc, char **argv, void *pd)
 	if (argc != 2 && argc != 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
 	int newline = 1;
-	char *line = argv[1];
+	const char *line = argv[1];
 	if (argc == 3) {
 		line = argv[2];
 		if (!strcmp(argv[1], "-nonewline")) { newline = 0; }
@@ -85,6 +86,7 @@ static int pickleCommandError(pickle_t *i, const int argc, char **argv, void *pd
 }
 
 static int pickleCommandSystem(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 2 && argc != 1)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -93,6 +95,7 @@ static int pickleCommandSystem(pickle_t *i, const int argc, char **argv, void *p
 }
 
 static int pickleCommandRandom(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 1 && argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -104,6 +107,7 @@ static int pickleCommandRandom(pickle_t *i, const int argc, char **argv, void *p
 }
 
 static int pickleCommandExit(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 2 && argc != 1)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -113,6 +117,7 @@ static int pickleCommandExit(pickle_t *i, const int argc, char **argv, void *pd)
 }
 
 static int pickleCommandGetEnv(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -121,6 +126,7 @@ static int pickleCommandGetEnv(pickle_t *i, const int argc, char **argv, void *p
 }
 
 static int pickleCommandClock(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc == 1) {
 		const long t = (((double)(clock()) / (double)CLOCKS_PER_SEC) * 1000.0);
@@ -137,6 +143,7 @@ static int pickleCommandClock(pickle_t *i, const int argc, char **argv, void *pd
 }
 
 static int pickleCommandEqual(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
@@ -144,6 +151,7 @@ static int pickleCommandEqual(pickle_t *i, const int argc, char **argv, void *pd
 }
 
 static int pickleCommandNotEqual(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
@@ -151,6 +159,7 @@ static int pickleCommandNotEqual(pickle_t *i, const int argc, char **argv, void 
 }
 
 static int pickleCommandRaise(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -158,6 +167,7 @@ static int pickleCommandRaise(pickle_t *i, const int argc, char **argv, void *pd
 }
 
 static int pickleCommandGetCh(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(pd);
 	FILE *f = pd;
 	if (argc != 1)
 		return pickle_set_result_error_arity(i, 1, argc, argv);
@@ -165,20 +175,19 @@ static int pickleCommandGetCh(pickle_t *i, const int argc, char **argv, void *pd
 }
 
 static int pickleCommandPutCh(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(pd);
 	FILE *f = pd;
-	assert(f);
 	if (argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
 	return pickle_set_result_integer(i, fputc(atoi(argv[1]), f));
 }
-
-static int signal_variable = 0;
 
 static void signal_handler(int sig) {
 	signal_variable = sig;
 }
 
 static int pickleCommandSignal(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(!pd);
 	UNUSED(pd);
 	if (argc != 1 && argc != 3)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -209,6 +218,7 @@ static void memory_tracer(void *file, const char *fmt, ...) {
 }
 
 static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) {
+	assert(pd || !pd); /* a neat way of saying 'may or may not be NULL */
 	pool_t *p = pd;
 	long info = -1;
 
@@ -277,7 +287,7 @@ static int file(pickle_t *i, const char *name, FILE *output, int command) {
 		fprintf(stderr, "Failed to open file %s (rb): %s\n", name, strerror(errno));
 		return -1;
 	}
-	char buf[FILE_SZ];
+	char buf[FILE_SZ] = { 0 };
 	buf[fread(buf, 1, FILE_SZ, fp)] = '\0';
 	fclose(fp);
 	int retcode = PICKLE_OK;
@@ -336,13 +346,13 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 	return 0;
 }
 
-/* an interactive pickle - the things you can do with it! */
+/* An interactive pickle - the things you can do with it! */
 static int interactive(pickle_t *i, FILE *input, FILE *output) { /* NB. This could be rewritten as a script now */
 	assert(i);
 	assert(input);
 	assert(output);
 	for (;;) {
-		char clibuf[LINE_SZ];
+		char clibuf[LINE_SZ] = { 0 };
 		const char *prompt = NULL;
 		pickle_get_var_string(i, "prompt", &prompt);
 		prompt = prompt ? prompt : "";

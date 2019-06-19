@@ -25,6 +25,8 @@ pickle.o: pickle.c pickle.h
 
 block.o: block.c block.h
 
+simple: libpickle.a simple.o
+
 libpickle.a: pickle.o
 	${AR} ${ARFLAGS} $@ $<
 	${RANLIB} $@

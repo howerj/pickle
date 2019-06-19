@@ -276,7 +276,7 @@ inserting a String in-between its elements. For example "join {a b c} ," yields
 The 'string' command in [TCL][] implements nearly every string command you
 could possibly want, however this version of 'string' is more limited and
 behaves differently in many circumstances. 'string' also pulls in more standard
-C library functions in 'ctype' and 'string.
+C library functions from 'ctype.h' and 'string.h'.
 
 Some of the commands that are implemented:
 
@@ -426,7 +426,7 @@ The following commands are defined:
 * puts -nonewline? string
 
 Write a string, followed by a newline, to the standard output stream,
-[stdout][]. If an EOF is encountered, a return code of '1' is sent and the
+[stdout][]. If an EOF is encountered, a return code of '1' occurs and the
 string 'EOF' is returned. '-nonewline' can be given as an optional argument, to
 suppress the newline.
 
@@ -535,14 +535,13 @@ file in the current interpreter context and is *not* a safe operation.
 
 * info item
 
-Retrieve information about the system. Information items include, and are
-but are limited to:
+Retrieve information about the system. Information items include:
 
  - level, call stack level
  - line, current line number
- - heap, information about the heap, if available, see 'heap' command
+ - heap, information about the heap, if available, see 'heap' command.
 
-The 'heap' information can also be queried.
+But may include other information.
 
 * heap item number *OR* heap item *OR* heap
 
@@ -649,6 +648,8 @@ language.
 * Static code analysis, dynamic code analysis (gcov, valgrind, American fuzzy
 lop).
 * Profile, Profile, Profile!
+* Add the 'expr' command, maybe by using the Q library version of 'expr', see
+<https://github.com/howerj/q>/
 * 'string' command <https://www.tcl.tk/man/tcl8.4/TclCmd/string.htm>
 * Add commands to core interpreter to do the following:
   - Query variables in scopes

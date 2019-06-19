@@ -1,7 +1,11 @@
 /**@file pickle.h
- * @brief pickle language header
+ * @brief Pickle interpreter header, a TCL like language based on 'picol'.
+ *
  * BSD license, See <https://github.com/howerj/pickle/blob/master/LICENSE>
- * or pickle.c for more information */
+ * or pickle.c for more information.
+ *
+ * Copyright (c) 2007-2016, Salvatore Sanfilippo <antirez at gmail dot com>
+ * Copyright (c) 2018-2019, Richard James Howe <howe.r.j.89@gmail.com> */
 
 #ifndef PICKLE_H
 #define PICKLE_H
@@ -40,7 +44,7 @@ typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *p
 /* returns -1 when finished, '?' (bad option), ':' (bad argument) on error */
 int pickle_getopt(pickle_getopt_t *opt, int nargc, char *const nargv[], const char *fmt);
 
-/* NOTES: All the following functions return one of the pickle error statuses; PICKLE_OK,
+/* NOTE: All the following functions return one of the pickle error statuses; PICKLE_OK,
  * PICKLE_ERROR, ...*/
 enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 

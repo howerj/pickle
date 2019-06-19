@@ -39,11 +39,12 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * Style and coding guide lines:
+ * Style/coding guide and notes:
  *   - 'pickle_' and snake_case is used for exported functions/variables/types
- *   - 'picol_'  and camelCase  is used for internal functions/variables/types
+ *   - 'picol'  and camelCase  is used for internal functions/variables/types
  *   - Use asserts wherever you can for as many preconditions, postconditions
  *   and invariants that you can think of. */
+
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
 #include <ctype.h>   /* toupper, tolower, isalnum, isalpha, ... */
@@ -51,7 +52,7 @@
 #include <stdarg.h>  /* va_list, va_start, va_end */
 #include <stdio.h>   /* vsnprintf, snprintf. !defined(NDEBUG): puts, printf */
 #include <stdlib.h>  /* strtol. !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
-#include <string.h>  /* memcpy, memset, memchr, strstr, compare, strncat, strlen */
+#include <string.h>  /* memcpy, memset, memchr, strstr, strncmp, strncat, strlen */
 
 #ifdef NDEBUG
 #define DEBUGGING (0)
@@ -83,10 +84,10 @@ struct picolParser {
 }; /**< Parsing structure */
 
 typedef struct {
-	const char *name;
-	pickle_command_func_t func;
-	void *data;
-} pickle_register_command_t;
+	const char *name;           /**< Name of function/TCL command */
+	pickle_command_func_t func; /**< Callback that actually does stuff */
+	void *data;                 /**< Optional data for this function */
+} pickle_register_command_t;        /**< A single TCL command */
 
 enum { PV_STRING, PV_SMALL_STRING, PV_LINK };
 
@@ -101,7 +102,7 @@ struct pickle_var { /* strings are stored as either pointers, or as 'small' stri
 		compact_string_t val;    /**< value */
 		struct pickle_var *link; /**< link to another variable */
 	} data;
-	struct pickle_var *next;
+	struct pickle_var *next; /**< next variable in list of variables */
 	/* NOTE:
 	 * - On a 32 machine type, two bits could merged into the lowest bits
 	 *   on the 'next' pointer, as these pointers are most likely aligned
@@ -123,12 +124,12 @@ struct pickle_command {
 	void *privdata;              /**< (optional) private data for function */
 };
 
-struct pickle_call_frame {         /**< A call frame, organized as a linked list */
-	struct pickle_var *vars; /**< first variable in linked list of variables */
-	struct pickle_call_frame *parent;       /**< parent is NULL at top level */
+struct pickle_call_frame {       /**< A call frame, organized as a linked list */
+	struct pickle_var *vars;          /**< first variable in linked list of variables */
+	struct pickle_call_frame *parent; /**< parent is NULL at top level */
 };
 
-struct pickle_interpreter {
+struct pickle_interpreter { /**< The Pickle Interpreter! */
 	pickle_allocator_t allocator;        /**< custom allocator, if desired */
 	const char *result;                  /**< result of an evaluation */
 	const char *ch;                      /**< the current text position; set if line != 0 */
@@ -143,7 +144,7 @@ struct pickle_interpreter {
 
 static char *string_empty = "", *string_oom = "Out Of Memory";
 
-static inline void static_assertions(void) {
+static inline void static_assertions(void) { /* A neat place to put these */
 	BUILD_BUG_ON(PICKLE_MAX_STRING    < 128);
 	BUILD_BUG_ON(PICKLE_MAX_RECURSION < 8);
 	BUILD_BUG_ON(PICKLE_MAX_ARGS      < 8);
@@ -212,9 +213,10 @@ static int power(long base, long exp, long *r) {
 /* Adapted from: <https://stackoverflow.com/questions/10404448>
  *
  * TODO:
- *  - Remove need for 'init' field in opt argument
+ *  - remove need for 'init' field in opt argument
  *  - refactor so PICKLE_OK/PICKLE_ERROR/PICKLE_CONTINUE is used
- *  - more assertions */
+ *  - more assertions
+ *  - add as function to interpreter */
 int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], const char *fmt) {
 	assert(opt);
 	assert(fmt);
@@ -806,9 +808,9 @@ static void picolFreeArgList(pickle_t *i, const int argc, char **argv) {
 
 static int picolUnEscape(char *inout) {
 	assert(inout);
-	int j, k, ch;
-	char r[PICKLE_MAX_STRING];
-	for (j = 0, k = 0; (ch = inout[j]); j++, k++) {
+	int k = 0;
+	char r[PICKLE_MAX_STRING] = { 0 };
+	for (int j = 0, ch = 0; (ch = inout[j]); j++, k++) {
 		if (ch == '\\') {
 			j++;
 			switch (inout[j]) {
@@ -841,7 +843,7 @@ static int picolUnEscape(char *inout) {
 		}
 	}
 	r[k] = 0;
-	memcpy(inout, r, k+1);
+	memcpy(inout, r, k + 1);
 	return k;
 }
 
@@ -982,17 +984,19 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 	}
 	if ((l + 1) >= PICKLE_MAX_STRING)
 		return NULL;
-	char r[PICKLE_MAX_STRING];
+	char r[PICKLE_MAX_STRING] = { 0 };
 	l = 0;
 	for (int j = 0; j < argc; j++) {
+		assert(l < PICKLE_MAX_STRING);
 		memcpy(r + l, argv[j], ls[j]);
 		l += ls[j];
 		if (jl && (j + 1) < argc) {
+			assert(l < PICKLE_MAX_STRING);
 			memcpy(r + l, join, jl);
 			l += jl;
 		}
 	}
-	r[l] = 0;
+	r[l] = '\0';
 	return picolStrdup(i, r);
 }
 
@@ -1375,16 +1379,16 @@ static void picolDropCallFrame(pickle_t *i) {
 	struct pickle_call_frame *cf = i->callframe;
 	assert(i->level >= 0);
 	i->level--;
-	if (cf) {
-		struct pickle_var *v = cf->vars, *t = NULL;
-		while (v) {
-			assert(v != v->next); /* Cycle? */
-			t = v->next;
-			picolVarFree(i, v);
-			v = t;
-		}
-		i->callframe = cf->parent;
+	if (!cf)
+		return;
+	struct pickle_var *v = cf->vars, *t = NULL;
+	while (v) {
+		assert(v != v->next); /* Cycle? */
+		t = v->next;
+		picolVarFree(i, v);
+		v = t;
 	}
+	i->callframe = cf->parent;
 	picolFree(i, cf);
 }
 
@@ -1448,6 +1452,10 @@ arityerr:
 	return PICKLE_ERROR;
 }
 
+/* NOTE: If space is really at a premium it would be possible to store the
+ * strings compressed, decompressing them when needed. Perhaps 'smaz' library,
+ * with a custom dictionary, could be used for this, see
+ * <https://github.com/antirez/smaz> for more information. */
 static int picolCommandProc(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 4)
