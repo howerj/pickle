@@ -1,0 +1,156 @@
+.\" Manpage for pickle
+.\" Contact howe.r.j.89@gmail.com to correct errors or typos.
+.TH pickle 1 "20 Jun 2019" "1.0.0" "pickle man page"
+.SH NAME
+pickle \- An interpreter for a TCL like language.
+.SH SYNOPSIS
+pickle [-htaAs] file*
+.SH DESCRIPTION
+.B pickle
+is an interpreter for a TCL like language, which was derived from a small
+program called 'picol', by Antirez. The language is not exactly like TCL but
+it is close enough. The goals of the project are to provide a simple and
+small (not efficient) interpreter that can embedded pretty much anywhere to
+be used as a command line interpreter, for example it could be used on an
+embedded system where you may want to issue a few quick commands to the device
+over a UART interface.
+
+For a more complete description of the language, please view the 
+.I readme.md
+file which you can find online at:
+.br
+.B <https://github.com/howerj/pickle/blob/master/readme.md>
+.br
+This contains a much fuller description of the project.
+
+Things to bear in mind about the language:
+
+.br
+* Everything in the language is a string.
+.br
+* All things are commands, like in sh(1), they take the form 'command arg1, arg2, ...'
+.br
+* There is very little syntax.
+
+The syntax includes:
+
+.br
+	string  called if first string, argument if not
+.br
+	{ }     quote, used to prevent evaluation
+.br
+	[ ]     command substitution
+.br
+	" "     string
+.br
+	$var    variable lookup
+.br
+	\\c      escape a character
+.br
+	#       comment
+.br
+
+Some example commands/programs, one per line:
+
+.br
+	puts "Hello, World!"
+.br
+	set a 2; puts $a; puts "a is: $a";
+.br
+	if {< $a 3} { puts "a < three" } else { puts "a >= three" }
+.br
+	set a -1; while {< $a 3} { set a [+ $a 1]; puts $a; }
+.br
+	proc square {x} { * $x $x }; puts "$a squared is [square $a]";
+.br
+	set line [gets]; puts "you typed $line";
+
+
+.SH OPTIONS
+
+.TP
+.B -
+Stop processing command line arguments
+
+.TP
+.B -h
+Display a help message and exit.
+
+.TP
+.B -t
+Run built in self tests and exit (return code 0 is success).
+
+.TP 
+.B -a
+Use custom block allocator, for testing purposes. The interpreter does not have
+to use the standard library allocation functions malloc(3) and free(3), but
+instead can use an externally provided allocator. This is to aid in porting the
+system to a non-hosted environment, running on the bare metal.
+
+.TP 
+.B -A
+Enable debugging of the custom allocator, implies '-a'.
+
+.TP 
+.B -s
+Suppress prompt printing. By default a prompt is printed out, this can be
+disabled.
+
+.TP
+.B file
+A pickle script file to process, multiple files can be given and they will be
+processed one after the other.
+
+.SH EXAMPLES
+
+.B
+	./pickle file.tcl
+
+This will run the pickle interpreter on a TCL script called
+.I file.tcl
+
+.SH C API
+
+The C API is small and regular. 
+
+.SH EXIT STATUS
+
+This command returns zero on success and non zero on failure, although any
+scripts executed may chose return other values.
+
+.SH SEE ALSO
+
+For more information, see
+.B <https://github.com/howerj/pickle>
+
+.SH LIMITATIONS
+
+For the sake of simplicity of the implementation the system has some
+limitations. The defaults as of writing this document are:
+
+.br
+* Recursion Depth - 128
+.br
+* Number of arguments to command/function - 128
+.br
+* Maximum string length - 512 bytes
+.br
+* Maximum command length (length of line) - 1024 bytes
+.br
+* Maximum size of file - 16384 bytes
+
+.SH BUGS
+For any bugs, contact the author.
+
+.SH AUTHOR
+Richard James Howe (howe.r.j.89@gmail.com)
+
+.SH COPYRIGHT
+BSD license, See 
+.B <https://github.com/howerj/pickle/blob/master/LICENSE>
+or pickle.c for more information.
+
+Copyright (c) 2018-2019, Richard James Howe <howe.r.j.89@gmail.com>
+.br
+Copyright (c) 2007-2016, Salvatore Sanfilippo <antirez at gmail dot com>
+

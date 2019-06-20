@@ -15,6 +15,7 @@ extern "C" {
 
 #include <stddef.h>
 
+/* TODO: Remove some of these arbitrary limitations, if possible */
 #define PICKLE_MAX_STRING    (512) /* Max string/Data structure size */
 #define PICKLE_MAX_RECURSION (128) /* Recursion limit */
 #define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
@@ -46,6 +47,7 @@ int pickle_getopt(pickle_getopt_t *opt, int nargc, char *const nargv[], const ch
 
 /* NOTE: All the following functions return one of the pickle error statuses; PICKLE_OK,
  * PICKLE_ERROR, ...*/
+// TODO: Change PICKLE_ERROR to be -1, fix throughout code.
 enum { PICKLE_OK, PICKLE_ERROR, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
 int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) default allocator used */

@@ -109,6 +109,7 @@ The following table sums up the different language constructs:
 	$var    variable lookup
 	\c      escape a character
 	#       comment
+	;       terminates a command
 
 A Picol program consists of a series of commands and arguments to those
 commands. Before a command is evaluated, variables are looked up and strings
@@ -632,6 +633,13 @@ all of the unit tests and example programs run within that amount).
 
 ## To Do
 
+* Instead of adding 'expr' in as a C function it could be added in purely
+as TCL. This would require expansion of the list wordsets, which really needs
+to be done.
+* Add an 'apply' function that applies a list to a function, splitting up
+that list into arguments for that function.
+* Allow functions to be redefined, then use this to create a purely TCL
+debugger.
 * Add more internal unit tests, that test against the internals and against the
 public facing API.
 * Add documentation here; building, command line use, command list, syntax
@@ -641,8 +649,6 @@ data structure within the interpreter).
 * Add more commands in 'pickle.c' for command introspection, specifically so
 that variables can be directly inspected and manipulated. Also allow
 procedures to be renamed and deleted.
-* Make an example application (integrate with an MQTT library, jsmn and maybe
-sqlite3 (or CDB <https://cr.yp.to/cdb.html>, to make an Internet Of Things shell).
 * C++ Example, integrating the interpreter in ways which make sense with the
 language.
 * Static code analysis, dynamic code analysis (gcov, valgrind, American fuzzy

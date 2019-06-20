@@ -42,4 +42,4 @@ check:
 	clang-tidy main.c
 
 clean:
-	rm -rf picol pickle *.o *.a
+	git clean -dfx

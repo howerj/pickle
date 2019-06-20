@@ -3,7 +3,9 @@
  * interpreter is a copy and modification of the 'picol' interpreter
  * by antirez. See the 'pickle.h' header for more information.
  * @author Richard James Howe
- * @license BSD */
+ * @license BSD 
+ * TODO: Use PICKLE_ERROR/PICKLE_OK throughout this program instead of 0/-1
+ * TODO: Change PICKLE_ERROR so it is '-1', not '1'. */
 #include "pickle.h"
 #include "block.h"
 #include <assert.h>
@@ -17,8 +19,8 @@
 #include <ctype.h>
 #include <stdarg.h>
 
-#define LINE_SZ (1024)
-#define FILE_SZ (1024 * 16)
+#define LINE_SZ   (1024)      /* super lazy: maximum size of a line */
+#define FILE_SZ   (1024 * 16) /* super lazy: maximum size of file to interpret */
 #define UNUSED(X) ((void)(X))
 
 typedef struct {
@@ -354,6 +356,7 @@ static int interactive(pickle_t *i, FILE *input, FILE *output) { /* NB. This cou
 	for (;;) {
 		char clibuf[LINE_SZ] = { 0 };
 		const char *prompt = NULL;
+		/* TODO: Evaluate prompt variable, making it more flexible */
 		pickle_get_var_string(i, "prompt", &prompt);
 		prompt = prompt ? prompt : "";
 		fputs(prompt, output);
@@ -420,7 +423,7 @@ static void cleanup(void) {
 
 int main(int argc, char **argv) {
 	pickle_getopt_t opt = { .init = 0 };
-	int r = 0, prompt_on = 1, memory_debug = 0, j, ch;
+	int r = 0, prompt_on = 1, memory_debug = 0, ch;
 	argument_t args = { .argc = argc, .argv = argv };
 
 	static const pool_specification_t specs[] = {
@@ -469,7 +472,7 @@ int main(int argc, char **argv) {
 	if (argc == opt.index) {
 		r = interactive(interp, stdin, stdout);
 	} else {
-		for (j = opt.index; j < argc; j++)
+		for (int j = opt.index; j < argc; j++)
 			if ((r = file(interp, argv[j], stdout, 0)) != PICKLE_OK)
 				break;
 	}
