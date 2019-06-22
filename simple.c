@@ -4,7 +4,8 @@
 
 int main(void) {
 	pickle_t *p = NULL;
-	pickle_new(&p, NULL);
+	if (pickle_new(&p, NULL) < 0)
+		return -1;
 	const char *prompt = "> ";
 	fputs(prompt, stdout);
 	fflush(stdout);
@@ -15,6 +16,5 @@ int main(void) {
 		fprintf(stdout, "[%d]: %s\n%s", er, r, prompt);
 		fflush(stdout);
 	}
-	pickle_delete(p);
-	return 0;
+	return pickle_delete(p);
 }

@@ -633,13 +633,6 @@ all of the unit tests and example programs run within that amount).
 
 ## To Do
 
-* Instead of adding 'expr' in as a C function it could be added in purely
-as TCL. This would require expansion of the list wordsets, which really needs
-to be done.
-* Add an 'apply' function that applies a list to a function, splitting up
-that list into arguments for that function.
-* Allow functions to be redefined, then use this to create a purely TCL
-debugger.
 * Add more internal unit tests, that test against the internals and against the
 public facing API.
 * Add documentation here; building, command line use, command list, syntax
@@ -651,22 +644,22 @@ that variables can be directly inspected and manipulated. Also allow
 procedures to be renamed and deleted.
 * C++ Example, integrating the interpreter in ways which make sense with the
 language.
-* Static code analysis, dynamic code analysis (gcov, valgrind, American fuzzy
-lop).
-* Profile, Profile, Profile!
-* Add the 'expr' command, maybe by using the Q library version of 'expr', see
-<https://github.com/howerj/q>/
-* 'string' command <https://www.tcl.tk/man/tcl8.4/TclCmd/string.htm>
-* Add commands to core interpreter to do the following:
-  - Query variables in scopes
-  - Get more run time information
-Once this is done, some functions in the API can be removed, and tests moved to
-the TCL code instead of being in C.
 * Replace unsafe string copying routines with safe version; including 'strncpy'
 (what's the point of this function!?).
 * Currently there is no way to serialize the interpreter state, this could
 actually be done from within the interpreter if methods for analyzing variables
 were available.
+* The get/set variable functions also need to be able to set a scope.
+* Add a function to remove commands. This could be used to implement adding
+resources such as file-handles, a file handle would consist of a function and
+some private data. It would act something like this:
+
+	set file [open "file.txt"]
+	puts [$file -get]
+	$file -close
+
+That interface is not too cumbersome.
+
 
 [pickle.c]: pickle.c
 [pickle.h]: pickle.h

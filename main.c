@@ -276,30 +276,63 @@ static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_set_result_string(i, global_argv[j]);
 }
 
-/* retrieve and process those pickles you filed away for safe keeping */
+static char *slurp(FILE *input) { /* TODO: Add as function to interpreter */
+	assert(input);
+	char *r = NULL;
+	if (fseek(input, 0, SEEK_END) < 0)
+		goto fail;
+	const long pos = ftell(input);
+	if (pos < 0)
+		goto fail;
+	if (fseek(input, 0, SEEK_SET) < 0)
+		goto fail;
+	if (!(r = malloc(pos + 1))) /* TODO: Allow for custom allocator */
+		goto fail;
+	if (pos != (long)fread(r, 1, pos, input))
+		goto fail;
+	r[pos] = '\0'; /* Ensure NUL termination */
+	rewind(input);
+	return r;
+fail:
+	free(r);
+	rewind(input);
+	return NULL;
+}
+
+static char *slurp_by_name(const char *name) {
+	assert(name);
+	FILE *input = fopen(name, "rb");
+	if (!input)
+		return NULL;
+	char *r = slurp(input);
+	fclose(input);
+	return r;
+}
+
+/* Retrieve and process those pickles you filed away for safe keeping */
 static int file(pickle_t *i, const char *name, FILE *output, int command) {
 	assert(i);
 	assert(file);
 	assert(output);
 	errno = 0;
-	FILE *fp = fopen(name, "rb");
-	if (!fp) {
+	char *program = slurp_by_name(name);
+	if (!program) {
 		if (command)
 			return pickle_set_result_error(i, "Failed to open file %s (rb): %s\n", name, strerror(errno));
 		fprintf(stderr, "Failed to open file %s (rb): %s\n", name, strerror(errno));
 		return -1;
 	}
-	char buf[FILE_SZ] = { 0 };
-	buf[fread(buf, 1, FILE_SZ, fp)] = '\0';
-	fclose(fp);
-	int retcode = PICKLE_OK;
-	if ((retcode = pickle_eval(i, buf)) != PICKLE_OK)
+	const int retcode = pickle_eval(i, program);
+	if (retcode != PICKLE_OK)
 		if (!command) {
 			const char *s = NULL;
-			if (pickle_get_result_string(i, &s) != PICKLE_OK)
+			if (pickle_get_result_string(i, &s) != PICKLE_OK) {
+				free(program);
 				return -1;
+			}
 			fprintf(output, "%s\n", s);
 		}
+	free(program);
 	return retcode == PICKLE_OK ? 0 : -1;
 }
 
@@ -441,7 +474,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	while ((ch = pickle_getopt(&opt, argc, argv, "hatsA")) != -1) {
+	while ((ch = pickle_getopt(&opt, argc, argv, "hatsA")) != PICKLE_RETURN) {
 		switch (ch) {
 		case 'A': memory_debug = 1; /* fall through */
 		case 'a': use_custom_allocator = 1; break;

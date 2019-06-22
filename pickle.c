@@ -43,7 +43,14 @@
  *   - 'pickle_' and snake_case is used for exported functions/variables/types
  *   - 'picol'  and camelCase  is used for internal functions/variables/types
  *   - Use asserts wherever you can for as many preconditions, postconditions
- *   and invariants that you can think of. */
+ *   and invariants that you can think of. 
+ *
+ * TODO: There are some arbitrary limits on string length, these limits should
+ * be removed. The limits mostly come from using a temporary buffer stack
+ * allocated with a fixed width. Instead of removing this completely, the
+ * buffer should be moved to a heap when it is too big for this buffer.
+ * NOTE: An 'expr' command, which would process infix mathematics expressions,
+ * could be added but not much would be gained. */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -64,6 +71,7 @@
 #define DEFINE_MATHS             (1)
 #define DEFINE_STRING            (1)
 #define DEFAULT_ALLOCATOR        (1)
+#define USE_MAX_STRING           (1)
 #define UNUSED(X)                ((void)(X))
 #define BUILD_BUG_ON(condition)  ((void)sizeof(char[1 - 2*!!(condition)]))
 #define implies(P, Q)            assert(!(P) || (Q)) /* material implication, immaterial if NDEBUG defined */
@@ -110,12 +118,7 @@ struct pickle_var { /* strings are stored as either pointers, or as 'small' stri
 	 *   would be non-portable. There is nothing to be gained from this,
 	 *   as we have one bit left over.
 	 * - On a 64 bit machine, all three bits could be merged with a
-	 *   pointer, saving space in this structure.
-	 *
-	 * TODO: Merge 'type' and 'smallname' fields if possible. Bear in 
-	 * mind that the last smallstring byte has to be NUL, so does not
-	 * contain data, that might not be as useful because of endianess.
-	 * TODO: With a compile time option, merge fields 'type' with 'next' */
+	 *   pointer, saving space in this structure. */
 	unsigned type      : 2; /* type of data; string (pointer/small), or link (NB. Could add number type) */
 	unsigned smallname : 1; /* if true, name is stored as small string */
 };
@@ -161,14 +164,14 @@ static inline void static_assertions(void) { /* A neat place to put these */
 static inline void *picolMalloc(pickle_t *i, size_t size) {
 	assert(i);
 	assert(size > 0); /* we should not allocate any zero length objects here */
-	if (size > PICKLE_MAX_STRING)
+	if (USE_MAX_STRING && size > PICKLE_MAX_STRING)
 		return NULL;
 	return i->allocator.malloc(i->allocator.arena, size);
 }
 
 static inline void *picolRealloc(pickle_t *i, void *p, size_t size) {
 	assert(i);
-	if (size > PICKLE_MAX_STRING)
+	if (USE_MAX_STRING && size > PICKLE_MAX_STRING)
 		return NULL;
 	return i->allocator.realloc(i->allocator.arena, p, size);
 }
@@ -182,7 +185,9 @@ static inline void picolFree(pickle_t *i, void *p) {
 static inline int compare(const char *a, const char *b) {
 	assert(a);
 	assert(b);
-	return strncmp(a, b, PICKLE_MAX_STRING);
+	if (USE_MAX_STRING)
+		return strncmp(a, b, PICKLE_MAX_STRING);
+	return strcmp(a, b);
 }
 
 static int logarithm(long a, const long b, long *c) {
@@ -218,11 +223,56 @@ static int power(long base, long exp, long *r) {
 	return PICKLE_OK;
 }
 
+/**This is may seem like an odd function, say for small allocation we want to
+ * keep them on the stack, but move them when they get too big, we can use
+ * the picolStackOrHeapAlloc/picolStackOrHeapFree functions to manage this.
+ *
+ * @param[in]   orig, pointer to original stack allocation
+ * @param[inout] new, pointer we use, which may now point to stack or heap
+ * @param[in] length, pointer to length of 'new'
+ * @param needed,     required length
+ * @return PICKLE_OK on success, PICKLE_ERROR on failure. '*new' is freed
+ * on failure if it needs to be. */
+static int picolStackOrHeapAlloc(pickle_t *i, char *orig, char **new, size_t *length, size_t needed) {
+	assert(i);
+	assert(orig);
+	assert(new);
+	assert(length);
+	void *current = *new;
+	size_t l = *length;
+	if (l <= needed)
+		return PICKLE_OK;
+	if (USE_MAX_STRING)
+		return PICKLE_ERROR;
+	if (current == orig) {
+		if (!(*new = picolMalloc(i, needed)))
+			return PICKLE_ERROR;
+		*length = needed;
+		return PICKLE_OK;
+	}
+	if (!(current = picolRealloc(i, current, needed))) {
+		picolFree(i, *new);
+		return PICKLE_ERROR;
+	}
+	*new = current;
+	*length = needed;
+	return PICKLE_OK;
+}
+
+static int picolStackOrHeapFree(pickle_t *i, char *orig, char **new) {
+	assert(i);
+	assert(orig);
+	assert(new);
+	if (orig != *new)
+		picolFree(i, orig);
+	*new = NULL;
+	return PICKLE_OK;
+}
+
 /* Adapted from: <https://stackoverflow.com/questions/10404448>
  *
  * TODO:
  *  - remove need for 'init' field in opt argument
- *  - refactor so PICKLE_OK/PICKLE_ERROR/PICKLE_CONTINUE is used
  *  - perhaps the pickle_t object could be used instead of a custom
  *  object.
  *  - more assertions
@@ -231,7 +281,8 @@ int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], cons
 	assert(opt);
 	assert(fmt);
 	assert(argv);
-	enum { BADARG_E = ':', BADCH_E = '?' };
+	/* enum { BADARG_E = ':', BADCH_E = '?' }; */
+	enum { BADARG_E = PICKLE_ERROR, BADCH_E = PICKLE_ERROR };
 
 	if (!(opt->init)) {
 		opt->place = string_empty; /* option letter processing */
@@ -243,12 +294,12 @@ int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], cons
 		opt->reset = 0;
 		if (opt->index >= argc || *(opt->place = argv[opt->index]) != '-') {
 			opt->place = string_empty;
-			return -1;
+			return PICKLE_RETURN;
 		}
 		if (opt->place[1] && *++opt->place == '-') { /* found "--" */
 			opt->index++;
 			opt->place = string_empty;
-			return -1;
+			return PICKLE_RETURN;
 		}
 	}
 
@@ -256,7 +307,7 @@ int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], cons
 	if ((opt->option = *opt->place++) == ':' || !(oli = strchr(fmt, opt->option))) { /* option letter okay? */
 		 /* if the user didn't specify '-' as an option, assume it means -1.  */
 		if (opt->option == '-')
-			return -1;
+			return PICKLE_RETURN;
 		if (!*opt->place)
 			opt->index++;
 		/*if (opt->error && *fmt != ':')
@@ -290,7 +341,8 @@ int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], cons
 static char *picolStrdup(pickle_t *i, const char *s) {
 	assert(i);
 	assert(s);
-	const size_t l = strlen(s); /* NB: could use 'strnlen(s, PICKLE_MAX_STRING)' */
+	// const size_t l = USE_MAX_STRING ? strnlen(s, PICKLE_MAX_STRING) : strlen(s);
+	const size_t l = strlen(s);
 	char *r = picolMalloc(i, l + 1);
 	return r ? memcpy(r, s, l + 1) : r;
 }
@@ -327,6 +379,7 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 			picolFree(i, np);
 			return picolErrorOutOfMemory(i);
 		}
+		/*TODO: Allow removal of values */
 		const unsigned long hashval = hash(name, strlen(name)) % i->length;
 		np->next = i->table[hashval];
 		i->table[hashval] = np;
@@ -991,22 +1044,31 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 		ls[j] = sz;
 		l += sz + jl;
 	}
-	if ((l + 1) >= PICKLE_MAX_STRING)
+	if (USE_MAX_STRING && ((l + 1) >= PICKLE_MAX_STRING))
 		return NULL;
-	char r[PICKLE_MAX_STRING] = { 0 };
+	char buf[PICKLE_MAX_STRING] = { 0 };
+	char *r = &buf[0];
+	size_t length = sizeof buf;
+	if (l > (PICKLE_MAX_STRING - 1))
+		if (picolStackOrHeapAlloc(i, buf, &r, &length, l) < 0)
+			return NULL;
 	l = 0;
 	for (int j = 0; j < argc; j++) {
-		assert(l < PICKLE_MAX_STRING);
+		assert(!USE_MAX_STRING || l < PICKLE_MAX_STRING);
 		memcpy(r + l, argv[j], ls[j]);
 		l += ls[j];
 		if (jl && (j + 1) < argc) {
-			assert(l < PICKLE_MAX_STRING);
+			assert(!USE_MAX_STRING || l < PICKLE_MAX_STRING);
 			memcpy(r + l, join, jl);
 			l += jl;
 		}
 	}
 	r[l] = '\0';
-	return picolStrdup(i, r);
+	if (r != buf)
+		return r;
+	char *str = picolStrdup(i, r);
+	picolStackOrHeapFree(i, buf, &r);
+	return str;
 }
 
 int pickle_set_result_error_arity(pickle_t *i, const int expected, const int argc, char **argv) {
@@ -1113,14 +1175,14 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 		if (!compare(rq, "length"))
 			return pickle_set_result_integer(i, strlen(arg1));
 		if (!compare(rq, "toupper")) {
-			size_t j;
+			size_t j = 0;
 			for (j = 0; arg1[j]; j++)
 				buf[j] = toupper(arg1[j]);
 			buf[j] = 0;
 			return pickle_set_result_string(i, buf);
 		}
 		if (!compare(rq, "tolower")) {
-			size_t j;
+			size_t j = 0;
 			for (j = 0; arg1[j]; j++)
 				buf[j] = tolower(arg1[j]);
 			buf[j] = 0;
@@ -1978,7 +2040,7 @@ static int picolTestUnescape(void) {
 
 	printf("Unescape Tests\n");
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
-		memset(m, 0, sizeof m);
+		memset(m, 0, sizeof m); /* lazy */
 		strncpy(m, ts[i].str, sizeof(m) - 1);
 		printf("\tTest: '%s' = '%s' or code %d ...", ts[i].str, ts[i].res, ts[i].r);
 		const int u = picolUnEscape(m);
@@ -2041,7 +2103,7 @@ static int picolTestEval(void) {
 		{ PICKLE_OK,    "+  2 2",          "4"     },
 		{ PICKLE_OK,    "* -2 9",          "-18"   },
 		{ PICKLE_OK,    "join {a b c} ,",  "a,b,c" },
-		{ PICKLE_ERROR, "return fail 1",   "fail"  },
+		{ PICKLE_ERROR, "return fail -1",  "fail"  },
 	};
 
 	printf("Evaluate Tests\n");
@@ -2179,7 +2241,7 @@ static int picolTestGetOpt(void) {
 	char *argument_to_f = NULL;
 	int ch = 0, r = 0, result = 0;
 	printf("GetOpt Tests\n");
-	while ((ch = pickle_getopt(&opt, argc, argv, "hf:c")) != -1) {
+	while ((ch = pickle_getopt(&opt, argc, argv, "hf:c")) != PICKLE_RETURN) {
 		switch (ch) {
 		case 'h': if (result & 1) r = -1; result |= 1; break;
 		case 'f': if (result & 2) r = -2; result |= 2; argument_to_f = opt.arg; break;

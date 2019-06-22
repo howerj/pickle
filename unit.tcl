@@ -254,6 +254,7 @@ puts "\[[blue]DONE[normal]\]"
 
 if {== "[heap]" 0 } {
 	puts "Custom allocator not used"
+	# BUG: Causes memory leak to appear in Valgrind, not a real leak however.
 	# We should not really exit here as it prevents cleanup
 	exit $failed
 }
