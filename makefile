@@ -41,4 +41,10 @@ check:
 	clang-tidy main.c
 
 clean:
-	git clean -dfx
+	$(RM) pickle
+	$(RM) main.o
+	$(RM) block.o
+	$(RM) simple.o
+	$(RM) pickle.o
+	$(RM) libpickle.a
+
