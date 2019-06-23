@@ -370,6 +370,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "heap",     pickleCommandHeapUsage, p },
 		{ "putch",    pickleCommandPutCh,     stdout },
 		{ "getch",    pickleCommandGetCh,     stdin },
+		{ "string",   pickle_command_string,  NULL },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
 		return -1;

@@ -22,12 +22,14 @@ main.o: main.c pickle.h block.h
 
 pickle.o: pickle.c pickle.h
 
+string.o: string.c pickle.h
+
 block.o: block.c block.h
 
 simple: libpickle.a simple.o
 
-libpickle.a: pickle.o
-	${AR} ${ARFLAGS} $@ $<
+libpickle.a: pickle.o string.o
+	${AR} ${ARFLAGS} $@ $^
 	${RANLIB} $@
 
 pickle: main.o block.o libpickle.a
@@ -37,6 +39,7 @@ pickle: main.o block.o libpickle.a
 check:
 	cppcheck --enable=all *.c
 	clang-tidy pickle.c
+	clang-tidy string.c
 	clang-tidy block.c
 	clang-tidy main.c
 
@@ -46,5 +49,6 @@ clean:
 	$(RM) block.o
 	$(RM) simple.o
 	$(RM) pickle.o
+	$(RM) string.o
 	$(RM) libpickle.a
 
