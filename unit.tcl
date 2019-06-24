@@ -154,6 +154,12 @@ test 0 {string equal a b}
 test 1 {string equal a a}
 test 1 {< 0 [string compare a A]}
 test 1 {> 0 [string compare bA ba]}
+test 0 {string compare-no-case a a}
+test 0 {string compare-no-case a A}
+test 0 {string compare-no-case B b}
+test 0 {string compare-no-case abc ABC}
+test 1 {> 0 [string compare-no-case a B]}
+test 1 {> 0 [string compare-no-case A b]}
 test h {string index hello 0}
 test e {string index hello 1}
 test l {string index hello 3}
@@ -196,6 +202,11 @@ test 1 {string is upper "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
 test 0 {string is upper "ABCDEFGHIJKLMNOPQRSTUVWXYZ "}
 test 0 {string is upper "AA123"}
 test 1 {string is upper ""}
+test 1 {string is wordchar ""}
+test 1 {string is wordchar "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345789abcdefghijklmnopqrstuvwxyz_"}
+test 0 {string is wordchar " ABCDEFGHIJKLMNOPQRSTUVWXYZ012345789abcdefghijklmnopqrstuvwxyz_"}
+test 0 {string is wordchar " "}
+test 0 {string is wordchar ":"}
 test 0 {string is integer ""}
 test 0 {string is integer " 0"}
 test 0 {string is integer "123a"}
@@ -212,6 +223,22 @@ test 1 {string is integer "+123"}
 test 1 {string is integer "0123"}
 test 1 {string is integer "+0"}
 test 1 {string is integer "-0"}
+test 1 {string is boolean false}
+test 1 {string is boolean no}
+test 1 {string is boolean 0}
+test 1 {string is boolean OFF}
+test 1 {string is boolean true}
+test 1 {string is boolean yes}
+test 1 {string is boolean 1}
+test 1 {string is boolean on}
+test 0 {string is boolean XXX}
+test 0 {string is boolean ""}
+test 1 {string is true true}
+test 1 {string is true yEs}
+test 1 {string is true 1}
+test 1 {string is true oN}
+test 0 {string is true off}
+test 0 {string is false oN}
 test 3 {string first a bbbaca}
 test 3 {string first a bbbaca 3}
 test 5 {string first a bbbaca 4}

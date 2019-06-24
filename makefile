@@ -1,5 +1,4 @@
 CC=gcc
-# CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv -fprofile-arcs -ftest-coverage
 CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv
 AR=ar
 ARFLAGS=rcs
@@ -33,7 +32,6 @@ libpickle.a: pickle.o
 
 pickle: main.o block.o libpickle.a
 	${CC} ${CFLAGS} $^ -o $@
-	# strip $@
 
 check:
 	cppcheck --enable=all *.c

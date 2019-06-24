@@ -190,6 +190,27 @@ static inline int compare(const char *a, const char *b) {
 	return strcmp(a, b);
 }
 
+static inline int picolCompareCaseInsensitive(const char *a, const char *b) {
+	assert(a);
+	assert(b);
+	const size_t al = /*USE_MAX_STRING ? strnlen(a, PICKLE_MAX_STRING) :*/ strlen(a);
+	const size_t bl = /*USE_MAX_STRING ? strnlen(b, PICKLE_MAX_STRING) :*/ strlen(b);
+	if (a == b)
+		return 0;
+	if (al > bl)
+		return 1;
+	if (al < bl)
+		return -1;
+	for (size_t i = 0; i < al; i++) {
+		const int ach = tolower(a[i]);
+		const int bch = tolower(b[i]);
+		const int diff = ach - bch;
+		if (diff)
+			return diff;
+	}
+	return 0;
+}
+
 static int logarithm(long a, const long b, long *c) {
 	assert(c);
 	long r = -1;
@@ -397,7 +418,7 @@ static int advance(struct picolParser *p) {
 		return PICKLE_ERROR;
 	if (p->len && !(*p->p))
 		return PICKLE_ERROR;
-	if (p->line && *p->line/*0 disables line count*/ && *p->ch < p->p) {
+	if (p->line && *p->line/*NULL disables line count*/ && *p->ch < p->p) {
 		*p->ch = p->p;
 		if (*p->p == '\n')
 			(*p->line)++;
@@ -870,7 +891,7 @@ static void picolFreeArgList(pickle_t *i, const int argc, char **argv) {
 	picolFree(i, argv);
 }
 
-static int picolHexCharToNibble(int c) {
+static int hexCharToNibble(int c) {
 	c = tolower(c);
 	if ('a' <= c && c <= 'f')
 		return 0xa + c - 'a';
@@ -878,16 +899,16 @@ static int picolHexCharToNibble(int c) {
 }
 
 /* converts up to two characters and returns number of characters converted */
-static int picolHexStr2ToInt(const char *str, int *const val) {
+static int hexStr2ToInt(const char *str, int *const val) {
 	assert(str);
 	assert(val);
 	*val = 0;
 	if (!isxdigit(*str))
 		return 0;
-	*val = picolHexCharToNibble(*str++);
+	*val = hexCharToNibble(*str++);
 	if (!isxdigit(*str))
 		return 1;
-	*val = (*val << 4) + picolHexCharToNibble(*str);
+	*val = (*val << 4) + hexCharToNibble(*str);
 	return 2;
 }
 
@@ -909,7 +930,7 @@ static int picolUnEscape(char *inout) {
 			case  'e': r[k] = 27;   break;
 			case  'x': {
 				int val = 0;
-				const int pos = picolHexStr2ToInt(&inout[j + 1], &val);
+				const int pos = hexStr2ToInt(&inout[j + 1], &val);
 				if (pos < 1)
 					return -2;
 				j += pos;
@@ -1170,6 +1191,24 @@ static char *reverse(char *s, size_t length) { /* Modifies Argument */
 	return s;
 }
 
+static int isFalse(const char *s) {
+	assert(s);
+	static const char *negatory[] = { "false", "off", "no", "0", };
+	for (size_t i = 0; i < (sizeof(negatory) / sizeof(negatory[0])); i++)
+		if (!picolCompareCaseInsensitive(negatory[i], s))
+			return 1;
+	return 0;
+}
+
+static int isTrue(const char *s) {
+	assert(s);
+	static const char *affirmative[] = { "true", "on", "yes", "1", };
+	for (size_t i = 0; i < (sizeof(affirmative) / sizeof(affirmative[0])); i++)
+		if (!picolCompareCaseInsensitive(affirmative[i], s))
+			return 1;
+	return 0;
+}
+
 static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd) { /* Big! */
 	UNUSED(pd);
 	if (argc < 3)
@@ -1257,6 +1296,8 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			return pickle_set_result_integer(i, !compare(arg1, arg2));
 		if (!compare(rq, "compare"))
 			return pickle_set_result_integer(i, compare(arg1, arg2));
+		if (!compare(rq, "compare-no-case"))
+			return pickle_set_result_integer(i, picolCompareCaseInsensitive(arg1, arg2));
 		if (!compare(rq, "index"))   {
 			long index = atol(arg2);
 			const long length = strlen(arg1);
@@ -1266,28 +1307,32 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 				index = length - 1;
 			if (index < 0)
 				index = 0;
-			const char ch[2] = { arg1[index], 0 };
+			const char ch[2] = { arg1[index], '\0' };
 			return pickle_set_result_string(i, ch);
 		}
 		if (!compare(rq, "is")) {
-			if (!compare(arg1, "alnum"))  { while (isalnum(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "alpha"))  { while (isalpha(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "digit"))  { while (isdigit(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "graph"))  { while (isgraph(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "lower"))  { while (islower(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "print"))  { while (isprint(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "punct"))  { while (ispunct(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "space"))  { while (isspace(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "upper"))  { while (isupper(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "xdigit")) { while (isxdigit(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "ascii"))  { while (*arg2 && !(0x80 & *arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "control")) { while (*arg2 && iscntrl(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
-			if (!compare(arg1, "integer")) {
+			if (!compare(arg1, "alnum"))    { while (isalnum(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "alpha"))    { while (isalpha(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "digit"))    { while (isdigit(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "graph"))    { while (isgraph(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "lower"))    { while (islower(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "print"))    { while (isprint(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "punct"))    { while (ispunct(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "space"))    { while (isspace(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "upper"))    { while (isupper(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "xdigit"))   { while (isxdigit(*arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "ascii"))    { while (*arg2 && !(0x80 & *arg2)) arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "control"))  { while (*arg2 && iscntrl(*arg2))  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "wordchar")) { while (isalnum(*arg2) || *arg2 == '_')  arg2++; return pickle_set_result_integer(i, !*arg2); }
+			if (!compare(arg1, "false"))    { return pickle_set_result_integer(i, isFalse(arg2)); }
+			if (!compare(arg1, "true"))     { return pickle_set_result_integer(i, isTrue(arg2)); }
+			if (!compare(arg1, "boolean"))  { return pickle_set_result_integer(i, isTrue(arg2) || isFalse(arg2)); }
+			if (!compare(arg1, "integer"))  {
 				char *ep = NULL;
 				(void)strtol(arg2, &ep, 10);
 				return pickle_set_result_integer(i, *arg2 && !isspace(*arg2) && !*ep);
 			}
-			/* Missing: double, Boolean, true, false */
+			/* Missing: double */
 		}
 		if (!compare(rq, "repeat")) {
 			long count = atol(arg2), j = 0;
