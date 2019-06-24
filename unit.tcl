@@ -178,6 +178,9 @@ test 1 {string is alpha abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ}
 test 1 {string is ascii ""}
 test 0 {string is ascii "a\x80a"}
 test 0 {string is ascii "\x82"}
+test 1 {string is ascii "\x01"}
+test 1 {string is ascii "\x1 "}
+test 1 {string is ascii "\x1"}
 test 1 {string is ascii "aa"}
 test 1 {string is ascii "\x7f"}
 test 1 {string is xdigit ""}
@@ -216,6 +219,7 @@ test -1 {string first d bbbaca}
 test 0 {string ordinal ""}
 test 0 {string ordinal "\x00"}
 test 1 {string ordinal "\x01"}
+test 2 {string ordinal "\x2"}
 test 48 {string ordinal "0"}
 test 49 {string ordinal "1"}
 test 49 {string ordinal "1a"}
