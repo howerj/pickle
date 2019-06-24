@@ -868,6 +868,26 @@ static void picolFreeArgList(pickle_t *i, const int argc, char **argv) {
 	picolFree(i, argv);
 }
 
+static int hexchartonibble(int c) {
+	c = tolower(c);
+	if ('a' <= c && c <= 'f')
+		return 0xa + c - 'a';
+	return c - '0';
+}
+
+/* converts up to two characters and returns number of characters converted */
+static int hexstr2toint(const char *str, int *const val) {
+	assert(str);
+	assert(val);
+	if (!isxdigit(*str))
+		return 0;
+	*val = hexchartonibble(*str++);
+	if (!isxdigit(*str))
+		return 1;
+	*val = (*val << 4) + hexchartonibble(*str);
+	return 2;
+}
+
 static int picolUnEscape(char *inout) {
 	assert(inout);
 	int k = 0;
@@ -885,16 +905,12 @@ static int picolUnEscape(char *inout) {
 			case  ']': r[k] = ']';  break;
 			case  'e': r[k] = 27;   break;
 			case  'x': {
-				if (!inout[j + 1])
-					return -1;
-				const char v[3] = { inout[j + 1], inout[j + 2], 0 };
-				unsigned d = 0;
-				int pos = 0;
-				if (sscanf(v, "%x%n", &d, &pos) != 1)
+				int val;
+				const int pos = hexstr2toint(&inout[j + 1], &val);
+				if (pos < 1)
 					return -2;
-				assert(pos > 0 && pos < 3);
 				j += pos;
-				r[k] = d;
+				r[k] = val;
 				break;
 			}
 			default:
