@@ -347,7 +347,7 @@ static char *picolStrdup(pickle_t *i, const char *s) {
 	return r ? memcpy(r, s, l + 1) : r;
 }
 
-static inline unsigned long hash(const char *s, size_t len) { /* DJB2 Hash, <http://www.cse.yorku.ca/~oz/hash.html> */
+static inline unsigned long picolHash(const char *s, size_t len) { /* DJB2 Hash, <http://www.cse.yorku.ca/~oz/hash.html> */
 	assert(s);
 	unsigned long h = 5381;
 	for (size_t i = 0; i < len; s++, i++)
@@ -359,7 +359,7 @@ static inline struct pickle_command *picolGetCommand(pickle_t *i, const char *s)
 	assert(s);
 	assert(i);
 	struct pickle_command *np;
-	for (np = i->table[hash(s, strlen(s)) % i->length]; np != NULL; np = np->next)
+	for (np = i->table[picolHash(s, strlen(s)) % i->length]; np != NULL; np = np->next)
 		if (!compare(s, np->name))
 			return np; /* found */
 	return NULL; /* not found */
@@ -380,7 +380,7 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 			return picolErrorOutOfMemory(i);
 		}
 		/*TODO: Allow removal of values */
-		const unsigned long hashval = hash(name, strlen(name)) % i->length;
+		const unsigned long hashval = picolHash(name, strlen(name)) % i->length;
 		np->next = i->table[hashval];
 		i->table[hashval] = np;
 	} else { /* already there */
@@ -807,7 +807,7 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	assert(off < PICKLE_MAX_STRING);
 	va_list ap;
 	va_start(ap, fmt);
-	vsnprintf(errbuf + off, sizeof(errbuf) - off, fmt, ap);
+	(void)vsnprintf(errbuf + off, sizeof(errbuf) - off, fmt, ap);
 	va_end(ap);
 	(void)pickle_set_result_string(i, errbuf);
 	return PICKLE_ERROR;
@@ -835,6 +835,8 @@ int pickle_set_result_integer(pickle_t *i, const long result) {
 }
 
 int pickle_set_var_integer(pickle_t *i, const char *name, const long r) {
+	assert(i);
+	assert(name);
 	char v[64] = { 0 };
 	snprintf(v, sizeof v, "%ld", r);
 	return pickle_set_var_string(i, name, v);
@@ -868,7 +870,7 @@ static void picolFreeArgList(pickle_t *i, const int argc, char **argv) {
 	picolFree(i, argv);
 }
 
-static int hexchartonibble(int c) {
+static int picolHexCharToNibble(int c) {
 	c = tolower(c);
 	if ('a' <= c && c <= 'f')
 		return 0xa + c - 'a';
@@ -876,22 +878,23 @@ static int hexchartonibble(int c) {
 }
 
 /* converts up to two characters and returns number of characters converted */
-static int hexstr2toint(const char *str, int *const val) {
+static int picolHexStr2ToInt(const char *str, int *const val) {
 	assert(str);
 	assert(val);
+	*val = 0;
 	if (!isxdigit(*str))
 		return 0;
-	*val = hexchartonibble(*str++);
+	*val = picolHexCharToNibble(*str++);
 	if (!isxdigit(*str))
 		return 1;
-	*val = (*val << 4) + hexchartonibble(*str);
+	*val = (*val << 4) + picolHexCharToNibble(*str);
 	return 2;
 }
 
 static int picolUnEscape(char *inout) {
 	assert(inout);
 	int k = 0;
-	char r[PICKLE_MAX_STRING] = { 0 };
+	char r[PICKLE_MAX_STRING] = { 0 }; /* TODO: Remove this limitation on string length */
 	for (int j = 0, ch = 0; (ch = inout[j]); j++, k++) {
 		if (ch == '\\') {
 			j++;
@@ -905,8 +908,8 @@ static int picolUnEscape(char *inout) {
 			case  ']': r[k] = ']';  break;
 			case  'e': r[k] = 27;   break;
 			case  'x': {
-				int val;
-				const int pos = hexstr2toint(&inout[j + 1], &val);
+				int val = 0;
+				const int pos = picolHexStr2ToInt(&inout[j + 1], &val);
 				if (pos < 1)
 					return -2;
 				j += pos;
@@ -936,7 +939,7 @@ static int picolEval(pickle_t *i, const char *t) {
 		return PICKLE_ERROR;
 	picolParserInitialize(&p, t, &i->line, &i->ch);
 	int prevtype = p.type;
-	for (;;) { /**@todo separate out the code so it can be reused in a 'subst' command */
+	for (;;) { /*TODO: separate out the code so it can be reused in a 'subst' command */
 		if (picolGetToken(&p) != PICKLE_OK)
 			return pickle_set_result_error(i, "parser error");
 		if (p.type == PT_EOF)
@@ -1229,7 +1232,7 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			return pickle_set_result_error(i, "Invalid hexadecimal value: %s", arg1);
 		}
 		if (!compare(rq, "hash"))
-			return pickle_set_result_integer(i, hash(arg1, strlen(arg1)));
+			return pickle_set_result_integer(i, picolHash(arg1, strlen(arg1)));
 	} else if (argc == 4) {
 		const char *arg1 = argv[2], *arg2 = argv[3];
 		if (!compare(rq, "trimleft"))

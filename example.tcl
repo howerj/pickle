@@ -1,11 +1,23 @@
 #!./pickle
 #
-# PICKLE EXAMPLE PROGRAMS
+# These are toy programs to test the interpreter. The 'loop forever'
+# and the 'performance test' programs have some minor utility.
 #
 
 set program [argv 2]
+set argc [argv]
 
-puts $program
+proc usage {} {
+	puts "Usage: example.tcl -\[123\]"
+	puts ""
+	puts "\t-1\tSimple nonsense test program"
+	puts "\t-2\tLoop forever printing '.'"
+	puts "\t-3\tPerformance test"
+	puts ""
+	bye
+}
+
+if {== $argc 0} { usage }
 
 if {eq $program "-1"} {
 	proc square {x} {
@@ -30,7 +42,7 @@ if {eq $program "-2"} {
 	forever
 }
 
-# Performance Test
+# Crude Performance Test
 if {eq $program "-3" } { 
 	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
 
@@ -47,6 +59,6 @@ if {eq $program "-3" } {
 	bye
 }
 
-puts "Usage: [argv 0] -\[123\]"
+usage
 
-bye
+
