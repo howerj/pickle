@@ -885,7 +885,7 @@ static int picolUnEscape(char *inout) {
 			case  ']': r[k] = ']';  break;
 			case  'e': r[k] = 27;   break;
 			case  'x': {
-				if (!inout[j + 1] || !inout[j + 2])
+				if (!inout[j + 1])
 					return -1;
 				const char v[3] = { inout[j + 1], inout[j + 2], 0 };
 				unsigned d = 0;
@@ -2029,8 +2029,9 @@ static int picolTestUnescape(void) {
 		{  "a\\[z\\[a",     "a[z[a",  5   },
 		{  "\\\\",          "\\",     1   },
 		{  "\\x30",         "0",      1   },
-		{  "\\xZ",          "N/A",    -1  },
+		{  "\\xZ",          "N/A",    -2  },
 		{  "\\xZZ",         "N/A",    -2  },
+		{  "\\x9",          "\x09",   1   },
 		{  "\\x9Z",         "\011Z",  2   },
 		{  "\\x300",        "00",     2   },
 		{  "\\x310",        "10",     2   },
