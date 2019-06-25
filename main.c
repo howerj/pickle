@@ -3,9 +3,8 @@
  * interpreter is a copy and modification of the 'picol' interpreter
  * by antirez. See the 'pickle.h' header for more information.
  * @author Richard James Howe
- * @license BSD 
- * TODO: Use PICKLE_ERROR/PICKLE_OK throughout this program instead of 0/-1
- * TODO: Change PICKLE_ERROR so it is '-1', not '1'. */
+ * @license BSD*/
+
 #include "pickle.h"
 #include "block.h"
 #include <assert.h>
@@ -20,7 +19,6 @@
 #include <stdarg.h>
 
 #define LINE_SZ   (1024)      /* super lazy: maximum size of a line */
-#define FILE_SZ   (1024 * 16) /* super lazy: maximum size of file to interpret */
 #define UNUSED(X) ((void)(X))
 
 typedef struct {
@@ -68,7 +66,7 @@ static int pickleCommandGets(pickle_t *i, const int argc, char **argv, void *pd)
 	assert(pd);
 	if (argc != 1)
 		return pickle_set_result_error_arity(i, 1, argc, argv);
-	char buf[PICKLE_MAX_STRING] = { 0 };
+	char buf[PICKLE_MAX_STRING] = { 0 }; /* TODO: Remove this limitation: read and realloc, then integrate into slurp? */
 	if (!fgets(buf, sizeof buf, (FILE*)pd)) {
 		pickle_set_result_string(i, "EOF");
 		return PICKLE_ERROR;
@@ -222,7 +220,7 @@ static void memory_tracer(void *file, const char *fmt, ...) {
 static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) {
 	assert(pd || !pd); /* a neat way of saying 'may or may not be NULL */
 	pool_t *p = pd;
-	long info = -1;
+	long info = PICKLE_ERROR;
 
 	if (argc > 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
@@ -276,7 +274,7 @@ static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_set_result_string(i, global_argv[j]);
 }
 
-static char *slurp(FILE *input) { /* TODO: Add as function to interpreter */
+static char *slurp(FILE *input) {
 	assert(input);
 	char *r = NULL;
 	if (fseek(input, 0, SEEK_END) < 0)
@@ -309,6 +307,25 @@ static char *slurp_by_name(const char *name) {
 	return r;
 }
 
+/* NOTE: A 'dump' command would be useful as well. We still do not have a way
+ * to process binary data however.
+ * NOTE: Only files which rewind/fseek works on can be handled at the
+ * moment. */
+static int pickleCommandSlurp(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(i);
+	assert(argv);
+	assert(!pd);
+	UNUSED(pd);
+	if (argc != 2)
+		return pickle_set_result_error_arity(i, 2, argc, argv);
+	char *m = slurp_by_name(argv[1]);
+	if (!m)
+		return pickle_set_result_error(i, "Could not slurp file: %s", argv[1]);
+	const int r = pickle_set_result_string(i, m);
+	free(m);
+	return r;
+}
+
 /* Retrieve and process those pickles you filed away for safe keeping */
 static int file(pickle_t *i, const char *name, FILE *output, int command) {
 	assert(i);
@@ -320,7 +337,7 @@ static int file(pickle_t *i, const char *name, FILE *output, int command) {
 		if (command)
 			return pickle_set_result_error(i, "Failed to open file %s (rb): %s\n", name, strerror(errno));
 		fprintf(stderr, "Failed to open file %s (rb): %s\n", name, strerror(errno));
-		return -1;
+		return PICKLE_ERROR;
 	}
 	const int retcode = pickle_eval(i, program);
 	if (retcode != PICKLE_OK)
@@ -328,12 +345,12 @@ static int file(pickle_t *i, const char *name, FILE *output, int command) {
 			const char *s = NULL;
 			if (pickle_get_result_string(i, &s) != PICKLE_OK) {
 				free(program);
-				return -1;
+				return PICKLE_ERROR;
 			}
 			fprintf(output, "%s\n", s);
 		}
 	free(program);
-	return retcode == PICKLE_OK ? 0 : -1;
+	return retcode;
 }
 
 static int pickleCommandSource(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -347,6 +364,30 @@ static int pickleCommandSource(pickle_t *i, const int argc, char **argv, void *p
 	return PICKLE_OK;
 }
 
+static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(i);
+	assert(argv);
+	assert(!pd);
+	UNUSED(pd);
+	if (argc != 3 && argc != 4)
+		return pickle_set_result_error_arity(i, 4, argc, argv);
+	char *file = argv[1], *dump = argv[2], *mode = "wb";
+	if (argc == 4) {
+		if (strcmp(argv[1], "-append")) 
+			return pickle_set_result_error(i, "unexpected option: %s", argv[1]);
+		mode = "ab";
+		file = argv[2];
+		dump = argv[3];
+	}
+	FILE *handle = fopen(file, mode);
+	if (!handle)
+		return pickle_set_result_error(i, "Could not open file for writing: %s/%s", file, mode);
+	const size_t length = strlen(dump);
+	const size_t wrote  = fwrite(dump, 1, length, handle);
+	fclose(handle);	
+	return pickle_set_result_integer(i, wrote);
+}
+
 static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, int prompt) {
 	assert(i);
 	assert(args);
@@ -357,7 +398,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "system",   pickleCommandSystem,    NULL },
 		{ "exit",     pickleCommandExit,      NULL },
 		{ "quit",     pickleCommandExit,      NULL },
-		{ "bye",      pickleCommandExit,      NULL }, // hold over from Forth
+		{ "bye",      pickleCommandExit,      NULL }, /* hold over from Forth */
 		{ "getenv",   pickleCommandGetEnv,    NULL },
 		{ "random",   pickleCommandRandom,    NULL },
 		{ "clock",    pickleCommandClock,     NULL },
@@ -370,15 +411,17 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "heap",     pickleCommandHeapUsage, p },
 		{ "putch",    pickleCommandPutCh,     stdout },
 		{ "getch",    pickleCommandGetCh,     stdin },
+		{ "slurp",    pickleCommandSlurp,     NULL },
+		{ "dump",     pickleCommandDump,      NULL },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
-		return -1;
+		return PICKLE_ERROR;
 	if (pickle_set_var_string(i, "prompt", prompt ? "pickle> " : "") != PICKLE_OK)
-		return -1;
+		return PICKLE_ERROR;
 	for (size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
 		if (pickle_register_command(i, commands[j].name, commands[j].func, commands[j].data) != 0)
-			return -1;
-	return 0;
+			return PICKLE_ERROR;
+	return PICKLE_OK;
 }
 
 /* An interactive pickle - the things you can do with it! */
@@ -389,21 +432,20 @@ static int interactive(pickle_t *i, FILE *input, FILE *output) { /* NB. This cou
 	for (;;) {
 		char clibuf[LINE_SZ] = { 0 };
 		const char *prompt = NULL;
-		/* TODO: Evaluate prompt variable, making it more flexible */
 		pickle_get_var_string(i, "prompt", &prompt);
 		prompt = prompt ? prompt : "";
 		fputs(prompt, output);
 		fflush(output);
 		if (!fgets(clibuf, sizeof clibuf, input))
-			return 0;
+			return PICKLE_OK;
 		const int retcode = pickle_eval(i, clibuf);
 		const char *s = NULL;
 		if (pickle_get_result_string(i, &s) != PICKLE_OK)
-			return -1;
+			return PICKLE_ERROR;
 		if (s[0] != '\0')
 			fprintf(output, "[%d] %s\n", retcode, s);
 	}
-	return 0;
+	return PICKLE_OK;
 }
 
 static int tests(void) {
@@ -435,11 +477,11 @@ Options:\n\
 \t-s,\tsuppress prompt printing\n\
 \n\
 If no arguments are given then input is taken from stdin. Otherwise\n\
-they are treated as scripts to execute. Maximum file size is %d\n\
-bytes, maximum length of an input line is is %d bytes. There are no\n\
-configuration files or environment variables need by the interpreter.\n\
-Non zero return codes indicate failure.\n";
-	fprintf(output, msg, arg0, FILE_SZ, LINE_SZ);
+they are treated as scripts to execute. Maximum length of an input \n\
+line is is %d bytes. There are no configuration files or environment\n\
+variables need by the interpreter. Non zero return codes indicate\n\
+failure.\n";
+	fprintf(output, msg, arg0, LINE_SZ);
 }
 
 static void cleanup(void) {

@@ -11,15 +11,27 @@ if {eq [getenv OS] "Windows_NT" } {
 	set HOME "HOMEPATH"
 }
 
-set HOME [getenv $HOME]
-puts $HOME
+# TODO: A TCL list we could index would be useful here, this requires
+# the list functions being implemented.
+proc ERROR    {} { return -1 }
+proc OK       {} { return  0 }
+proc RETURN   {} { return  1 }
+proc BREAK    {} { return  2 }
+proc CONTINUE {} { return  3 }
 
-source $HOME/.picklerc
+set HOME [getenv $HOME]
+set initrc "$HOME/.picklerc"
+
+set status [catch {source $initrc} sourced]
+set status [string trim $status]
+if {!= 0 status} { puts "$status" }
+unset status
+unset initrc
 
 set colorize [getenv COLOR]
 proc color {x} {
 	upvar #0 colorize c;
-	if {eq $c on} { return $x } else { return "" }
+	if {string compare-no-case $c on} { return "" } else { return $x }
 }
 
 proc normal {} { color "\x1b\[0m" }
@@ -30,6 +42,8 @@ proc blue   {} { color "\x1b\[34;1m" }
 proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
 
 # Hold over from Forth; list defined commands
+# TODO: Not sure if this works correctly and finds all values in the 
+# dictionary. This function needs checking.
 proc words {} {
 	set i 0
 	set m [info command]
@@ -91,7 +105,7 @@ proc io {} {
 	puts -nonewline $p
 	set e ""
 	catch {set l [gets]} e
-	if {== $e 1} {
+	if {== $e [ERROR]} {
 		if {== $l EOF} {
 			exit 0
 		}

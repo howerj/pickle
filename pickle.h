@@ -52,6 +52,7 @@ int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) defa
 int pickle_delete(pickle_t *i);
 int pickle_eval(pickle_t *i, const char *t);
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
+int pickle_remove_command(pickle_t *i, const char *name);
 
 int pickle_set_result(pickle_t *i, const char *fmt, ...);
 int pickle_set_result_error(pickle_t *i, const char *fmt, ...);

@@ -1,5 +1,11 @@
 #!./pickle -a
-# This file contains unit tests for the Pickle Interpreter
+#
+# This file contains unit tests for the Pickle Interpreter. The things tested
+# in this file are mainly the commands and sub-commands that perform simple
+# functions, and not basic language constructions (and commands like 'if',
+# or 'while') as we would have to use those constructs as part of the test
+# framework itself. Instead, those things should be considered tested if
+# the test framework itself runs.
 
 proc die {x} { puts $x; exit 1 }
 
@@ -38,7 +44,7 @@ proc test {result x} {
 	} else {
 		set f "[red]FAIL[normal]: (expected \"$result\") "
 	}
-	puts "$f$x = $r"
+	puts "$f{$x} = \"$r\""
 	unset t
 }
 
@@ -258,6 +264,25 @@ test 65535 {string hex2dec FffF}
 test 0 {string char 48}
 test 1 {string char 49}
 test a {string char 97}
+test 0 {llength ""}
+test 0 {llength " "}
+test 1 {llength "a"}
+test 2 {llength "a b"}
+test 2 {llength "a b "}
+test 2 {llength "a { b }"}
+test 3 {llength "a { b } c"}
+test 3 {llength "a { { b } } c"}
+test 3 {llength {a { { \" b \" } } c}}
+test 3 {llength {a " b " c}}
+# ERROR: test 2 {llength "a { b }c"}
+test a {lindex "a b c" 0}
+test b {lindex "a b c" 1}
+test c {lindex "a b c" 2}
+test c {lindex "a b c" 2}
+test { b } {lindex "a { b } c" 1}
+test a {lindex "a { b } c" 0}
+test c {lindex "a { b } c" 2}
+test "" {lindex "a { b } c" 3}
 
 # Test upvar links
 set u 5

@@ -74,23 +74,21 @@ in [C][].
 * The language interpreter is not well tested and is likely to be insecure. If
 you find a bug, please report it.
 * Despite being a language designed to manipulate strings it lacks many
-expected string operations, they have to be added by the user. This includes
-facilities for trimming strings, replacing subsections of strings,
-concatenating strings, modifying bits of string, searching, and more.
-* Lacks Unicode support.
+expected string operations, they have to be added by the user. The 'string'
+command adds most of the functionality.
+* Lacks Unicode/UTF-8 support.
 
 Potential Improvements:
 
 * Many, many more commands could be written in order to make this interpreter
 more usable.
-* A hash library could be integrated. It would not have to that big or complex
-to greatly speed up the interpreter.
-* The following small library can be used to either extend or modify the
+* The following small libraries can be used to either extend or modify the
 interpreter to suite your purposes:
   - UTF-8: <https://www.cprogramming.com/tutorial/unicode.html>
   - Data Packing/Unpacking: <https://beej.us/guide/bgnet/html/multi/advanced.html#serialization>
   - Base-64: <https://stackoverflow.com/questions/342409/>
   - Line editing: <https://github.com/antirez/linenoise>
+  - Fixed point (Q16.16, signed) library: <https://github.com/howerj/q>
 
 ### The language itself
 
@@ -260,8 +258,8 @@ an item is given a number indicates which command that it applies to. Commands
 are indexed by numbers. Defining new command may change the index of other
 commands. Commands are either user defined or built in commands.
 
- - args: get a functions arguments (returns 'built-in' for built in commands)
- - body: get a functions body (returns 'built-in' for built in commands)
+ - args: get a functions arguments (returns '{built-in pointer pointer}' for built in commands)
+ - body: get a functions body (returns '{built-in pointer pointer}' for built in commands)
  - name: get a functions name
 
 * join {list} String
@@ -414,6 +412,31 @@ to the index of the last character. Indexing starts at zero and goes up to one
 less than the strings length (or zero of empty string), which is the index of 
 the last character. The characters from Index1 to Index2 inclusive form the
 sub-string.
+
+* remove function-name
+
+Remove a function from usage allowing the function name to be reused.
+
+* llength list
+
+Get the length a list. A TCL list consists of a specially formatted string
+argument, each element of that list is separated by either space or is a string
+or quote. For example the following lists each contain three elements:
+
+	"a b c"
+	"a { b } c"
+	"a \" b \" c"
+
+The list is the basic higher level data structure in Pickle, and as you can
+see, there is nothing special about them. They are just strings treated in a
+special way.
+
+* lindex list index
+
+See 'llength'.
+
+Index into a list, retrieving an element from that list. Indexing starts at
+zero, the first element being the zeroth element.
 
 ### Extension Commands
 
@@ -578,6 +601,19 @@ can use "string char" to convert this to a character). -1 is returned on EOF.
 Write a character, represented numerically, to standard output. The original
 character is returned if there is no error in doing this.
 
+* slurp file-name
+
+Read an entire file into a string. Bear in mind any 'NUL' characters in the
+file will terminate the string early. The file is always 'NUL' terminated by
+appending a 'NUL' character after the file contents into the character array
+read in. Only files which are seekable can be loaded correctly.
+
+* dump -append? file-name string
+
+Dump the contents of a string into a file, specified by 'file-name'. Optionally
+the string can be appended, if the '-append' is given, by default the file is
+overwritten.
+
 ## Compile Time Options
 
 I am not a big fan of using the [C Preprocessor][] to define a myriad of
@@ -651,7 +687,7 @@ actually be done from within the interpreter if methods for analyzing variables
 were available.
 * The get/set variable functions also need to be able to set a scope.
 * Add a function to remove commands. This could be used to implement adding
-resources such as file-handles, a file handle would consist of a function and
+resources such as file-handles, a file-handle would consist of a function and
 some private data. It would act something like this:
 
 	set file [open "file.txt"]
