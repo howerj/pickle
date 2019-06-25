@@ -1,8 +1,5 @@
 #!./pickle -a
 # Simple Shell
-# Before this is usable, several things need to be done:
-# - Evaluation could be done in a sandbox
-# - ARGC/ARGC could be processed
 
 set HOME "HOME"
 set OS Unix
@@ -11,13 +8,11 @@ if {eq [getenv OS] "Windows_NT" } {
 	set HOME "HOMEPATH"
 }
 
-# TODO: A TCL list we could index would be useful here, this requires
-# the list functions being implemented.
-proc ERROR    {} { return -1 }
-proc OK       {} { return  0 }
-proc RETURN   {} { return  1 }
-proc BREAK    {} { return  2 }
-proc CONTINUE {} { return  3 }
+proc decode {r} {
+	set r [+ $r 1]
+	set codes "error ok return break continue"
+	lindex $codes $r
+}
 
 set HOME [getenv $HOME]
 set initrc "$HOME/.picklerc"
@@ -105,7 +100,7 @@ proc io {} {
 	puts -nonewline $p
 	set e ""
 	catch {set l [gets]} e
-	if {== $e [ERROR]} {
+	if {eq [decode $e] error} {
 		if {== $l EOF} {
 			exit 0
 		}

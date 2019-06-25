@@ -47,22 +47,14 @@
  *   - Use asserts wherever you can for as many preconditions, postconditions
  *   and invariants that you can think of. 
  *
- * NOTE: Instead of using normal C strings it would have been better
- * to use strings with a length and used field, however that would require
- * a full rewrite and will not be done.
- * TODO: Rename exported functions? Instead of SVO (Subject Verb Object,
- * pickle_get_return_value) it should be SOV (Subject Object Verb,
- * 'pickle_return_value_set'). This makes for easier grouping of functions.
  * TODO: Add list manipulation functions; 'split', 'append', 'lappend', 
- * 'lindex', 'llength', and perhaps 'foreach'. There are only a few other
+ * and perhaps 'foreach'. There are only a few other
  * functions and features that can and should be added, along with these
  * list functions, before the interpreter can be considered complete.
  * TODO: There are some arbitrary limits on string length, these limits should
  * be removed. The limits mostly come from using a temporary buffer stack
  * allocated with a fixed width. Instead of removing this completely, the
- * buffer should be moved to a heap when it is too big for this buffer.
- * NOTE: An 'expr' command, which would process infix mathematics expressions,
- * could be added but not much would be gained. */
+ * buffer should be moved to a heap when it is too big for this buffer. */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -398,12 +390,11 @@ static char *picolStrdup(pickle_t *i, const char *s) {
 	return r ? memcpy(r, s, l + 1) : r;
 }
 
-/*TODO: Make a string specific version, no need to specify length */
-static inline unsigned long picolHash(const char *s, size_t len) { /* DJB2 Hash, <http://www.cse.yorku.ca/~oz/hash.html> */
+static inline unsigned long picolHashString(const char *s) { /* DJB2 Hash, <http://www.cse.yorku.ca/~oz/hash.html> */
 	assert(s);
-	unsigned long h = 5381;
-	for (size_t i = 0; i < len; s++, i++)
-		h = ((h << 5) + h) + (*s);
+	unsigned long h = 5381, ch = 0;
+	for (size_t i = 0; (ch = s[i]); i++)
+		h = ((h << 5) + h) + ch;
 	return h;
 }
 
@@ -411,7 +402,7 @@ static inline struct pickle_command *picolGetCommand(pickle_t *i, const char *s)
 	assert(s);
 	assert(i);
 	struct pickle_command *np = NULL;
-	for (np = i->table[picolHash(s, strlen(s)) % i->length]; np != NULL; np = np->next)
+	for (np = i->table[picolHashString(s) % i->length]; np != NULL; np = np->next)
 		if (!compare(s, np->name))
 			return np; /* found */
 	return NULL; /* not found */
@@ -431,7 +422,7 @@ int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t
 			picolFree(i, np);
 			return picolErrorOutOfMemory(i);
 		}
-		const unsigned long hashval = picolHash(name, strlen(name)) % i->length;
+		const unsigned long hashval = picolHashString(name) % i->length;
 		np->next = i->table[hashval];
 		i->table[hashval] = np;
 	} else { /* already there */
@@ -447,7 +438,7 @@ static void picolFreeCmd(pickle_t *i, struct pickle_command *p);
 int pickle_remove_command(pickle_t *i, const char *name) {
 	assert(i);
 	assert(name);
-	struct pickle_command **p = &i->table[picolHash(name, strlen(name)) % i->length];
+	struct pickle_command **p = &i->table[picolHashString(name) % i->length];
 	struct pickle_command *c = *p;
 	for (; c; c = c->next) {
 		if (!compare(c->name, name)) {
@@ -1318,7 +1309,7 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			return pickle_set_result_error(i, "Invalid hexadecimal value: %s", arg1);
 		}
 		if (!compare(rq, "hash"))
-			return pickle_set_result_integer(i, picolHash(arg1, strlen(arg1)));
+			return pickle_set_result_integer(i, picolHashString(arg1));
 	} else if (argc == 4) {
 		const char *arg1 = argv[2], *arg2 = argv[3];
 		if (!compare(rq, "trimleft"))
