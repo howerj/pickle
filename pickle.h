@@ -39,10 +39,10 @@ typedef struct {
 struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
 
-typedef int (*pickle_command_func_t)(pickle_t *i, int argc, const char * const *argv, void *privdata);
+typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
 /* All the following functions return one of the pickle error statuses; PICKLE_OK,
- * PICKLE_ERROR, ...*/
+ * PICKLE_ERROR, or one of the other pickle return values */ 
 
 enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
@@ -52,26 +52,20 @@ int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) defa
 int pickle_delete(pickle_t *i);
 int pickle_eval(pickle_t *i, const char *t);
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
-int pickle_unset_command(pickle_t *i, const char *name);
 
 int pickle_set_result(pickle_t *i, const char *fmt, ...);
 int pickle_set_result_string(pickle_t *i, const char *s);
 int pickle_set_result_integer(pickle_t *i, long result);
 int pickle_get_result_string(pickle_t *i, const char **s);
 int pickle_get_result_integer(pickle_t *i, long *val);
-int pickle_set_result_empty(pickle_t *i); /* NB. Does not allocate */
 
-/* '*_result_error_*' functions always return PICKLE_ERROR */
 int pickle_set_result_error(pickle_t *i, const char *fmt, ...);
-int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, const char * const *argv);
-int pickle_set_result_error_out_of_memory(pickle_t *i); /* NB. Does not allocate */
+int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, char **argv);
 
-/* For setting variables in current scope */
 int pickle_set_var_string(pickle_t *i, const char *name, const char *val);
 int pickle_set_var_integer(pickle_t *i, const char *name, long r);
 int pickle_get_var_string(pickle_t *i, const char *name, const char **val);
 int pickle_get_var_integer(pickle_t *i, const char *name, long *val);
-int pickle_unset_var(pickle_t *, const char *name);
 
 int pickle_tests(void); /* returns: test passed || defined(NDEBUG) */
 
