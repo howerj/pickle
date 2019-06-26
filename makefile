@@ -1,4 +1,4 @@
-CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv
+CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv ${DEFINES}
 AR=ar
 ARFLAGS=rcs
 RANLIB=ranlib
@@ -9,9 +9,6 @@ all: pickle
 
 run: pickle
 	${TRACE} ./pickle ${FILE}
-
-wrap: pickle
-	rlwrap ./pickle -a ${FILE}
 
 test: pickle unit.tcl
 	./pickle -t

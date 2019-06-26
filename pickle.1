@@ -203,7 +203,10 @@ sufficient for many tasks.
 While API presented in 'pickle.h' is small there are a few areas of
 complication. They are: The memory allocation API, registering a command, the
 getopt function and the unit tests. The most involved is the memory allocation
-API and there is not too much to it.
+API and there is not too much to it, you do not even need to use it and can
+pass a NULL to 'pickle_new' if for the allocator argument if you want to use
+the built in malloc/realloc/free based allocator (provided the library was
+built with support for it).
 
 .SH EXIT STATUS
 
