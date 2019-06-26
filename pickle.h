@@ -34,7 +34,7 @@ typedef struct {
 	    reset;   /* set to reset */
 	char *place; /* internal use: scanner position */
 	int  init;   /* internal use: initialized or not */
-} pickle_getopt_t;   /* getopt clone */
+} pickle_getopt_t;   /* getopt clone; with a few modifications */
 
 struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
@@ -42,7 +42,7 @@ typedef struct pickle_interpreter pickle_t;
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
 /* All the following functions return one of the pickle error statuses; PICKLE_OK,
- * PICKLE_ERROR, ...*/
+ * PICKLE_ERROR, or one of the other pickle return values */ 
 
 enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
@@ -52,15 +52,15 @@ int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) defa
 int pickle_delete(pickle_t *i);
 int pickle_eval(pickle_t *i, const char *t);
 int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
-int pickle_remove_command(pickle_t *i, const char *name);
 
 int pickle_set_result(pickle_t *i, const char *fmt, ...);
-int pickle_set_result_error(pickle_t *i, const char *fmt, ...);
-int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, char **argv);
 int pickle_set_result_string(pickle_t *i, const char *s);
 int pickle_set_result_integer(pickle_t *i, long result);
 int pickle_get_result_string(pickle_t *i, const char **s);
 int pickle_get_result_integer(pickle_t *i, long *val);
+
+int pickle_set_result_error(pickle_t *i, const char *fmt, ...);
+int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, char **argv);
 
 int pickle_set_var_string(pickle_t *i, const char *name, const char *val);
 int pickle_set_var_integer(pickle_t *i, const char *name, long r);

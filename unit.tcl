@@ -327,7 +327,7 @@ while {< $i $heaps} {
 	set used  [heap arena-active $i]
 	set max   [heap arena-max    $i]
 	set m [+ $m [* $blk $sz]]
-	puts "ARENA($i):   $blk $sz $used $max"
+	puts "ARENA $i:   $blk $sz $used $max"
 	incr i
 }
 

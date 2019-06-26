@@ -197,7 +197,7 @@ static int pickleCommandSignal(pickle_t *i, const int argc, char **argv, void *p
 		return pickle_set_result_integer(i, sig);
 	}
 	int r = PICKLE_ERROR, sig = atoi(argv[1]);
-	char *rq = argv[2];
+	const char *rq = argv[2];
 	if (!strcmp(rq, "ignore"))  { r = SIG_ERR == signal(sig, SIG_IGN) ? r : PICKLE_OK; }
 	if (!strcmp(rq, "default")) { r = SIG_ERR == signal(sig, SIG_DFL) ? r : PICKLE_OK; }
 	if (!strcmp(rq, "catch"))   { r = SIG_ERR == signal(sig, signal_handler) ? r : PICKLE_OK; }
@@ -307,10 +307,8 @@ static char *slurp_by_name(const char *name) {
 	return r;
 }
 
-/* NOTE: A 'dump' command would be useful as well. We still do not have a way
- * to process binary data however.
- * NOTE: Only files which rewind/fseek works on can be handled at the
- * moment. */
+/* NOTE: Only files which rewind/fseek works on can be handled at the moment. Binary
+ * data also cannot be processed. */
 static int pickleCommandSlurp(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
@@ -371,7 +369,7 @@ static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd)
 	UNUSED(pd);
 	if (argc != 3 && argc != 4)
 		return pickle_set_result_error_arity(i, 4, argc, argv);
-	char *file = argv[1], *dump = argv[2], *mode = "wb";
+	const char *file = argv[1], *dump = argv[2], *mode = "wb";
 	if (argc == 4) {
 		if (strcmp(argv[1], "-append")) 
 			return pickle_set_result_error(i, "unexpected option: %s", argv[1]);
