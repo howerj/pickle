@@ -198,7 +198,12 @@ Also present is a custom prompt.
 
 It should be obvious that the interface presented is not efficient for many
 uses, treating everything as a string has a cost. It is however simple and
-sufficient.
+sufficient for many tasks.
+
+While API presented in 'pickle.h' is small there are a few areas of
+complication. They are: The memory allocation API, registering a command, the
+getopt function and the unit tests. The most involved is the memory allocation
+API and there is not too much to it.
 
 .SH EXIT STATUS
 
