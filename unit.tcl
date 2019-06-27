@@ -40,12 +40,17 @@ proc test {result x} {
 
 	if {eq $r $result} {
 		uplevel #0 { set passed [+ $passed 1] }
-		set f "[green]ok[normal]:   "
+		set f "[green]ok[normal]:    "
 	} else {
 		set f "[red]FAIL[normal]: (expected \"$result\") "
 	}
 	puts "$f{$x} = \"$r\""
 	unset t
+}
+
+proc state {x} {
+		puts "[blue]state[normal]: $x"
+		eval $x
 }
 
 proc square {x} { * $x $x }
@@ -115,7 +120,12 @@ test 1 {eq "a b" [concat a b]}
 test a,b,c {join {a b c} ,}
 test 16 {square 4}
 test 89 {fib 10}
-
+test 0 {> 0 [info command fib]}
+state {rename fib ""}
+test -1 {info command fib}
+state {rename square sq}
+test 16 {sq 4}
+state {rename sq ""}
 test 3 {string length 123}
 test 4 {string length 1234}
 test 4 {string length abcd}

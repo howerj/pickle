@@ -67,7 +67,7 @@ int pickle_set_var_integer(pickle_t *i, const char *name, long r);
 int pickle_get_var_string(pickle_t *i, const char *name, const char **val);
 int pickle_get_var_integer(pickle_t *i, const char *name, long *val);
 
-int pickle_tests(void); /* returns: test passed || defined(NDEBUG) */
+int pickle_tests(void); /* returns: PICKLE_OK on success, PICKLE_ERROR on failure, PICKLE_OK if defined(NDEBUG) */
 
 #ifdef __cplusplus
 }

@@ -413,9 +413,12 @@ less than the strings length (or zero of empty string), which is the index of
 the last character. The characters from Index1 to Index2 inclusive form the
 sub-string.
 
-* remove function-name
+* rename function-name new-name
 
-Remove a function from usage allowing the function name to be reused.
+Rename a function to a new-name, this will fail if the function does not exist
+or a function by the same name exists for the name we are trying to rename to.
+A special case exists when the new-name is an empty string, the function gets
+deleted.
 
 * llength list
 
