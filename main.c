@@ -34,7 +34,7 @@ static pickle_t *interp = NULL;
 static int signal_variable = 0;
 
 void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, length); }
-void custom_free(void *a, void *v)                    { pool_free(a, v); }
+int   custom_free(void *a, void *v)                    { return pool_free(a, v); }
 void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v, length); }
 
 static pickle_allocator_t block_allocator = {
@@ -284,7 +284,7 @@ static char *slurp(FILE *input) {
 		goto fail;
 	if (fseek(input, 0, SEEK_SET) < 0)
 		goto fail;
-	if (!(r = malloc(pos + 1))) /* TODO: Allow for custom allocator */
+	if (!(r = malloc(pos + 1)))
 		goto fail;
 	if (pos != (long)fread(r, 1, pos, input))
 		goto fail;
@@ -431,7 +431,7 @@ static int interactive(pickle_t *i, FILE *input, FILE *output) { /* NB. This cou
 		char clibuf[LINE_SZ] = { 0 };
 		const char *prompt = NULL;
 		pickle_get_var_string(i, "prompt", &prompt);
-		prompt = prompt ? prompt : "";
+		prompt = prompt ? prompt : ""; /* NB. We could evaluate the prompt for more flexibility. */
 		fputs(prompt, output);
 		fflush(output);
 		if (!fgets(clibuf, sizeof clibuf, input))

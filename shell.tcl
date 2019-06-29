@@ -17,9 +17,11 @@ proc decode {r} {
 set HOME [getenv $HOME]
 set initrc "$HOME/.picklerc"
 
+set sourced 0
 set status [catch {source $initrc} sourced]
 set status [string trim $status]
-if {!= 0 status} { puts "$status" }
+# puts "st: $status"
+if {== 0 $sourced} { puts "$status" }
 unset status
 unset initrc
 

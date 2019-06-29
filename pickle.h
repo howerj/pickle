@@ -22,7 +22,7 @@ extern "C" {
 typedef struct {
 	void *(*malloc)  (void *arena, size_t bytes);            /* malloc equivalent */
 	void *(*realloc) (void *arena, void *ptr, size_t bytes); /* realloc equivalent */
-	void  (*free)    (void *arena, void *ptr);               /* free equivalent */
+	int   (*free)    (void *arena, void *ptr);               /* free equivalent; can return error code */
 	void *arena;  /* arena we are allocating in, if any */
 } pickle_allocator_t; /* optional */
 

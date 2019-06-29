@@ -87,13 +87,13 @@ void block_delete(block_arena_t *a);
 
 void *block_malloc(block_arena_t *a, size_t length);
 void *block_calloc(block_arena_t *a, size_t length);
-void block_free(block_arena_t *a, void *v);
+int block_free(block_arena_t *a, void *v);
 void *block_realloc(block_arena_t *a, void *v, size_t length);
 
 pool_t *pool_new(size_t count, const pool_specification_t *specs);
 void pool_delete(pool_t *p);
 void *pool_malloc(pool_t *p, size_t length);
-void pool_free(pool_t *p, void *v);
+int pool_free(pool_t *p, void *v);
 void *pool_realloc(pool_t *p, void *v, size_t length);
 void *pool_calloc(pool_t *p, size_t length);
 

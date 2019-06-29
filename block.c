@@ -205,10 +205,10 @@ static inline int block_arena_valid_pointer(block_arena_t *a, void *v) {
 	return 1;
 }
 
-void block_free(block_arena_t *a, void *v) {
+int block_free(block_arena_t *a, void *v) {
 	assert(a);
 	if (!v)
-		return;
+		return 0;
 	if (!block_arena_valid_pointer(a, v))
 		abort();
 	const intptr_t p = ((char*)v - (char*)a->memory);
@@ -219,6 +219,7 @@ void block_free(block_arena_t *a, void *v) {
 		a->active--;
 	bitmap_clear(&a->freelist, bit);
 	a->lastfree = bit;
+	return 0;
 }
 
 void *block_realloc(block_arena_t *a, void *v, size_t length) {
@@ -332,25 +333,24 @@ void *pool_calloc(pool_t *p, size_t length) {
 	return r ? memset(r, 0, length) : r;
 }
 
-void pool_free(pool_t *p, void *v) {
+int pool_free(pool_t *p, void *v) {
 	assert(p);
 	if (p->tracer)
 		p->tracer(p->tracer_arg, "{free   %p: %p}", (void*)p, v);
 	if (!v)
-		return;
+		return 0;
 	if (STATISTICS)
 		p->freed++;
 	for (size_t i = 0; i < p->count; i++) {
 		if (block_arena_valid_pointer(p->arenas[i], v)) {
-			block_free(p->arenas[i], v);
 			if (STATISTICS)
 				p->active -= p->arenas[i]->blocksz;
-			return;
+			return block_free(p->arenas[i], v);
 		}
 	}
 	if (FALLBACK) {
 		free(v);
-		return;
+		return 0;
 	}
 	abort();
 }
@@ -414,24 +414,17 @@ static uintptr_t diff(void *a, void *b) {
 }
 
 int block_tests(void) {
-	printf("Block Tests\n\n");
-	printf("arena   = %p\n", (void*)&block_arena);
-	printf("arena.m = %p\n", block_arena.memory);
 	void *v1, *v2, *v3;
 	if (!(v1 = block_malloc(&block_arena, 12)))
 		return -1;
-	printf("v1 = %p\n", v1);
 	if (!(v2 = block_malloc(&block_arena, 30)))
 		return -2;
-	printf("v2 = %p\n", v2);
 	if (diff(v1, v2) != BLK_SIZE)
 		return -3;
 	block_free(&block_arena, v1);
 	v1 = block_malloc(&block_arena, 12);
-	printf("v1 = %p\n", v1);
 	if (!(v3 = block_malloc(&block_arena, 12)))
 		return -4;
-	printf("v3 = %p\n", v3);
 	if (diff(v1, v3) != BLK_SIZE*2)
 		return -5;
 	block_free(&block_arena, v1);
@@ -441,10 +434,8 @@ int block_tests(void) {
 	for (i = 0; i < (BLK_COUNT+1); i++)
 		if (!block_malloc(&block_arena, 1))
 			break;
-	printf("exhausted at = %u\n", (unsigned)i);
 	if (i != BLK_COUNT)
 		return -6;
-	printf("[DONE]\n\n");
 	return 0;
 }
 #endif

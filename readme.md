@@ -670,39 +670,18 @@ provided, it is possible to do quite a bit with this scripting language whilst
 only allocating about 32KiB of memory total on a 64-bit machine (for example
 all of the unit tests and example programs run within that amount).
 
-## To Do
+## Project Goals
 
-* Add more internal unit tests, that test against the internals and against the
-public facing API.
-* Add documentation here; building, command line use, command list, syntax
-and semantics. Make a nice manual page.
-* Reorganize hashing code so it can be reused (and potentially reused as a
-data structure within the interpreter).
-* Add more commands in 'pickle.c' for command introspection, specifically so
-that variables can be directly inspected and manipulated. Also allow
-procedures to be renamed and deleted.
-* C++ Example, integrating the interpreter in ways which make sense with the
-language.
-* Replace unsafe string copying routines with safe version; including 'strncpy'
-(what's the point of this function!?).
-* Currently there is no way to serialize the interpreter state, this could
-actually be done from within the interpreter if methods for analyzing variables
-were available.
-* The get/set variable functions also need to be able to set a scope.
-* Add a function to remove commands. This could be used to implement adding
-resources such as file-handles, a file-handle would consist of a function and
-some private data. It would act something like this:
+* [x] Turn into library
+  * [x] Headers/Build System/Stuff/Cleanup
+  * [x] Remove static variables
+* [x] Add a custom allocator
+* [x] Add a unit test framework
+  * [x] In C
+  * [x] In TCL
+* [ ] Remove internal limitations on string size
+* [ ] Create a framework for adding modules external to this project
 
-	set file [open "file.txt"]
-	puts [$file -get]
-	$file -close
-
-That interface is not too cumbersome.
-
-
-[pickle.c]: pickle.c
-[pickle.h]: pickle.h
-[block.c]: block.c
 [block.h]: block.h
 [main.c]: main.c
 [picol]: http://oldblog.antirez.com/post/picol.html
