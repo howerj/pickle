@@ -362,6 +362,7 @@ static int pickleCommandSource(pickle_t *i, const int argc, char **argv, void *p
 	return PICKLE_OK;
 }
 
+/* TODO: Remove 'dump' and 'slurp' command now that 'fopen' exists? */
 static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
@@ -385,6 +386,73 @@ static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd)
 	fclose(handle);	
 	return pickle_set_result_integer(i, wrote);
 }
+
+static int pickleCommandFile(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(pd);
+	FILE *f = (FILE*)pd;
+	if (argc == 1)
+		return pickle_set_result_integer(i, ftell(f));
+	const char *name = argv[0];
+	if (argc == 2) {
+		if (!strcmp("-close", argv[1])) {
+			if (pickle_rename_command(i, name, "") < 0)
+				return pickle_set_result_error(i, "unable to remove command: %s", name);
+			return pickle_set_result_integer(i, fclose(f));
+		}
+		if (!strcmp("-getc", argv[1]))
+			return pickle_set_result_integer(i, fgetc(f));
+		if (!strcmp("-gets", argv[1])) {
+			char buf[PICKLE_MAX_STRING] = { 0 };
+			return pickle_set_result_integer(i, !fgets(buf, sizeof buf, f));
+		}
+		if (!strcmp("-rewind", argv[1]))
+			return pickle_set_result_integer(i, fseek(f, 0, SEEK_SET));
+	}
+	if (argc == 3) {
+		if (!strcmp("-putc", argv[1]))
+			return pickle_set_result_integer(i, fputc(argv[2][0], f));
+		if (!strcmp("-puts", argv[1]))
+			return pickle_set_result_integer(i, fputs(argv[2], f));
+	}
+	if (argc == 4) {
+		if (!strcmp("-seek", argv[1])) {
+			int whence = -1;
+			if (!strcmp("start", argv[3]))
+				whence = SEEK_SET;
+			if (!strcmp("current", argv[3]))
+				whence = SEEK_CUR;
+			if (!strcmp("end", argv[3]))
+				whence = SEEK_END;
+			if (whence < 0)
+				return pickle_set_result(i, "invalid whence: %s", argv[3]);
+			return pickle_set_result_integer(i, fseek(f, atol(argv[2]), whence));
+		}
+	}
+	return pickle_set_result_error(i, "fopen: unknown subcommand");
+}
+
+static int pickleCommandFOpen(pickle_t *i, const int argc, char **argv, void *pd) {
+	assert(i);
+	assert(argv);
+	UNUSED(pd);
+	assert(!pd);
+	if (argc != 3)
+		return pickle_set_result_error_arity(i, 3, argc, argv);
+	errno = 0;
+	char buf[PICKLE_MAX_STRING] = { 0 };
+	FILE *handle = fopen(argv[1], argv[2]);
+	if (!handle)
+		return pickle_set_result_error(i, "unable to open %s (mode = %s): %s", argv[1], argv[2], strerror(errno));
+	snprintf(buf, sizeof buf, "%p", (void*)handle);
+	if (pickle_register_command(i, buf, pickleCommandFile, handle) != PICKLE_OK)
+		goto fail;
+	return pickle_set_result_string(i, buf);
+fail:
+	if (handle)
+		fclose(handle);
+	return pickle_set_result_error(i, "open failed");
+}
+
 
 static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, int prompt) {
 	assert(i);
@@ -411,6 +479,7 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "getch",    pickleCommandGetCh,     stdin },
 		{ "slurp",    pickleCommandSlurp,     NULL },
 		{ "dump",     pickleCommandDump,      NULL },
+		{ "fopen",    pickleCommandFOpen,     NULL },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
 		return PICKLE_ERROR;

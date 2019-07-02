@@ -617,6 +617,29 @@ Dump the contents of a string into a file, specified by 'file-name'. Optionally
 the string can be appended, if the '-append' is given, by default the file is
 overwritten.
 
+* fopen file-name mode
+
+This 'fopen' opens 'file-name' in 'mode', like the C library command 'fopen'.
+This 'fopen' command does not return a file handle however, it instead
+registers a function which contains a file handle. The function itself has
+subcommands which can operate on that hidden file handle.
+
+To use this command:
+
+	set fh [fopen file.txt rb]   # Open a new file
+	$fh -seek 123 start          # Seek to a position in the file relative
+	                             # to 'start' or 'current' or 'end'
+	$fh                          # Get file position
+	$fh -close                   # Close file, remove command
+	$fh -getc                    # Write a character to a file
+	$fh -gets                    # Get a line from a file
+	$fh -rewind                  # Rewind the file stream
+	$fh -putc c                  # Write a single character to file
+	$fh -puts "string"           # Write a string to a file
+
+As soon as '-close' is used on the returned function, it is removed and cannot
+be used again. Subsequent uses cause errors.
+
 ## Compile Time Options
 
 I am not a big fan of using the [C Preprocessor][] to define a myriad of
