@@ -3,8 +3,6 @@
 # any functions within this file so as not to clash with TCL instances
 # that source this file.
 
-# TODO Expand this help.
-
 set more {puts -nonewline "-- more --"; gets; }
 puts {}
 puts {Pickle:     A tiny TCL like language derived/copied from 'picol'}

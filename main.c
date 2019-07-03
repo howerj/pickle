@@ -394,6 +394,10 @@ static int pickleCommandFile(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_set_result_integer(i, ftell(f));
 	const char *name = argv[0];
 	if (argc == 2) {
+		if (!strcmp("-clear", argv[1])) {
+			clearerr(f);
+			return PICKLE_OK;
+		}
 		if (!strcmp("-close", argv[1])) {
 			if (pickle_rename_command(i, name, "") < 0)
 				return pickle_set_result_error(i, "unable to remove command: %s", name);
@@ -403,7 +407,11 @@ static int pickleCommandFile(pickle_t *i, const int argc, char **argv, void *pd)
 			return pickle_set_result_integer(i, fgetc(f));
 		if (!strcmp("-gets", argv[1])) {
 			char buf[PICKLE_MAX_STRING] = { 0 };
-			return pickle_set_result_integer(i, !fgets(buf, sizeof buf, f));
+			if (fgets(buf, sizeof buf, f))
+				return pickle_set_result_string(i, buf);
+			if (ferror(f))
+				return pickle_set_result_error(i, "error");
+			return PICKLE_BREAK;
 		}
 		if (!strcmp("-rewind", argv[1]))
 			return pickle_set_result_integer(i, fseek(f, 0, SEEK_SET));

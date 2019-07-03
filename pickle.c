@@ -64,7 +64,6 @@
  * 'lsort', 'linsert', * and perhaps 'foreach'. There are only a few other 
  * functions and features that can and should be added, along with these 
  * list functions, before the interpreter can be considered complete.
- * TODO: Reorganize code so there is not as many forward references
  * TODO: There are some arbitrary limits on string length, these limits should
  * be removed. The limits mostly come from using a temporary buffer stack
  * allocated with a fixed width. Instead of removing this completely, the
@@ -1329,42 +1328,73 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 	UNUSED(pd);
 	if (argc < 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
+	int r = PICKLE_OK;
 	const char *rq = argv[1];
-	char buf[PICKLE_MAX_STRING] = { 0 };
+	pickle_stack_or_heap_t h = { 0 };
 	if (argc == 3) {
 		const char *arg1 = argv[2];
 		if (!compare(rq, "trimleft"))
 			return pickle_set_result_string(i, trimleft(string_white_space, arg1));
 		if (!compare(rq, "trimright")) {
-			strncpy(buf, arg1, PICKLE_MAX_STRING - 1);
-			trimright(string_white_space, buf);
-			return pickle_set_result_string(i, buf);
+			const size_t l = picolStrlen(arg1);
+			if (picolStackOrHeapAlloc(i, &h, l + 1) < 0)
+				return -1;
+			memcpy(h.p, arg1, l + 1);
+			trimright(string_white_space, h.p);
+			r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "trim"))      {
-			strncpy(buf, arg1, PICKLE_MAX_STRING - 1);
-			trimright(string_white_space, buf);
-			return pickle_set_result_string(i, trimleft(string_white_space, buf));
+			const size_t l = picolStrlen(arg1);
+			if (picolStackOrHeapAlloc(i, &h, l + 1) < 0)
+				return -1;
+			memcpy(h.p, arg1, l + 1);
+			trimright(string_white_space, h.p);
+			r = pickle_set_result_string(i, trimleft(string_white_space, h.p));
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "length"))
 			return pickle_set_result_integer(i, picolStrlen(arg1));
 		if (!compare(rq, "toupper")) {
+			if (picolStackOrHeapAlloc(i, &h, picolStrlen(arg1) + 1) < 0)
+				return PICKLE_ERROR;
 			size_t j = 0;
 			for (j = 0; arg1[j]; j++)
-				buf[j] = toupper(arg1[j]);
-			buf[j] = 0;
-			return pickle_set_result_string(i, buf);
+				h.p[j] = toupper(arg1[j]);
+			h.p[j] = 0;
+			r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "tolower")) {
+			if (picolStackOrHeapAlloc(i, &h, picolStrlen(arg1) + 1) < 0)
+				return PICKLE_ERROR;
 			size_t j = 0;
 			for (j = 0; arg1[j]; j++)
-				buf[j] = tolower(arg1[j]);
-			buf[j] = 0;
-			return pickle_set_result_string(i, buf);
+				h.p[j] = tolower(arg1[j]);
+			h.p[j] = 0;
+			if (h.p != h.buf) {
+				/* set i->result */
+			}
+			r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "reverse")) {
-			const size_t l = picolStrlen(arg1);
-			memcpy(buf, arg1, l + 1);
-			return pickle_set_result_string(i, reverse(buf, l));
+			const size_t l = picolStrlen(arg1); /* TODO: Request arg1 strlen upfront? */
+			if (picolStackOrHeapAlloc(i, &h, picolStrlen(arg1) + 1) < 0)
+				return PICKLE_ERROR;
+			memcpy(h.p, arg1, l + 1);
+			r = pickle_set_result_string(i, reverse(h.p, l));
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "ordinal"))
 			return pickle_set_result_integer(i, arg1[0]);
@@ -1372,21 +1402,20 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			long v = 0;
 			if (picolConvertLong(i, arg1, &v) != PICKLE_OK)
 				return PICKLE_ERROR;
-			buf[0] = v;
-			buf[1] = 0;
-			return pickle_set_result_string(i, buf);
+			char b[] = { v, 0 };
+			return pickle_set_result_string(i, b);
 		}
 		if (!compare(rq, "dec2hex")) {
 			long hx = 0;
 			if (picolConvertLong(i, arg1, &hx) != PICKLE_OK)
 				return PICKLE_ERROR;
-			if (snprintf(buf, sizeof buf, "%lx", hx) < 1)
+			if (snprintf(h.buf, sizeof h.buf, "%lx", hx) < 1)
 				return pickle_set_result_error(i, "snprintf format error '%%lx'");
-			return pickle_set_result_string(i, buf);
+			return pickle_set_result_string(i, h.buf);
 		}
 		if (!compare(rq, "hex2dec")) {
 			char *ep = NULL;
-			const long l = strtol(arg1, &ep, 16);
+			const long l = strtol(arg1, &ep, 16); /* TODO: Remove dependency on 'strtol' */
 			if (*arg1 && !*ep)
 				return pickle_set_result_integer(i, l);
 			return pickle_set_result_error(i, "Invalid hexadecimal value: %s", arg1);
@@ -1398,14 +1427,26 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 		if (!compare(rq, "trimleft"))
 			return pickle_set_result_string(i, trimleft(arg2, arg1));
 		if (!compare(rq, "trimright")) {
-			strncpy(buf, arg1, PICKLE_MAX_STRING - 1);
-			trimright(arg2, buf);
-			return pickle_set_result_string(i, buf);
+			const size_t l = picolStrlen(arg1);
+			if (picolStackOrHeapAlloc(i, &h, l + 1) < 0)
+				return -1;
+			memcpy(h.p, arg1, l + 1);
+			trimright(arg2, h.p);
+			r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "trim"))   {
-			strncpy(buf, arg1, PICKLE_MAX_STRING - 1);
-			trimright(arg2, buf);
-			return pickle_set_result_string(i, trimleft(arg2, buf));
+			const size_t l = picolStrlen(arg1);
+			if (picolStackOrHeapAlloc(i, &h, l + 1) < 0)
+				return -1;
+			memcpy(h.p, arg1, l + 1);
+			trimright(arg2, h.p);
+			r = pickle_set_result_string(i, trimleft(arg2, h.p));
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "match"))  {
 			const int r = match(arg1, arg2, PICKLE_MAX_RECURSION - i->level);
@@ -1452,7 +1493,7 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			if (!compare(arg1, "boolean"))  { return pickle_set_result_integer(i, isTrue(arg2) || isFalse(arg2)); }
 			if (!compare(arg1, "integer"))  {
 				char *ep = NULL;
-				(void)strtol(arg2, &ep, 10);
+				(void)strtol(arg2, &ep, 10); /* TODO: Remove dependency on 'strtol' */
 				return pickle_set_result_integer(i, *arg2 && !isspace(*arg2) && !*ep);
 			}
 			/* Missing: double */
@@ -1464,14 +1505,17 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 				return PICKLE_ERROR;
 			if (count < 0)
 				return pickle_set_result_error(i, "'string' repeat count negative: %ld", count);
-			if ((count * length) > (PICKLE_MAX_STRING - 1))
-				return picolSetResultErrorOutOfMemory(i);
+			if (picolStackOrHeapAlloc(i, &h, (count * length) + 1) < 0)
+				return PICKLE_ERROR;
 			for (; j < count; j++) {
-				assert(((j * length) + length) < PICKLE_MAX_STRING);
-				memcpy(&buf[j * length], arg1, length);
+				assert(!USE_MAX_STRING || ((j * length) + length) < PICKLE_MAX_STRING);
+				memcpy(&h.p[j * length], arg1, length);
 			}
-			buf[j * length] = 0;
-			return pickle_set_result_string(i, buf);
+			h.p[j * length] = 0;
+			r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 		if (!compare(rq, "first"))      {
 			const char *found = strstr(arg2, arg1);
@@ -1507,10 +1551,14 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			if (last > length)
 				last = length;
 			const long diff = (last - first) + 1;
-			assert(diff < PICKLE_MAX_STRING);
-			memcpy(buf, &arg1[first], diff);
-			buf[diff] = 0;
-			return pickle_set_result_string(i, buf);
+			if (picolStackOrHeapAlloc(i, &h, diff) < 0)
+				return PICKLE_ERROR;
+			memcpy(h.p, &arg1[first], diff);
+			h.p[diff] = 0;
+			r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) < 0)
+				return PICKLE_ERROR;
+			return r;
 		}
 	}
 	return pickle_set_result_error_arity(i, 3, argc, argv);
