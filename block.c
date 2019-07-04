@@ -34,6 +34,7 @@
 #define STATISTICS  (1) /* Collect statistics on allocations? */
 #define FALLBACK    (0) /* Fallback to malloc/free if we cannot allocate? */
 #define RANDOM_FAIL (0) /* Simulate random failures? (pool allocations only) */
+#define USE_ABORT   (0) /* Call abort() on an error, instead of returning a code */
 #define BITS        (sizeof(bitmap_unit_t)*CHAR_BIT)
 #define MASK        (BITS-1)
 #define MIN(X, Y)   ((X) < (Y) ? (X) : (Y))
@@ -209,12 +210,18 @@ int block_free(block_arena_t *a, void *v) {
 	assert(a);
 	if (!v)
 		return 0;
-	if (!block_arena_valid_pointer(a, v))
-		abort();
+	if (!block_arena_valid_pointer(a, v)) {
+		if (USE_ABORT)
+			abort();
+		return -1;
+	}
 	const intptr_t p = ((char*)v - (char*)a->memory);
 	const size_t bit = p / a->blocksz;
-	if (!bitmap_get(&a->freelist, bit)) /* double free */
-		abort();
+	if (!bitmap_get(&a->freelist, bit)) { /* double free */
+		if (USE_ABORT)
+			abort();
+		return -1;
+	}
 	if (STATISTICS)
 		a->active--;
 	bitmap_clear(&a->freelist, bit);
@@ -352,7 +359,9 @@ int pool_free(pool_t *p, void *v) {
 		free(v);
 		return 0;
 	}
-	abort();
+	if (USE_ABORT)
+		abort();
+	return -1;
 }
 
 size_t pool_block_size(pool_t *p, void *v) {
@@ -360,8 +369,9 @@ size_t pool_block_size(pool_t *p, void *v) {
 	for (size_t i = 0; i < p->count; i++)
 		if (block_arena_valid_pointer(p->arenas[i], v))
 			return p->arenas[i]->blocksz;
-	abort();
-	return 0;
+	if (USE_ABORT)
+		abort();
+	return 0; /*WARNING: Returns zero! Which is kind-of and invalid value... */
 }
 
 static inline bool pool_valid_pointer(pool_t *p, void *v) {
@@ -387,6 +397,7 @@ void *pool_realloc(pool_t *p, void *v, size_t length) {
 			return realloc(v, length);
 	const size_t oldsz = pool_block_size(p, v);
 	const size_t minsz = MIN(oldsz, length);
+	assert(oldsz != 0);
 	if (length > (oldsz/2) && length < oldsz)
 		return v;
 	void *n = pool_malloc(p, length);

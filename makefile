@@ -3,7 +3,7 @@ AR=ar
 ARFLAGS=rcs
 RANLIB=ranlib
 
-.PHONY: all run test wrap clean 
+.PHONY: all run test wrap clean dist
 
 all: pickle
 
@@ -34,3 +34,9 @@ check:
 
 clean:
 	git clean -dfx
+
+SHELL := sh
+date := $(shell date "+%Y%m%d%H%M%S")
+dist:
+	tar zcf ../pickle-${date}.tgz ../pickle
+

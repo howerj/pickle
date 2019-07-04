@@ -114,14 +114,13 @@ This will run the pickle interpreter on a TCL script called
 .SH C API
 
 The C API is small and regular. All of the functions exported return the same
-error codes and implementing an interpreter loop is trivial. The only
-data structure available is a list of strings.
+error codes and implementing an interpreter loop is trivial.
 
 The language can be extended with new functions written in C, each function
 accepts an integer length, and an array of pointers to ASCIIZ strings - much 
-like the 'main' function. 
+like the 'main' function in C.
 
-New, user defined commands can be registered with the 'pickle_register_command' 
+User defined commands can be registered with the 'pickle_register_command' 
 function. With in the user defined callbacks the 'pickle_set_result' family of 
 functions can be used. The callbacks passed to 'pickle_register_command' look
 like this:
@@ -208,6 +207,87 @@ pass a NULL to 'pickle_new' if for the allocator argument if you want to use
 the built in malloc/realloc/free based allocator (provided the library was
 built with support for it).
 
+It may not be obvious from the API how to go about designing functions to
+integrate with the interpreter. The C API is deliberately kept as simple as
+possible, more could be exported but there is a trade-off in doing so; it
+places more of a burden on backwards compatibility, limits the development
+of the library internals and makes the library more difficult to use. It is
+always possible to hack your own personal copy of the library to suite your
+purpose, the library is small enough that this should be possible.
+
+The Pickle interpreter has no way of registering different types with it, the
+string is king. As such, it is not immediately clear what the best way of
+adding functionality that requires manipulating non-string data (such as
+file handles or pointers to binary blobs) is. There are several ways of doing
+this:
+
+.nf
+\& 1. Convert the pointer to a string and add functions which deal with this string.
+\& 2. Put data into the private data field
+\& 3. Create a function which registers another function that contains private data.
+.fi
+
+Option '1' may seem natural, but it is much more error prone. It is possible
+to pass the wrong string around and cause the program to crash. Option '2' is
+limiting, the C portion of the program is entirely in control of what resources
+get added, and only one handle to a resource can be controlled. Option '2' is
+a good option for certain cases.
+
+Option '3' is the most general and allows an arbitrary resource to be managed
+by the interpreter. The idea is to create a function that acquires the resource
+to be managed and registers a new function in the pickle global function 
+namespace with the resource in the private data field of the newly registered
+function. The newly created function, a limited form of a closure, can then
+perform operations on the handle. It can also cleanup the resource by release
+the object in its private data field, and then deleting itself with the
+ 'pickle_rename_command' function. An example of this is the 'fopen' command,
+it returns a closure which contains a file handle.
+
+An example of using the 'fopen' command and the returned function from within
+the pickle interpeter is:
+
+.Xs
+.nf
+\& set fh [fopen file.txt rb]
+\& set line [$fh -gets]
+\& $fh -close
+.fi
+.Xe
+
+And an example of how this might be implemented in C is:
+
+.Xs
+.nf
+\&
+\& int pickleCommandFile(pickle_t *i, int argc, char **argv, void *pd) {
+\& 	FILE *fh = (FILE*)pd;
+\& 	if (!strcmp(argv[1], "-close")) { /* delete self */
+\&		fclose(fh);                                /* free handle */
+\&		return pickle_rename_command(argv[0], ""); /* delete self */
+\&	}
+\&      if (!strcmp(argv[1], "-gets")) {
+\& 		char buf[512];
+\& 		fgets(buf, sizeof buf, fh);
+\&		return pickle_set_result_string(i, buf);
+\& 	}
+\&	return pickle_set_result_error(i, "invalid option");
+\& }
+\&
+\& int pickleCommandFopen(pickle_t *i, int argc, char **argv, void *pd) {
+\& 	char name[64];
+\&	FILE *fh = fopen(argv[1], argv[2]);
+\&	sprintf(name, "%p", fh); /* unique name */
+\& 	pickle_register_command(i, name, pickleCommandFile, fh);
+\& 	return pickle_set_result_string(i, name);
+\& }
+.fi
+.Xe
+
+The code illustrates the point, but lacks the assertions, error checking,
+and functionality of the real 'fopen' command. The 'pickleCommandFopen' should
+be registered with 'pickle_register_command', the 'pickleCommandFile' is not
+as 'pickleCommandFopen' does the registering when needed.
+
 .SH EXIT STATUS
 
 This command returns zero on success and non zero on failure, although any
@@ -231,7 +311,7 @@ limitations. The defaults as of writing this document are:
 \& * Maximum size of file - 2GiB
 .fi
 
-These limitations should be removed in later releases.
+Some of these limitations should be removed in later releases.
 
 .SH BUGS
 For any bugs, contact the author.

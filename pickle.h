@@ -20,15 +20,15 @@ extern "C" {
 #define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
 
 #ifndef PREPACK
-#define PREPACK
+#define PREPACK /* Used to apply attributes to structures (like packing) */
 #endif
 
 #ifndef POSTPACK
-#define POSTPACK
+#define POSTPACK /* Used to apply attributes to structures (like packing) */
 #endif
 
 #ifndef PICKLE_API
-#define PICKLE_API
+#define PICKLE_API /* Used to apply attributes to exported functions */
 #endif
 
 typedef PREPACK struct {
@@ -38,7 +38,7 @@ typedef PREPACK struct {
 	void *arena;  /* arena we are allocating in, if any */
 } POSTPACK pickle_allocator_t; /* optional */
 
-typedef PREPACK struct {
+typedef PREPACK struct { /* TODO: Remove/Hide this if possible. */
 	char *arg;   /* parsed argument */
 	int error,   /* turn error reporting on/off */
 	    index,   /* index into argument list */
@@ -54,7 +54,8 @@ typedef struct pickle_interpreter pickle_t;
 typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
 /* All the following functions return one of the pickle error statuses; PICKLE_OK,
- * PICKLE_ERROR, or one of the other pickle return values */ 
+ * PICKLE_ERROR, or one of the other pickle return values. All arguments are
+ * asserted for not being NULL unless otherwise specified. */ 
 
 enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
@@ -64,7 +65,7 @@ PICKLE_API int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a ==
 PICKLE_API int pickle_delete(pickle_t *i);
 PICKLE_API int pickle_eval(pickle_t *i, const char *t);
 PICKLE_API int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
-PICKLE_API int pickle_rename_command(pickle_t *i, const char *src, const char *dst);
+PICKLE_API int pickle_rename_command(pickle_t *i, const char *src, const char *dst); /* if 'dst' is "" then command is deleted */
 
 PICKLE_API int pickle_set_result(pickle_t *i, const char *fmt, ...);
 PICKLE_API int pickle_set_result_string(pickle_t *i, const char *s);

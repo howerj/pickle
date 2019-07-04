@@ -704,6 +704,8 @@ all of the unit tests and example programs run within that amount).
   * [x] In TCL
 * [ ] Remove internal limitations on string size
 * [ ] Create a framework for adding modules external to this project
+* [ ] Move documentation to a manual page, or generate a man page from
+      this document.
 
 [block.h]: block.h
 [main.c]: main.c
