@@ -59,8 +59,10 @@
  * as they do not modify their arguments. However adding this in just adds
  * a lot of noise to the function definitions. Also see
  * <http://c-faq.com/ansi/constmismatch.html>.
- * TODO: Restructure code into 'precondition' and 'postcondition' tests, along
- * with tests for invariants.
+ * TODO: Add command like 'interp' for manipulating and creating a
+ * new TCL interpreter, it could use a closure to capture the needed
+ * state.
+ * TODO: Remove internal dependency on 'vsnprintf', and on 'snprintf'.
  * TODO: Add debugging functionality for tracing, which will need thinking
  * about...
  * TODO: Add list manipulation functions; 'split', 'append', 'lappend', 'lset',
@@ -80,11 +82,12 @@
 #include <stdint.h>  /* intptr_t */
 #include <limits.h>  /* CHAR_BIT */
 #include <stdarg.h>  /* va_list, va_start, va_end */
-#include <stdio.h>   /* vsnprintf, snprintf. !defined(NDEBUG): puts, printf */
+#include <stdio.h>   /* vsnprintf, snprintf */
 #include <stdlib.h>  /* !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
 #include <string.h>  /* memcpy, memset, memchr, strstr, strncmp, strncat, strlen, strchr */
 
-#define SMALL_RESULT_BUF_SZ       (32)
+#define SMALL_RESULT_BUF_SZ       (96)
+#define PRINT_NUMBER_BUF_SZ       (64 /* base 2 */ + 1 /* '-'/'+' */ + 1 /* NUL */)
 #define VERSION                   (1989)
 #define UNUSED(X)                 ((void)(X))
 #define STRICT_NUMERIC_CONVERSION (1)
@@ -405,6 +408,9 @@ static int picolStackOrHeapFree(pickle_t *i, pickle_stack_or_heap_t *s) {
 /* Adapted from: <https://stackoverflow.com/questions/10404448>
  *
  * TODO:
+ *  - It is possible to store nearly all the state needed in 64-bit
+ *  value, 32-bit if pushing it. Options could be returned via an
+ *  OUT parameter (NULL if no option).
  *  - Perhaps the pickle_t object could be used instead of a custom
  *  object. This would allow us to return much more informative error
  *  messages. Alternatively a wrapper that accepts a 'pickle_t' could
@@ -964,7 +970,7 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	size_t off = 0;
 	char errbuf[PICKLE_MAX_STRING] = { 0 };
 	if (i->line)
-		off = snprintf(errbuf, sizeof(errbuf) / 2, "line %d: ", i->line);
+		off = snprintf(errbuf, sizeof(errbuf) / 2, "line %d: ", i->line); // TODO: Remove need for 'snprintf'
 	assert(off < PICKLE_MAX_STRING);
 	va_list ap;
 	va_start(ap, fmt);
@@ -988,12 +994,34 @@ int pickle_set_result(pickle_t *i, const char *fmt, ...) {
 		pickle_set_result_string(i, buf);
 }
 
+static inline char *reverse(char *s, size_t length);
+
+static int picolLongToString(char buf[static 64/*base 2*/ + 1/*'+'/'-'*/ + 1/*NUL*/], long in, int base) {
+	assert(buf);
+	int negate = 0;
+	size_t i = 0;
+	if (!picolIsBaseValid(base))
+		return PICKLE_ERROR;
+	if (in < 0) {
+		in = -in;
+		negate = 1;
+	}
+	do 
+		buf[i++] = string_digits[in % base];
+	while ((in /= base));
+	if (negate)
+		buf[i++] = '-';
+	buf[i] = 0;
+	reverse(buf, i);
+	return PICKLE_OK;
+}
+
 int pickle_set_result_integer(pickle_t *i, const long result) {
 	assert(i);
 	assert(i->initialized);
-	char buffy[64] = { 0 };
-	const int r = snprintf(buffy, sizeof(buffy), "%ld", result); (void)r;
-	assert(r >= 0 && r <= (int)(sizeof buffy));
+	char buffy/*<3*/[PRINT_NUMBER_BUF_SZ] = { 0 };
+	if (picolLongToString(buffy, result, 10) < 0)
+		return pickle_set_result_error(i, "Invalid Conversion");
 	return pickle_set_result_string(i, buffy);
 }
 
@@ -1001,9 +1029,10 @@ int pickle_set_var_integer(pickle_t *i, const char *name, const long r) {
 	assert(i);
 	assert(i->initialized);
 	assert(name);
-	char v[64] = { 0 };
-	snprintf(v, sizeof v, "%ld", r);
-	return pickle_set_var_string(i, name, v);
+	char buffy[PRINT_NUMBER_BUF_SZ] = { 0 };
+	if (picolLongToString(buffy, r, 10) < 0)
+		return pickle_set_result_error(i, "Invalid Conversion");
+	return pickle_set_var_string(i, name, buffy);
 }
 
 static inline void picolAssertCommandPreConditions(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -1362,7 +1391,7 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 		return pickle_set_result_error_arity(i, 3, argc, argv);
 	int r = PICKLE_OK;
 	const char *rq = argv[1];
-	pickle_stack_or_heap_t h = { 0 };
+	pickle_stack_or_heap_t h = { .p = NULL };
 	if (argc == 3) {
 		const char *arg1 = argv[2];
 		if (!compare(rq, "trimleft"))
@@ -1441,8 +1470,9 @@ static int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd
 			long hx = 0;
 			if (picolConvertLong(i, arg1, &hx) != PICKLE_OK)
 				return PICKLE_ERROR;
-			if (snprintf(h.buf, sizeof h.buf, "%lx", hx) < 1)
-				return pickle_set_result_error(i, "snprintf format error '%%lx'");
+			BUILD_BUG_ON(SMALL_RESULT_BUF_SZ < 66);
+			if (picolLongToString(h.buf, hx, 16) < 0)
+				return pickle_set_result_error(i, "Invalid Conversion");
 			return pickle_set_result_string(i, h.buf);
 		}
 		if (!compare(rq, "hex2dec")) { /* TODO: N-base conversion */
@@ -1740,7 +1770,7 @@ static int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd
 		if (t == PT_STR || t == PT_CMD || t == PT_VAR || t == PT_ESC)
 			count++;
 		if (count > (size_t)index) {
-			char buf[PICKLE_MAX_STRING] = { 0 };
+			char buf[PICKLE_MAX_STRING] = { 0 }; /* TODO: Remove this limitation */
 			const size_t l = p.end - p.start + 1;
 			assert(l < PICKLE_MAX_STRING);
 			return pickle_set_result_string(i, memcpy(buf, p.start, l));

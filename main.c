@@ -62,16 +62,54 @@ static int pickleCommandPuts(pickle_t *i, const int argc, char **argv, void *pd)
 	return PICKLE_OK;
 }
 
+static int get_a_line(FILE *input, char **out) {
+	assert(input);
+	assert(out);
+	char *line = NULL, *p = NULL;
+	size_t linelen = 0;
+	*out = NULL;
+	for (char t[PICKLE_MAX_STRING] = { 0 }; fgets(t, sizeof t, input); memset(t, 0, sizeof t)) {
+		const size_t tlen = strlen(t);
+		linelen += tlen;
+		p = realloc(line, linelen + 1);
+		if (!p) {
+			free(line);
+			return PICKLE_ERROR;
+		}
+		line = p;
+		strcat(line, t);
+		if (!(tlen == (sizeof(t) - 1) && t[sizeof(t) - 2] != '\n'))
+			break;
+	}
+	*out = line;
+	return PICKLE_OK;
+}
+
+static int pickleGetLine(pickle_t *i, FILE *f) {
+	assert(i);
+	assert(f);
+	char *line = NULL;
+	int r = get_a_line(f, &line);
+	if (r < 0) {
+		free(line);
+		return pickle_set_result_error(i, "Out Of Memory");
+	}
+	if (line) {
+		r = pickle_set_result_string(i, line);
+	} else {
+		if (pickle_set_result_string(i, "EOF") < 0)
+			return pickle_set_result_error(i, "Out Of Memory");
+		r = PICKLE_BREAK;
+	}
+	free(line);
+	return r;
+}
+
 static int pickleCommandGets(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	if (argc != 1)
 		return pickle_set_result_error_arity(i, 1, argc, argv);
-	char buf[PICKLE_MAX_STRING] = { 0 }; /* TODO: Remove this limitation: read and realloc, then integrate into slurp? */
-	if (!fgets(buf, sizeof buf, (FILE*)pd)) {
-		pickle_set_result_string(i, "EOF");
-		return PICKLE_ERROR;
-	}
-	return pickle_set_result_string(i, buf);
+	return pickleGetLine(i, (FILE*)pd);
 }
 
 static int pickleCommandError(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -362,7 +400,6 @@ static int pickleCommandSource(pickle_t *i, const int argc, char **argv, void *p
 	return PICKLE_OK;
 }
 
-/* TODO: Remove 'dump' and 'slurp' command now that 'fopen' exists? */
 static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(i);
 	assert(argv);
@@ -405,14 +442,8 @@ static int pickleCommandFile(pickle_t *i, const int argc, char **argv, void *pd)
 		}
 		if (!strcmp("-getc", argv[1]))
 			return pickle_set_result_integer(i, fgetc(f));
-		if (!strcmp("-gets", argv[1])) {
-			char buf[PICKLE_MAX_STRING] = { 0 };
-			if (fgets(buf, sizeof buf, f))
-				return pickle_set_result_string(i, buf);
-			if (ferror(f))
-				return pickle_set_result_error(i, "error");
-			return PICKLE_BREAK;
-		}
+		if (!strcmp("-gets", argv[1]))
+			return pickleGetLine(i, f);
 		if (!strcmp("-rewind", argv[1]))
 			return pickle_set_result_integer(i, fseek(f, 0, SEEK_SET));
 	}
