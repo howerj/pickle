@@ -268,6 +268,40 @@ Given a [TCL][] list, 'join' will flatten that list and return a string by
 inserting a String in-between its elements. For example "join {a b c} ," yields
 "a,b,c".
 
+* for {start} {test} {next} {body}
+
+Implements a for loop.
+
+* rename function-name new-name
+
+Rename a function to a new-name, this will fail if the function does not exist
+or a function by the same name exists for the name we are trying to rename to.
+A special case exists when the new-name is an empty string, the function gets
+deleted.
+
+* llength list
+
+Get the length a list. A TCL list consists of a specially formatted string
+argument, each element of that list is separated by either space or is a string
+or quote. For example the following lists each contain three elements:
+
+	"a b c"
+	"a { b } c"
+	"a \" b \" c"
+
+The list is the basic higher level data structure in Pickle, and as you can
+see, there is nothing special about them. They are just strings treated in a
+special way.
+
+* lindex list index
+
+See 'llength'.
+
+Index into a list, retrieving an element from that list. Indexing starts at
+zero, the first element being the zeroth element.
+
+
+
 #### String Operator
 
 * string option arg *OR* string option arg arg
@@ -412,34 +446,6 @@ to the index of the last character. Indexing starts at zero and goes up to one
 less than the strings length (or zero of empty string), which is the index of 
 the last character. The characters from Index1 to Index2 inclusive form the
 sub-string.
-
-* rename function-name new-name
-
-Rename a function to a new-name, this will fail if the function does not exist
-or a function by the same name exists for the name we are trying to rename to.
-A special case exists when the new-name is an empty string, the function gets
-deleted.
-
-* llength list
-
-Get the length a list. A TCL list consists of a specially formatted string
-argument, each element of that list is separated by either space or is a string
-or quote. For example the following lists each contain three elements:
-
-	"a b c"
-	"a { b } c"
-	"a \" b \" c"
-
-The list is the basic higher level data structure in Pickle, and as you can
-see, there is nothing special about them. They are just strings treated in a
-special way.
-
-* lindex list index
-
-See 'llength'.
-
-Index into a list, retrieving an element from that list. Indexing starts at
-zero, the first element being the zeroth element.
 
 ### Extension Commands
 
@@ -631,6 +637,8 @@ To use this command:
 	                             # to 'start' or 'current' or 'end'
 	$fh                          # Get file position
 	$fh -close                   # Close file, remove command
+	$fh -error                   # Get error status of file
+	$fh -eof                     # Get End Of File status of file
 	$fh -getc                    # Write a character to a file
 	$fh -gets                    # Get a line from a file
 	$fh -rewind                  # Rewind the file stream
@@ -639,6 +647,59 @@ To use this command:
 
 As soon as '-close' is used on the returned function, it is removed and cannot
 be used again. Subsequent uses cause errors.
+
+* frename src dst
+
+This renames a file on disk, from 'src' to 'dst'. A special case exists if
+'dst' is the empty string (which is usually an invalid file name), if 'dst' is
+an empty file then the file is *deleted*.
+
+* stdin
+
+A file handle, as if returned by 'fopen', that reads from the standard input
+steam. This file has been opened for reading.
+
+* stdout
+
+A file handle, as if returned by 'fopen', that reads from the standard output
+steam. This file has been opened for writing.
+
+* stdout
+
+A file handle, as if returned by 'fopen', that reads from the standard error 
+output steam. This file has been opened for writing.
+
+* errno *OR* errno -string *OR* errno -string number *OR* errno -set number
+
+This command can be used to manipulated the 'errno' variable, which may get
+clobbered by the internals of the interpreter.
+
+Calling just 'errno' returns the current error number as a number. With the
+optional '-string' command it returns the string corresponding to the current
+error number. To set the current error number use 'errno -set number'. To get
+the error string corresponding to an arbitrary error number, use 'errno -string
+number'.
+
+* incr variable number?
+
+Increment a variable by 1, or by an optional value. 'incr' returns the
+incremented variable. 'incr' being implemented in C is usually a lot more
+efficient then defining 'incr' in TCL, like so:
+
+	proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
+
+And it is used often in looping constructs, however it is not necessary so is
+not part of the language core.
+
+* gensym
+
+Generate a unique symbol of the form 'gensym.X', where 'X' is a number. 
+This will return an error if it has run out of unique symbols. It should be
+noted that the symbols generated form a completely predictable sequence.
+
+* id arg?
+
+Return the argument.
 
 ## Compile Time Options
 

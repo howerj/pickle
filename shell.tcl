@@ -9,9 +9,8 @@ if {eq [getenv OS] "Windows_NT" } {
 }
 
 proc decode {r} {
-	set r [+ $r 1]
-	set codes "error ok return break continue"
-	lindex $codes $r
+	incr r
+	lindex  {error ok return break continue} $r
 }
 
 set HOME [getenv $HOME]
@@ -36,7 +35,7 @@ proc red    {} { color "\x1b\[31;1m" }
 proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
 
-proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
+# proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
 
 # Hold over from Forth; list defined commands
 # TODO: Not sure if this works correctly and finds all values in the 
@@ -60,13 +59,13 @@ proc words {} {
 proc defined {x} {
 	set i 0
 	set m [info command]
-	set r 0:undefined
+	set r {0 undefined}
 	while {< $i $m} {
-		if {eq $x [info command name $i]} { return 1:command }
+		if {eq $x [info command name $i]} { return {1 command} }
 		incr i
 	}
 	catch {uplevel 1 "set $x"} e
-	if {== 0 $e} { return 2:variable }
+	if {eq 0 $e} { return {2 variable} }
 	return $r
 }
 
@@ -75,7 +74,7 @@ proc help {} { source help.tcl }
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words.
 proc see {w} {
-	if {eq [uplevel 1 "defined $w"] "2:variable"} {
+	if {eq [uplevel 1 "defined {$w}"] {2 variable}} {
 		puts "set $w [uplevel 1 "set $w"]"
 		return
 	}
@@ -100,10 +99,10 @@ proc io {} {
 	upvar #0 prompt p
 	upvar #0 line l
 	puts -nonewline $p
-	set e ""
-	catch {set l [gets]} e
-	if {eq [decode $e] error} {
-		if {== $l EOF} {
+	set e -1
+	set l [catch {gets} e]
+	if {| [eq [decode $e] break] [eq [decode $e] error]} {
+		if {eq $l EOF} {
 			exit 0
 		}
 		exit 1

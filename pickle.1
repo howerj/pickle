@@ -306,12 +306,19 @@ limitations. The defaults as of writing this document are:
 .nf
 \& * Recursion Depth - 128
 \& * Number of arguments to command/function - 128
-\& * Maximum string length - 512 bytes
-\& * Maximum command length (length of line) - 1024 bytes
 \& * Maximum size of file - 2GiB
 .fi
 
 Some of these limitations should be removed in later releases.
+
+Limitations which should have been removed are:
+
+.nf
+\& * Maximum string length - 512 bytes (can be added back in with a compile time option)
+\& * Maximum command length (length of line) - 1024 bytes
+.fi
+
+If these are still present, this is a bug.
 
 .SH BUGS
 For any bugs, contact the author.

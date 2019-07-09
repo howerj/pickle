@@ -14,7 +14,7 @@ Pickle is a tiny TCL language, like the original TCL, it is designed to be
 embedded within other programming environments. It excels as a glue language,
 for processing strings, and as a command language.
 }
-# eval $more
+eval $more
 puts {
 The language itself is compact and easy to understand, but only if you take the
 time to understand the language. If you approach the language as another
@@ -49,6 +49,7 @@ depending on the result evaluates one of two clauses.
 	}
 }
 
+eval $more
 puts {
 We can also declare variables with 'set', setting a variable to a string. We
 can refer to this variable with a '$':
@@ -87,6 +88,7 @@ The command 'gets' is used to retrieve a line of input text:
 	puts "Hello, $name"
 }
 
+eval $more
 puts {
 A list of defined commands in no particular order:
 }
@@ -107,3 +109,4 @@ puts ""
 puts {
 EOF
 }
+unset more

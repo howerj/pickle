@@ -7,6 +7,10 @@
 # framework itself. Instead, those things should be considered tested if
 # the test framework itself runs.
 
+# TODO: Test failure conditions as well, this test bench only tests commands
+# and language features that do not return errors.
+#
+
 proc die {x} { puts $x; exit 1 }
 
 set passed 0
@@ -18,8 +22,7 @@ proc assert {x} {
 	}
 }
 
-proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
-proc decr {x} { upvar 1 $x i; set i [- $i 1] }
+proc decr {x} { uplevel 1 "incr {$x} -1" }
 
 # Set environment variable COLOR to 'on' to turn on color
 set colorize [getenv COLOR]
@@ -271,6 +274,8 @@ test ff {string dec2hex 255}
 test 1000 {string dec2hex 4096}
 test 4096 {string hex2dec 1000}
 test 65535 {string hex2dec FffF}
+test 101 {string dec2base 5 2}
+test 5 {string base2dec 101 2}
 test 0 {string char 48}
 test 1 {string char 49}
 test a {string char 97}
