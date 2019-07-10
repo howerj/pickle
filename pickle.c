@@ -115,6 +115,10 @@
 #define DEBUGGING         (1)
 #endif
 
+#ifndef DEFINE_TESTS
+#define DEFINE_TESTS      (1)
+#endif
+
 #ifndef DEFINE_MATHS
 #define DEFINE_MATHS      (1)
 #endif
@@ -2507,10 +2511,6 @@ int pickle_delete(pickle_t *i) {
 	return r != PICKLE_OK ? r : PICKLE_OK;
 }
 
-#ifdef NDEBUG
-int pickle_tests(void) { return PICKLE_OK; }
-#else
-
 static int test(const char *eval, const char *result, int retcode) {
 	assert(eval);
 	assert(result);
@@ -2753,6 +2753,9 @@ static int picolTestParser(void) { /**@todo The parser needs unit test writing f
 }
 
 int pickle_tests(void) {
+	if (!DEFINE_TESTS) {
+		return PICKLE_OK;
+	}
 	typedef int (*test_func)(void);
 	static const test_func ts[] = {
 		picolTestSmallString,
@@ -2771,4 +2774,3 @@ int pickle_tests(void) {
 	return r != 0 ? PICKLE_ERROR : PICKLE_OK;
 }
 
-#endif
