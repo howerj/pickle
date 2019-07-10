@@ -849,8 +849,7 @@ static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val)
 	assert(val);
 	if (picolIsSmallString(val)) {
 		v->type = PV_SMALL_STRING;
-		memset(v->data.val.small, 0,    sizeof(v->data.val.small));
-		strncat(v->data.val.small, val, sizeof(v->data.val.small) - 1);
+		strcpy(v->data.val.small, val);
 		return PICKLE_OK;
 	}
 	v->type = PV_STRING;
@@ -863,8 +862,7 @@ static inline int picolSetVarName(pickle_t *i, struct pickle_var *v, const char 
 	assert(name);
 	if (picolIsSmallString(name)) {
 		v->smallname = 1;
-		memset(v->name.small, 0,     sizeof(v->name.small));
-		strncat(v->name.small, name, sizeof(v->name.small) - 1);
+		strcpy(v->name.small, name);
 		return PICKLE_OK;
 	}
 	v->smallname = 0;
