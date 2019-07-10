@@ -833,12 +833,14 @@ static void picolFreeVarVal(pickle_t *i, struct pickle_var *v) {
 		picolFree(i, v->data.val.ptr);
 }
 
+/* return: non-zero if and only if val fits in a small string */
 static inline int picolIsSmallString(const char *val) {
 	assert(val);
 	/* Instead of 'memchr' we could use a bit twiddling hack to determine if
 	 * there is a NUL byte in this word. See the following for more info:
 	 * <https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord> */
-	return !!memchr(val, 0, sizeof(char*));
+	const compact_string_t *const cs;
+	return !!memchr(val, 0, sizeof(cs->small));
 }
 
 static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val) {
@@ -847,8 +849,7 @@ static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val)
 	assert(val);
 	if (picolIsSmallString(val)) {
 		v->type = PV_SMALL_STRING;
-		memset(v->data.val.small, 0,    sizeof(v->data.val.small));
-		strncat(v->data.val.small, val, sizeof(v->data.val.small) - 1);
+		strcpy(v->data.val.small, val);
 		return PICKLE_OK;
 	}
 	v->type = PV_STRING;
@@ -861,8 +862,7 @@ static inline int picolSetVarName(pickle_t *i, struct pickle_var *v, const char 
 	assert(name);
 	if (picolIsSmallString(name)) {
 		v->smallname = 1;
-		memset(v->name.small, 0,     sizeof(v->name.small));
-		strncat(v->name.small, name, sizeof(v->name.small) - 1);
+		strcpy(v->name.small, name);
 		return PICKLE_OK;
 	}
 	v->smallname = 0;
