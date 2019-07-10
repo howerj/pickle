@@ -71,6 +71,8 @@ proc defined {x} {
 
 proc help {} { source help.tcl }
 
+proc unknown {l} { system "$l" }
+
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words.
 proc see {w} {

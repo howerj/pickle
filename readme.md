@@ -300,7 +300,24 @@ See 'llength'.
 Index into a list, retrieving an element from that list. Indexing starts at
 zero, the first element being the zeroth element.
 
+* unknown {list}
 
+This command is *not* defined at startup, but can be defined by the user to
+catch command-not-found exceptions.
+
+When the interpreter encounters a command that has not been defined it attempts
+to find the 'unknown' command and execute that. If it is not found, it performs
+its default action, which is to throw an error and return an error string
+indicating the command has not been found. If the 'unknown' command has been
+found then it is executed with the command and its arguments being passed to
+'unknown' as a list.
+
+For example, defining:
+
+	proc unknown {l} { system "$l" }
+
+Would mean any command the interpreter does know know about will be executed by
+the system shell, including its arguments.
 
 #### String Operator
 

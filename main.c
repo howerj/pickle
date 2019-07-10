@@ -582,7 +582,6 @@ static int pickleCommandGensym(pickle_t *i, const int argc, char **argv, void *p
 	return pickle_set_result(i, "gensym.%ld", gensym++);
 }
 
-
 static int pickleCommandIdentity(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 1 && argc != 2)

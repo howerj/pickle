@@ -59,22 +59,22 @@
  * as they do not modify their arguments. However adding this in just adds
  * a lot of noise to the function definitions. Also see
  * <http://c-faq.com/ansi/constmismatch.html>.
- * TODO: String substitute, 'previous result', and other miscellaneous 
- * things.
  * TODO: Add command like 'interp' for manipulating and creating a
  * new TCL interpreter, it could use a closure to capture the needed
- * state. (Optional).
+ * state. (Optional). Other complex data structures (associative arrays,
+ * arrays, ...) could be created and manipulated with closures as well. There
+ * is currently no method for automatically calling a destructor for the
+ * functions, so there will be leaks by this method if the user does
+ * manually cleanup the resource. Perhaps calling the function with 'argc' as
+ * a negative value could be used so a functions destructor is called.
  * TODO: "set {x x} 1; + ${x x} 1;" should work.
  * TODO: Make sure the minimal set of error message strings are used throughout
  * this program. 'strip libpickle.a; strings libpickle.a;' can be used for this.
- * TODO: Instead of 'assert' and 'implies' for 'PICKLE_MAX_STRING' when
- * 'USE_MAX_STRING' is '1', use a custom allocator that checks allocations
- * against 'PICKLE_MAX_STRING'. This should simplify and remove a lot of
- * unneeded checks.
- * TODO: Remove usages of 'strncat'.
+ * TODO: Remove PICKLE_MAX_STRING from the header.
+ * TODO: String substitute
  * TODO: Add list manipulation functions; 'split', 'append', 'lappend', 'lset',
- * 'lsort', 'linsert', 'lsearch', and perhaps 'foreach'. There are only a few other 
- * functions and features that can and should be added, along with these 
+ * 'lsort', 'linsert', 'lsearch', 'list', and perhaps 'foreach'. There are only 
+ * a few other functions and features that can and should be added, along with these 
  * list functions, before the interpreter can be considered complete. Other
  * functions for applying a list to a function as arguments and map/reduce
  * would be useful too. These should be made to be optional. */
@@ -87,7 +87,7 @@
 #include <stdarg.h>  /* va_list, va_start, va_end */
 #include <stdio.h>   /* vsnprintf */
 #include <stdlib.h>  /* !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
-#include <string.h>  /* memcpy, memset, memchr, strstr, strncmp, strncat, strlen, strchr */
+#include <string.h>  /* memcpy, memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr */
 
 #define SMALL_RESULT_BUF_SZ       (96)
 #define PRINT_NUMBER_BUF_SZ       (64 /* base 2 */ + 1 /* '-'/'+' */ + 1 /* NUL */)
@@ -97,6 +97,7 @@
 #define BUILD_BUG_ON(condition)   ((void)sizeof(char[1 - 2*!!(condition)]))
 #define implies(P, Q)             assert(!(P) || (Q)) /* material implication, immaterial if NDEBUG defined */
 #define verify(X)                 do { if (!(X)) { abort(); } } while (0)
+#define member_size(TYPE, MEMBER) (sizeof(((TYPE *)0)->MEMBER)) /* apparently fine */
 #define MIN(X, Y)                 ((X) > (Y) ? (Y) : (X))
 #define MAX(X, Y)                 ((X) > (Y) ? (X) : (Y))
 
@@ -126,9 +127,6 @@
 #define DEFAULT_ALLOCATOR (1)
 #endif
 
-/* TODO: This macro is not really necessary, if PICKLE_MAX_STRING is non-zero
- * then (and we have remove the arbitrary limits in the interpreter) then a
- * non-zero PICKLE_MAX_STRING implies we are using it */
 #ifndef USE_MAX_STRING
 #define USE_MAX_STRING    (0)
 #endif
@@ -173,21 +171,27 @@ PREPACK struct pickle_var { /* strings are stored as either pointers, or as 'sma
 		struct pickle_var *link; /**< link to another variable */
 	} data;
 	struct pickle_var *next; /**< next variable in list of variables */
-	/* NOTE:
+	/* NOTES:
 	 * - On a 32 machine type, two bits could merged into the lowest bits
 	 *   on the 'next' pointer, as these pointers are most likely aligned
 	 *   on a 4 byte boundary, leaving the lowest bits free. However, this
 	 *   would be non-portable. There is nothing to be gained from this,
 	 *   as we have one bit left over.
 	 * - On a 64 bit machine, all three bits could be merged with a
-	 *   pointer, saving space in this structure. */
+	 *   pointer, saving space in this structure. 
+	 * - As we have left over bits, we could use them to mark the
+	 *   variable as being one to trace, with actions for (r)ead,
+	 *   (w)rite, and (u)nset. There are no bits left over in the
+	 *   pickle_command struct however. The function that handled the
+	 *   action would have to be global however as there is no space
+	 *   to store a pointer to a variable specific handler. */
 	unsigned type      : 2; /* type of data; string (pointer/small), or link (NB. Could add number type) */
 	unsigned smallname : 1; /* if true, name is stored as small string */
 } POSTPACK;
 
 PREPACK struct pickle_command {
 	/* If online help in the form of help strings were to be added, we
-	 * could add another field for it here */
+	 * could add another field for it here. */
 	char *name;                  /**< name of function */
 	pickle_command_func_t func;  /**< pointer to function that implements this command */
 	struct pickle_command *next; /**< next command in list (chained hash table) */
@@ -839,8 +843,7 @@ static inline int picolIsSmallString(const char *val) {
 	/* Instead of 'memchr' we could use a bit twiddling hack to determine if
 	 * there is a NUL byte in this word. See the following for more info:
 	 * <https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord> */
-	const compact_string_t *const cs;
-	return !!memchr(val, 0, sizeof(cs->small));
+	return !!memchr(val, 0, member_size(compact_string_t, small));
 }
 
 static int picolSetVarString(pickle_t *i, struct pickle_var *v, const char *val) {
@@ -1007,7 +1010,7 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	char *r = picolVsprintf(i, fmt, ap);
 	va_end(ap);
 	if (r && i->line) {
-		/* Add line number */
+		/* TODO: Add line number */
 	}
 	(void)(r ? picolForceResult(i, r, 0) : pickle_set_result_string(i, "vsnprintf - invalid format/malloc"));
 	return PICKLE_ERROR;
@@ -1137,6 +1140,46 @@ static int picolUnEscape(char *r, size_t length) {
 	return k;
 }
 
+static char *concatenate(pickle_t *i, const char *join, const int argc, char **argv) {
+	assert(i);
+	assert(join);
+	assert(argc >= 0);
+	implies(argc > 0, argv != NULL);
+	if (argc == 0)
+		return picolStrdup(i, "");
+	if (argc > (int)PICKLE_MAX_ARGS)
+		return NULL;
+	const size_t jl = picolStrlen(join);
+	size_t ls[PICKLE_MAX_ARGS], l = 0;
+	for (int j = 0; j < argc; j++) {
+		const size_t sz = picolStrlen(argv[j]);
+		ls[j] = sz;
+		l += sz + jl;
+	}
+	if (USE_MAX_STRING && ((l + 1) >= PICKLE_MAX_STRING))
+		return NULL;
+	pickle_stack_or_heap_t h = { .p = NULL };
+	if (picolStackOrHeapAlloc(i, &h, l) < 0)
+		return NULL;
+	l = 0;
+	for (int j = 0; j < argc; j++) {
+		implies(USE_MAX_STRING, l < PICKLE_MAX_STRING);
+		memcpy(h.p + l, argv[j], ls[j]);
+		l += ls[j];
+		if (jl && (j + 1) < argc) {
+			implies(USE_MAX_STRING, l < PICKLE_MAX_STRING);
+			memcpy(h.p + l, join, jl);
+			l += jl;
+		}
+	}
+	h.p[l] = '\0';
+	if (h.p != h.buf)
+		return h.p;
+	char *str = picolStrdup(i, h.p);
+	picolStackOrHeapFree(i, &h);
+	return str;
+}
+
 static int picolEval(pickle_t *i, const char *t) {
 	assert(i);
 	assert(i->initialized);
@@ -1201,15 +1244,28 @@ static int picolEval(pickle_t *i, const char *t) {
 			picolFree(i, t);
 			prevtype = p.type;
 			if (argc) {
-				if ((c = picolGetCommand(i, argv[0])) == NULL) { // TODO: Document this! And update documentation in general.
-					if ((c = picolGetCommand(i, "unknown")) == NULL) { // TODO: Pass failed command + args as a list (use doJoin, but for lists)
+				if ((c = picolGetCommand(i, argv[0])) == NULL) { 
+					if ((c = picolGetCommand(i, "unknown")) == NULL) {
 						retcode = pickle_set_result_error(i, "No such command '%s'", argv[0]);
 						goto err;
+					} else {
+						/* TODO: Turn 'argv' into a proper TCL list */
+						char *arg2 = concatenate(i, " ", argc, argv);
+						if (!arg2) {
+							retcode = picolSetResultErrorOutOfMemory(i);
+							goto err;
+						}
+						char *nargv[] = { "unknown", arg2 };
+						picolAssertCommandPreConditions(i, 2, nargv, c->privdata);
+						retcode = c->func(i, 2, nargv, c->privdata);
+						picolAssertCommandPostConditions(i, retcode);
+						picolFree(i, arg2);
 					}
+				} else {
+					picolAssertCommandPreConditions(i, argc, argv, c->privdata);
+					retcode = c->func(i, argc, argv, c->privdata);
+					picolAssertCommandPostConditions(i, retcode);
 				}
-				picolAssertCommandPreConditions(i, argc, argv, c->privdata);
-				retcode = c->func(i, argc, argv, c->privdata);
-				picolAssertCommandPostConditions(i, retcode);
 				if (retcode != PICKLE_OK)
 					goto err;
 			}
@@ -1257,46 +1313,6 @@ int pickle_eval(pickle_t *i, const char *t) {
 	i->line = 1;
 	i->ch   = t;
 	return picolEval(i, t);
-}
-
-static char *concatenate(pickle_t *i, const char *join, const int argc, char **argv) {
-	assert(i);
-	assert(join);
-	assert(argc >= 0);
-	implies(argc > 0, argv != NULL);
-	if (argc == 0)
-		return picolStrdup(i, "");
-	if (argc > (int)PICKLE_MAX_ARGS)
-		return NULL;
-	const size_t jl = picolStrlen(join);
-	size_t ls[PICKLE_MAX_ARGS], l = 0;
-	for (int j = 0; j < argc; j++) {
-		const size_t sz = picolStrlen(argv[j]);
-		ls[j] = sz;
-		l += sz + jl;
-	}
-	if (USE_MAX_STRING && ((l + 1) >= PICKLE_MAX_STRING))
-		return NULL;
-	pickle_stack_or_heap_t h = { .p = NULL };
-	if (picolStackOrHeapAlloc(i, &h, l) < 0)
-		return NULL;
-	l = 0;
-	for (int j = 0; j < argc; j++) {
-		implies(USE_MAX_STRING, l < PICKLE_MAX_STRING);
-		memcpy(h.p + l, argv[j], ls[j]);
-		l += ls[j];
-		if (jl && (j + 1) < argc) {
-			implies(USE_MAX_STRING, l < PICKLE_MAX_STRING);
-			memcpy(h.p + l, join, jl);
-			l += jl;
-		}
-	}
-	h.p[l] = '\0';
-	if (h.p != h.buf)
-		return h.p;
-	char *str = picolStrdup(i, h.p);
-	picolStackOrHeapFree(i, &h);
-	return str;
 }
 
 int pickle_set_result_error_arity(pickle_t *i, const int expected, const int argc, char **argv) {
@@ -2290,41 +2306,41 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 	if (argc < 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
 	const char *rq = argv[1];
-	if (!strcmp(rq, "command"))
+	if (!compare(rq, "command"))
 		return picolCommandCommand(i, argc - 1, argv + 1, pd);
-	if (!strcmp(rq, "line"))
+	if (!compare(rq, "line"))
 		return pickle_set_result_integer(i, i->line);
-	if (!strcmp(rq, "level"))
+	if (!compare(rq, "level"))
 		return pickle_set_result_integer(i, i->level);
-	if (!strcmp(rq, "width"))
+	if (!compare(rq, "width"))
 		return pickle_set_result_integer(i, CHAR_BIT * sizeof(char*));
 	if (argc < 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
-	if (!strcmp(rq, "limits")) {
+	if (!compare(rq, "limits")) {
 		rq = argv[2];
-		if (!strcmp(rq, "recursion"))
+		if (!compare(rq, "recursion"))
 			return pickle_set_result_integer(i, PICKLE_MAX_RECURSION);
-		if (!strcmp(rq, "string"))
+		if (!compare(rq, "string"))
 			return pickle_set_result_integer(i, PICKLE_MAX_STRING);
-		if (!strcmp(rq, "arguments"))
+		if (!compare(rq, "arguments"))
 			return pickle_set_result_integer(i, PICKLE_MAX_ARGS);
-		if (!strcmp(rq, "minimum"))
+		if (!compare(rq, "minimum"))
 			return pickle_set_result_integer(i, LONG_MIN);
-		if (!strcmp(rq, "maximum"))
+		if (!compare(rq, "maximum"))
 			return pickle_set_result_integer(i, LONG_MAX);
 	}
-	if (!strcmp(rq, "features")) {
-		if (!strcmp(rq, "allocator"))
+	if (!compare(rq, "features")) {
+		if (!compare(rq, "allocator"))
 			return pickle_set_result_integer(i, DEFAULT_ALLOCATOR);
-		if (!strcmp(rq, "string"))
+		if (!compare(rq, "string"))
 			return pickle_set_result_integer(i, DEFINE_STRING);
-		if (!strcmp(rq, "maths"))
+		if (!compare(rq, "maths"))
 			return pickle_set_result_integer(i, DEFINE_MATHS);
-		if (!strcmp(rq, "debugging"))
+		if (!compare(rq, "debugging"))
 			return pickle_set_result_integer(i, DEBUGGING);
-		if (!strcmp(rq, "strict"))
+		if (!compare(rq, "strict"))
 			return pickle_set_result_integer(i, STRICT_NUMERIC_CONVERSION);
-		if (!strcmp(rq, "string-length"))
+		if (!compare(rq, "string-length"))
 			return pickle_set_result_integer(i, USE_MAX_STRING ? PICKLE_MAX_STRING : -1);
 	}
 	return pickle_set_result_error(i, "Unknown info request '%s'", rq);
