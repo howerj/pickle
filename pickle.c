@@ -138,6 +138,9 @@ typedef PREPACK struct {
 	int len;             /**< remaining length */
 	int type;            /**< token type, PT_... */
 	int insidequote;     /**< true if inside " " */
+	unsigned nocommand :1,
+		 noescape  :1,
+		 novars    :1;
 } POSTPACK pickle_parser_t ; /**< Parsing structure */
 
 typedef PREPACK struct {
@@ -548,7 +551,7 @@ static int advance(pickle_parser_t *p) {
 	return PICKLE_OK;
 }
 
-static inline void picolParserInitialize(pickle_parser_t *p, const char *text, int *line, const char **ch) {
+static inline void picolParserInitialize(pickle_parser_t *p, const char *text, int *line, const char **ch, unsigned parspec) {
 	assert(p);
 	assert(text);
 	memset(p, 0, sizeof *p);
@@ -558,6 +561,9 @@ static inline void picolParserInitialize(pickle_parser_t *p, const char *text, i
 	p->type = PT_EOL;
 	p->line = line;
 	p->ch   = ch;
+	p->nocommand = !!(parspec & 1u);
+	p->novars    = !!(parspec & 2u);
+	p->noescape  = !!(parspec & 4u);
 }
 
 static inline int picolIsSpaceChar(const int ch) {
@@ -681,11 +687,21 @@ static int picolParseString(pickle_parser_t *p) {
 	for (;p->len;) {
 		switch (*p->p) {
 		case '\\':
+			if (p->noescape)
+				break;
 			if (p->len >= 2)
 				if (advance(p) != PICKLE_OK)
 					return PICKLE_ERROR;
 			break;
-		case '$': case '[':
+		case '$': 
+			if (p->novars)
+				break;
+			p->end  = p->p - 1;
+			p->type = PT_ESC;
+			return PICKLE_OK;
+		case '[':
+			if (p->nocommand)
+				break;
 			p->end  = p->p - 1;
 			p->type = PT_ESC;
 			return PICKLE_OK;
@@ -733,10 +749,13 @@ static int picolGetToken(pickle_parser_t *p) {
 			if (p->insidequote)
 				return picolParseString(p);
 			return picolParseEol(p);
-		case '[':
-			return picolParseCommand(p);
+		case '[': {
+			return p->nocommand ? picolParsepicolParseCommand(p);
+			p->type = p->nocommand ? PT_STR : p->type;
+			return r;
+		}
 		case '$':
-			return picolParseVar(p);
+			return p->novars ? picolParseString(p) : picolParseVar(p);
 		case '#':
 			if (p->type == PT_EOL) {
 				if (picolParseComment(p) != PICKLE_OK)
@@ -1174,7 +1193,7 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 	return str;
 }
 
-static int picolEval(pickle_t *i, const char *t) {
+static int picolEvalAndSubst(pickle_t *i, const char *t, unsigned parspec) {
 	assert(i);
 	assert(i->initialized);
 	assert(t);
@@ -1183,9 +1202,9 @@ static int picolEval(pickle_t *i, const char *t) {
 	char **argv = NULL;
 	if (picolSetResultEmpty(i) != PICKLE_OK)
 		return PICKLE_ERROR;
-	picolParserInitialize(&p, t, &i->line, &i->ch);
+	picolParserInitialize(&p, t, &i->line, &i->ch, parspec);
 	int prevtype = p.type;
-	for (;;) { /*TODO: separate out the code so it can be reused in a 'subst' command */
+	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
 			return pickle_set_result_error(i, "Invalid parse");
 		if (p.type == PT_EOF)
@@ -1213,7 +1232,7 @@ static int picolEval(pickle_t *i, const char *t) {
 				goto err;
 			}
 		} else if (p.type == PT_CMD) {
-			retcode = picolEval(i, t);
+			retcode = picolEvalAndSubst(i, t, 0); // NB!
 			picolFree(i, t);
 			if (retcode != PICKLE_OK)
 				goto err;
@@ -1268,7 +1287,16 @@ static int picolEval(pickle_t *i, const char *t) {
 			argv = NULL;
 			argc = 0;
 			continue;
-		}
+		} /*else if (p.type == PT_EOL) {
+			char *result = concatenate(i, " ", argc, argv);
+			if (!result) {
+				retcode = picolSetResultErrorOutOfMemory(i);
+				goto err;
+			}
+			if ((retcode = pickle_set_result_string(i, result)) != PICKLE_OK)
+				goto err;
+			continue;
+		}*/
 		
 		if (prevtype == PT_SEP || prevtype == PT_EOL) { /* New token, append to the previous or as new arg? */
 			char **old = argv;
@@ -1298,6 +1326,12 @@ static int picolEval(pickle_t *i, const char *t) {
 err:
 	picolFreeArgList(i, argc, argv);
 	return retcode;
+}
+
+static int picolEval(pickle_t *i, const char *t) {
+	assert(i);
+	assert(t);
+	return picolEvalAndSubst(i, t, 0);
 }
 
 int pickle_eval(pickle_t *i, const char *t) {
@@ -1820,7 +1854,7 @@ static int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd
 	long index = 0;
 	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
 		return PICKLE_ERROR;
-	picolParserInitialize(&p, parse, NULL, NULL);
+	picolParserInitialize(&p, parse, NULL, NULL, 0);
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
 			return pickle_set_result_error(i, "Invalid parse");
@@ -1851,7 +1885,7 @@ static int picolCommandLLength(pickle_t *i, const int argc, char **argv, void *p
 		return pickle_set_result_error_arity(i, 2, argc, argv);
 	const char *parse = trimleft(string_white_space, argv[1]);
 	pickle_parser_t p = { NULL };
-	picolParserInitialize(&p, parse, NULL, NULL);
+	picolParserInitialize(&p, parse, NULL, NULL, 0);
 	size_t count = 0;
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
@@ -2069,7 +2103,7 @@ static int picolCommandJoin(pickle_t *i, const int argc, char **argv, void *pd) 
 	size_t count = 0;
 	char *arguments[PICKLE_MAX_ARGS] = { 0 };
 	pickle_parser_t p = { NULL };
-	picolParserInitialize(&p, parse, NULL, NULL);
+	picolParserInitialize(&p, parse, NULL, NULL, 0);
 	for (;;) {
 		if (picolGetToken(&p) == PICKLE_ERROR) {
 			r = pickle_set_result_error(i, "parser error");
@@ -2120,6 +2154,32 @@ static int picolCommandEval(pickle_t *i, const int argc, char **argv, void *pd) 
 		picolFree(i, e);
 	}
 	return r;
+}
+
+static int picolCommandSubst(pickle_t *i, int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	unsigned parspec = 0;
+again:
+	if (argc < 2 || argc > 5)
+		return pickle_set_result_error_arity(i, 2, argc, argv);
+	if (!strcmp(argv[1], "-nobackslashes")) {
+		argc--, argv++;
+		parspec |= 4u;
+		goto again;
+	}
+	if (!strcmp(argv[1], "-novariables")) {
+		argc--, argv++;
+		parspec |= 2u;
+		goto again;
+	}
+	if (!strcmp(argv[1], "-nocommands")) {
+		argc--, argv++;
+		parspec |= 1u;
+		goto again;
+	}
+	if (argc != 2)
+		return pickle_set_result_error_arity(i, 2, argc, argv);
+	return picolEvalAndSubst(i, argv[1], parspec);
 }
 
 static int picolSetLevel(pickle_t *i, const char *levelStr) {
@@ -2351,6 +2411,7 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "concat",    picolCommandConcat,    NULL },
 		{ "continue",  picolCommandRetCodes,  (char*)PICKLE_CONTINUE },
 		{ "eval",      picolCommandEval,      NULL },
+		{ "subst",     picolCommandSubst,     NULL },
 		{ "if",        picolCommandIf,        NULL },
 		{ "info",      picolCommandInfo,      NULL },
 		{ "join",      picolCommandJoin,      NULL },
@@ -2731,7 +2792,7 @@ static inline int picolTestParser(void) { /**@todo The parser needs unit test wr
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
 		const char *ch = NULL;
 		int line = 1;
-		picolParserInitialize(&p, ts[i].text, &line, &ch);
+		picolParserInitialize(&p, ts[i].text, &line, &ch, 0);
 		do {
 			if (picolGetToken(&p) == PICKLE_ERROR)
 				break;
