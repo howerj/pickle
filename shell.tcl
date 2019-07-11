@@ -35,22 +35,14 @@ proc red    {} { color "\x1b\[31;1m" }
 proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
 
-# proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
-
 # Hold over from Forth; list defined commands
-# TODO: Not sure if this works correctly and finds all values in the 
-# dictionary. This function needs checking.
 proc words {} {
-	set i 0
-	set m [info command]
-	set l 0
-	while {< $i $m} {
+	for {set i 0; set l 0; set m [info command]} {< $i $m} {incr i} {
 		set n [info command name $i]
 		set l [+ $l [string length $n]]
 		set c " "
 		if {> $l 80} { set c "\n"; set l 0 }
 		puts -nonewline "$n$c"
-		incr i
 	}
 	puts ""
 }

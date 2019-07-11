@@ -109,7 +109,7 @@ static int pickleGetLine(pickle_t *i, FILE *f) {
 	if (line) {
 		r = pickle_set_result_string(i, line);
 	} else {
-		if (pickle_set_result_string(i, "EOF") < 0)
+		if (pickle_set_result_string(i, "EOF") != PICKLE_OK)
 			return pickle_set_result_error(i, "Out Of Memory");
 		r = PICKLE_BREAK;
 	}
@@ -117,8 +117,6 @@ static int pickleGetLine(pickle_t *i, FILE *f) {
 	return r;
 }
 
-/* TODO: Remove Gets and Puts, and use pickleCommandFile? Both 'slurp' and 'dump'
- * are not really needed either. */
 static int pickleCommandGets(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	if (argc != 1)
@@ -452,7 +450,7 @@ static int pickleCommandFile(pickle_t *i, const int argc, char **argv, void *pd)
 		if (!strcmp("-flush", argv[1]))
 			return pickle_set_result_integer(i, fflush(f));
 		if (!strcmp("-close", argv[1])) {
-			if (pickle_rename_command(i, name, "") < 0)
+			if (pickle_rename_command(i, name, "") != PICKLE_OK)
 				return pickle_set_result_error(i, "unable to remove command: %s", name);
 			return pickle_set_result_integer(i, fclose(f));
 		}
@@ -564,10 +562,10 @@ static int pickleCommandIncr(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
 	if (argc == 3)
 		incr = atol(argv[2]);
-	if (pickle_get_var_integer(i, argv[1], &n) < 0)
+	if (pickle_get_var_integer(i, argv[1], &n) != PICKLE_OK)
 		return pickle_set_result_error(i, "Unknown variable: %s", argv[1]);
 	n += incr;
-	if (pickle_set_var_integer(i, argv[1], n) < 0)
+	if (pickle_set_var_integer(i, argv[1], n) != PICKLE_OK)
 		return pickle_set_result_error(i, "Unable to set variable: %s", argv[1]);
 	return pickle_set_result_integer(i, n);
 }
