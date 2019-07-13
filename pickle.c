@@ -1025,6 +1025,10 @@ int pickle_set_result(pickle_t *i, const char *fmt, ...) {
 	return picolForceResult(i, r, 0);
 }
 
+int pickle_set_result_empty(pickle_t *i) {
+	return picolSetResultEmpty(i);
+}
+
 int pickle_set_result_integer(pickle_t *i, const long result) {
 	assert(i);
 	assert(i->initialized);
