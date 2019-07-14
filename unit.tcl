@@ -298,6 +298,7 @@ test { b } {lindex "a { b } c" 1}
 test a {lindex "a { b } c" 0}
 test c {lindex "a { b } c" 2}
 test "" {lindex "a { b } c" 3}
+test {hello world} {set tv1 hello; subst {$tv1 world}; unset tv1}
 test {$x} {subst -novariables {$x}}
 test {$x 3} {subst -novariables {$x [+ 2 1]}}
 test {a 3} {subst {a [+ 2 1]}}

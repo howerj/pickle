@@ -129,11 +129,11 @@
 enum { PT_ESC, PT_STR, PT_CMD, PT_VAR, PT_SEP, PT_EOL, PT_EOF };
 
 typedef struct { 
-	unsigned nocommands :1, 
-		 noescape :1, 
-		 novars :1, 
-		 noeval: 1;  
-} pickle_parser_opts_t;
+	unsigned nocommands :1, /*< turn off commands */
+		 noescape   :1, /*< turn off escape sequences */
+		 novars     :1, /*< turn off variables */
+		 noeval     :1; /*< turn off command evaluation */
+} pickle_parser_opts_t; /*< options for parser/evaluator */
 
 typedef PREPACK struct {
 	const char *text;    /**< the program */
