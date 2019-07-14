@@ -49,8 +49,8 @@ PICKLE_API int pickle_set_result_integer(pickle_t *i, long result);
 PICKLE_API int pickle_get_result_string(pickle_t *i, const char **s);
 PICKLE_API int pickle_get_result_integer(pickle_t *i, long *val);
 
-PICKLE_API int pickle_set_result_error(pickle_t *i, const char *fmt, ...);
-PICKLE_API int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, char **argv);
+PICKLE_API int pickle_set_result_error(pickle_t *i, const char *fmt, ...); /* returns PICKLE_ERROR */
+PICKLE_API int pickle_set_result_error_arity(pickle_t *i, int expected, int argc, char **argv); /* returns PICKLE_ERROR */
 
 PICKLE_API int pickle_set_var_string(pickle_t *i, const char *name, const char *val);
 PICKLE_API int pickle_set_var_integer(pickle_t *i, const char *name, long r);
