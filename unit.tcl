@@ -298,6 +298,10 @@ test { b } {lindex "a { b } c" 1}
 test a {lindex "a { b } c" 0}
 test c {lindex "a { b } c" 2}
 test "" {lindex "a { b } c" 3}
+test {$x} {subst -novariables {$x}}
+test {$x 3} {subst -novariables {$x [+ 2 1]}}
+test {a 3} {subst {a [+ 2 1]}}
+test {a [+ 2 1]} {subst -nocommands {a [+ 2 1]}}
 
 # Test upvar links
 set u 5
