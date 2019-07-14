@@ -486,8 +486,9 @@ static int picolSetResultErrorOutOfMemory(pickle_t *i) { /* does not allocate */
 	return PICKLE_ERROR;
 }
 
-static int picolSetResultEmpty(pickle_t *i) {
+int pickle_set_result_empty(pickle_t *i) {
 	assert(i);
+	assert(i->initialized);
 	return picolForceResult(i, string_empty, 1);
 }
 
@@ -1051,10 +1052,6 @@ int pickle_set_result(pickle_t *i, const char *fmt, ...) {
 	return picolForceResult(i, r, 0);
 }
 
-int pickle_set_result_empty(pickle_t *i) {
-	return picolSetResultEmpty(i);
-}
-
 int pickle_set_result_integer(pickle_t *i, const long result) {
 	assert(i);
 	assert(i->initialized);
@@ -1238,7 +1235,7 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *t
 	pickle_parser_t p = { NULL };
 	int retcode = PICKLE_OK, argc = 0;
 	char **argv = NULL;
-	if (picolSetResultEmpty(i) != PICKLE_OK)
+	if (pickle_set_result_empty(i) != PICKLE_OK)
 		return PICKLE_ERROR;
 	picolParserInitialize(&p, o, t, &i->line, &i->ch);
 	int prevtype = p.type;
@@ -1675,7 +1672,7 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			if (picolConvertLong(i, arg3, &start) != PICKLE_OK)
 				return PICKLE_ERROR;
 			if (start < 0 || start >= length)
-				return picolSetResultEmpty(i);
+				return pickle_set_result_empty(i);
 			const char *found = strstr(arg2 + start, arg1);
 			if (!found)
 				return pickle_set_result_integer(i, -1);
@@ -1689,7 +1686,7 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			if (picolConvertLong(i, arg3, &last) != PICKLE_OK)
 				return PICKLE_ERROR;
 			if (first > last)
-				return picolSetResultEmpty(i);
+				return pickle_set_result_empty(i);
 			if (first < 0)
 				first = 0;
 			if (last > length)
@@ -1892,7 +1889,7 @@ static int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd
 			return r;
 		}
 	}
-	return picolSetResultEmpty(i);
+	return pickle_set_result_empty(i);
 }
 
 static int picolCommandLLength(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2083,7 +2080,7 @@ static int picolCommandReturn(pickle_t *i, const int argc, char **argv, void *pd
 		if (picolConvertLong(i, argv[2], &retcode) != PICKLE_OK)
 			return PICKLE_ERROR;
 	if (argc == 1)
-		return picolSetResultEmpty(i) != PICKLE_OK ? PICKLE_ERROR : PICKLE_RETURN;
+		return pickle_set_result_empty(i) != PICKLE_OK ? PICKLE_ERROR : PICKLE_RETURN;
 	if (pickle_set_result_string(i, argv[1]) != PICKLE_OK)
 		return PICKLE_ERROR;
 	return retcode;
