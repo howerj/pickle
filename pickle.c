@@ -619,11 +619,12 @@ static inline int picolParseCommand(pickle_parser_t *p) {
 		if (advance(p) != PICKLE_OK)
 			return PICKLE_ERROR;
 	}
+	if (*p->p != ']')
+		return PICKLE_ERROR;
 	p->end  = p->p - 1;
 	p->type = PT_CMD;
-	if (*p->p == ']')
-		if (advance(p) != PICKLE_OK)
-			return PICKLE_ERROR;
+	if (advance(p) != PICKLE_OK)
+		return PICKLE_ERROR;
 	return PICKLE_OK;
 }
 
@@ -755,7 +756,11 @@ static int picolGetToken(pickle_parser_t *p) {
 			return picolParseEol(p);
 		case '[': {
 			const int r = picolParseCommand(p);
-			p->type = p->o.nocommands ? PT_STR : p->type;
+			if (r == PICKLE_OK && p->o.nocommands && p->type == PT_CMD) {
+				p->start--, p->end++;
+				p->type = PT_STR;
+				assert(*p->start == '[' && *p->end == ']');
+			}
 			return r;
 		}
 		case '$':
