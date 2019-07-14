@@ -783,22 +783,20 @@ int pickle_set_result_string(pickle_t *i, const char *s) {
 	assert(i->result);
 	assert(i->initialized);
 	assert(s);
+	int is_static = 1;
+	char *r = i->result_buf;
 	const size_t sl = picolStrlen(s) + 1;
-	if (sl <= sizeof(i->result_buf)) {
-		memcpy(i->result_buf, s, sl);
-		i->static_result = 1;
-		i->result = i->result_buf;
-		return PICKLE_OK;
+	if (sizeof(i->result_buf) < sl) {
+		is_static = 0;
+		r = picolMalloc(i, sl);
+		if (!r)
+			return picolSetResultErrorOutOfMemory(i);
 	}
-	char *r = picolMalloc(i, sl);
-	if (r) {
-		memcpy(r, s, sl);
-		picolFreeResult(i);
-		i->static_result = 0;
-		i->result = r;
-		return PICKLE_OK;
-	}
-	return picolSetResultErrorOutOfMemory(i);
+	memcpy(r, s, sl);
+	picolFreeResult(i);
+	i->static_result = is_static;
+	i->result = r;
+	return PICKLE_OK;
 }
 
 int pickle_get_result_string(pickle_t *i, const char **s) {
