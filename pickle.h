@@ -42,6 +42,7 @@ PICKLE_API int pickle_eval(pickle_t *i, const char *t);
 PICKLE_API int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 PICKLE_API int pickle_rename_command(pickle_t *i, const char *src, const char *dst); /* if 'dst' is "" then command is deleted */
 
+PICKLE_API int pickle_set_result_empty(pickle_t *i);
 PICKLE_API int pickle_set_result(pickle_t *i, const char *fmt, ...);
 PICKLE_API int pickle_set_result_string(pickle_t *i, const char *s);
 PICKLE_API int pickle_set_result_integer(pickle_t *i, long result);

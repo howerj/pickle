@@ -69,7 +69,7 @@ static int pickleCommandPuts(pickle_t *i, const int argc, char **argv, void *pd)
 	const int r2 = fflush((FILE*)pd);
 	if (r1 < 0 || r2 < 0)
 		return pickle_set_result_error(i, "I/O error: %d/%d", r1, r2);
-	return PICKLE_OK;
+	return pickle_set_result_empty(i);
 }
 
 static int get_a_line(FILE *input, char **out) {
