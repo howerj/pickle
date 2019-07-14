@@ -43,9 +43,9 @@ static int use_custom_allocator = 0;
 static pickle_t *interp = NULL;
 static int signal_variable = 0;
 
-void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, length); }
-int   custom_free(void *a, void *v)                    { return pool_free(a, v); }
-void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v, length); }
+static void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, length); }
+static int   custom_free(void *a, void *v)                   { return pool_free(a, v); }
+static void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v, length); }
 
 static pickle_allocator_t block_allocator = {
 	.free    = custom_free,
