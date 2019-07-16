@@ -36,6 +36,8 @@ proc red    {} { color "\x1b\[31;1m" }
 proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
 
+# BUG: If the unit test sets the value of 'x' then it can mess
+# up printing the error.
 proc test {result x} {
 	set r [eval $x]
 	upvar #0 total t
@@ -45,7 +47,7 @@ proc test {result x} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
 	} else {
-		set f "[red]FAIL[normal]: (expected \"$result\") "
+		set f "[red]FAIL[normal]:  (expected \"$result\") "
 	}
 	puts "$f{$x} = \"$r\""
 	unset t
@@ -303,6 +305,9 @@ test {$x} {subst -novariables {$x}}
 test {$x 3} {subst -novariables {$x [+ 2 1]}}
 test {a 3} {subst {a [+ 2 1]}}
 test {a [+ 2 1]} {subst -nocommands {a [+ 2 1]}}
+test {a hello c} {set z "a b c"; lset z 1 hello}
+# Failing at the moment, extra space
+# test {a c} {set z "a b c";   lset z 1 ""}
 
 # Test upvar links
 set u 5

@@ -15,7 +15,6 @@ extern "C" {
 
 #include <stddef.h>
 
-#define PICKLE_MAX_STRING    (512) /* Max string/Data structure size */
 #define PICKLE_MAX_RECURSION (128) /* Recursion limit */
 #define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
 

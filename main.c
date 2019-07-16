@@ -78,7 +78,7 @@ static int get_a_line(FILE *input, char **out) {
 	char *line = NULL, *p = NULL;
 	size_t linelen = 0;
 	*out = NULL;
-	for (char t[PICKLE_MAX_STRING] = { 0 }; fgets(t, sizeof t, input); memset(t, 0, sizeof t)) {
+	for (char t[LINE_SZ] = { 0 }; fgets(t, sizeof t, input); memset(t, 0, sizeof t)) {
 		const size_t tlen = strlen(t);
 		linelen += tlen;
 		p = realloc(line, linelen + 1);
@@ -86,7 +86,7 @@ static int get_a_line(FILE *input, char **out) {
 			free(line);
 			return PICKLE_ERROR;
 		}
-		if (linelen <= PICKLE_MAX_STRING)
+		if (linelen <= LINE_SZ)
 			memset(p, 0, linelen + 1);
 		line = p;
 		strcat(line, t);
@@ -184,7 +184,7 @@ static int pickleCommandClock(pickle_t *i, const int argc, char **argv, void *pd
 	}
 	if (argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
-	char buf[PICKLE_MAX_STRING] = { 0 };
+	char buf[LINE_SZ] = { 0 };
 	time_t rawtime;
 	time(&rawtime);
 	struct tm *timeinfo = gmtime(&rawtime);
@@ -496,7 +496,7 @@ static int pickleCommandFOpen(pickle_t *i, const int argc, char **argv, void *pd
 	if (argc != 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
 	errno = 0;
-	char buf[PICKLE_MAX_STRING] = { 0 };
+	char buf[LINE_SZ] = { 0 };
 	FILE *handle = fopen(argv[1], argv[2]);
 	if (!handle)
 		return pickle_set_result_error(i, "unable to open %s (mode = %s): %s", argv[1], argv[2], strerror(errno));

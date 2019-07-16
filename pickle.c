@@ -61,7 +61,9 @@
  * <http://c-faq.com/ansi/constmismatch.html>.
  * TODO: Make sure the minimal set of error message strings are used throughout
  * this program. 'strip libpickle.a; strings libpickle.a;' can be used for this.
- * TODO: Remove PICKLE_MAX_STRING from the header.
+ * TODO: Assert that the correct 'PICKLE_*' is returned for API functions,
+ * other API pre-and-post conditions to check for; presence of call-stack,
+ * length is greater than zero, ...
  * TODO: String substitute, perhaps a 'tr' or 'sed' function would be useful as well.
  * TODO: Add list manipulation functions; 'split', 'append', 'lappend', 'lset',
  * 'lsort', 'linsert', 'lsearch', 'list', and perhaps 'foreach'. There are only 
@@ -78,7 +80,7 @@
 #include <stdarg.h>  /* va_list, va_start, va_end */
 #include <stdio.h>   /* vsnprintf */
 #include <stdlib.h>  /* !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
-#include <string.h>  /* memcpy, memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr */
+#include <string.h>  /* memcpy, memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr, strpbrk */
 
 #define SMALL_RESULT_BUF_SZ       (96)
 #define PRINT_NUMBER_BUF_SZ       (64 /* base 2 */ + 1 /* '-'/'+' */ + 1 /* NUL */)
@@ -118,12 +120,20 @@
 #define DEFINE_STRING     (1)
 #endif
 
+#ifndef DEFINE_LIST
+#define DEFINE_LIST       (1)
+#endif
+
 #ifndef DEFAULT_ALLOCATOR
 #define DEFAULT_ALLOCATOR (1)
 #endif
 
 #ifndef USE_MAX_STRING
 #define USE_MAX_STRING    (0)
+#endif
+
+#ifndef PICKLE_MAX_STRING
+#define PICKLE_MAX_STRING (512) /* Max string/Data structure size, if USE_MAX_STRING != 0 */
 #endif
 
 enum { PT_ESC, PT_STR, PT_CMD, PT_VAR, PT_SEP, PT_EOL, PT_EOF };
@@ -1857,25 +1867,26 @@ static int picolCommandFor(pickle_t *i, const int argc, char **argv, void *pd) {
 	}
 }
 
-static int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd) {
+static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
 	if (argc != 3)
-		return pickle_set_result_error_arity(i, 2, argc, argv);
+		return pickle_set_result_error_arity(i, 3, argc, argv);
+	pickle_parser_opts_t o = { 1, 1, 1, 1 };
 	pickle_parser_t p = { NULL };
 	const char *parse = argv[1];
        	size_t count = 0; 
 	long index = 0;
 	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
 		return PICKLE_ERROR;
-	picolParserInitialize(&p, NULL, parse, NULL, NULL); /** TODO: Refactor */
+	picolParserInitialize(&p, &o, parse, NULL, NULL);
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
 			return pickle_set_result_error(i, "Invalid parse");
 		const int t = p.type;
 		if (t == PT_EOF)
 			break;
-		if (t == PT_STR || t == PT_CMD || t == PT_VAR || t == PT_ESC)
+		if (t == PT_STR || t == PT_ESC)
 			count++;
 		if (count > (size_t)index) {
 			pickle_stack_or_heap_t h = { .p = NULL };
@@ -1892,14 +1903,72 @@ static int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd
 	return pickle_set_result_empty(i);
 }
 
-static int picolCommandLLength(pickle_t *i, const int argc, char **argv, void *pd) {
+static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc == 3)
+		return picolCommandSet(i, argc, argv, pd);
+	if (argc != 4)
+		return pickle_set_result_error_arity(i, 4, argc, argv);
+	struct pickle_var *v = picolGetVar(i, argv[1], 1);
+	if (!v)
+		return pickle_set_result_error(i, "Invalid variable %s", argv[1]);
+	const char *parse = picolGetVarVal(v);
+	const char *newval = argv[3];
+	const int escape = !!strpbrk(newval, string_white_space); /* TODO: Escape if it an has errant '{'/'}' */
+	pickle_parser_opts_t o = { 1, 1, 1, 1 };
+	pickle_parser_t p = { NULL };
+       	size_t count = 0; 
+	long index = 0;
+	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
+		return PICKLE_ERROR;
+	picolParserInitialize(&p, &o, parse, NULL, NULL);
+	for (;;) {
+		if (picolGetToken(&p) != PICKLE_OK)
+			return pickle_set_result_error(i, "Invalid parse");
+		const int t = p.type;
+		if (t == PT_EOF)
+			break;
+		if (t == PT_STR || t == PT_ESC)
+			count++;
+		if (count > (size_t)index) {
+			pickle_stack_or_heap_t h = { .p = NULL };
+			const size_t left   = p.start - parse;
+			const size_t centre = picolStrlen(newval);
+			const size_t right  = p.len;
+			const size_t nsl    = left + centre + right + (2 * escape) + 1;
+			implies(USE_MAX_STRING, nsl <= PICKLE_MAX_STRING);
+			if (picolStackOrHeapAlloc(i, &h, nsl) != PICKLE_OK)
+				return PICKLE_ERROR;
+			memcpy(h.p,                                parse,     left);
+			memcpy(h.p + left + escape,                newval,    centre);
+			memcpy(h.p + left + centre + (2 * escape), p.end + 1, right + 1);
+			if (escape) {
+				h.p[left]              = '{';
+				h.p[left + centre + 1] = '}';
+			}
+			if (picolSetVarString(i, v, h.p) != PICKLE_OK)
+				return PICKLE_ERROR;
+			if (h.p != h.buf) 
+				return picolForceResult(i, h.p, 0);
+			const int r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
+				return PICKLE_ERROR;
+			return r;
+		}
+	}
+	return pickle_set_result_error(i, "Invalid index %ld", index);
+}
+
+static inline int picolCommandLLength(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
 	if (argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
 	const char *parse = trimleft(string_white_space, argv[1]);
+	pickle_parser_opts_t o = { 1, 1, 1, 1 };
 	pickle_parser_t p = { NULL };
-	picolParserInitialize(&p, NULL, parse, NULL, NULL); /** TODO: Refactor */
+	picolParserInitialize(&p, &o, parse, NULL, NULL);
 	size_t count = 0;
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
@@ -2439,12 +2508,20 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "while",     picolCommandWhile,     NULL },
 		{ "for",       picolCommandFor,       NULL },
 		{ "rename",    picolCommandRename,    NULL },
-		{ "lindex",    picolCommandLIndex,    NULL }, /* TODO: Make list commands optional */
-		{ "llength",   picolCommandLLength,   NULL },
 	};
 	if (DEFINE_STRING)
 		if (picolRegisterCommand(i, "string", picolCommandString, NULL) != PICKLE_OK)
 			return PICKLE_ERROR;
+	if (DEFINE_LIST) {
+		pickle_register_command_t list[] = {
+			{ "lindex",    picolCommandLIndex,    NULL },
+			{ "llength",   picolCommandLLength,   NULL },
+			{ "lset",      picolCommandLSet,      NULL },
+		};
+		for (size_t j = 0; j < sizeof(list)/sizeof(list[0]); j++)
+			if (picolRegisterCommand(i, list[j].name, list[j].func, list[j].data) != PICKLE_OK)
+				return PICKLE_ERROR;
+	}
 	if (DEFINE_MATHS) {
 		static const char *unary[]  = { [UNOT] = "!", [UINV] = "~", [UABS] = "abs", [UBOOL] = "bool" };
 		static const char *binary[] = {

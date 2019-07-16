@@ -65,6 +65,24 @@ proc help {} { source help.tcl }
 
 proc unknown {l} { system "$l" }
 
+# Crude lsearch replacement, this expects a function and
+# an argument to that function.
+#
+# Perhaps options could be passed in as a list, such as:
+#
+#   lsearch {-not -eq -start 2} x {x x x x x y x x}
+#
+proc lsearch {p arg1 l} {
+	set ll [llength $l];
+	for {set i 0} {< $i $ll} {incr i} {
+		set e [lindex $l $i];
+		if {$p $arg1 $e} {
+			return $i
+		}
+	}
+	return -1
+}
+
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words.
 proc see {w} {
