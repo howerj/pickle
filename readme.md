@@ -787,6 +787,7 @@ all of the unit tests and example programs run within that amount).
 
 [block.h]: block.h
 [main.c]: main.c
+[picol.c]: picol.c
 [picol]: http://oldblog.antirez.com/post/picol.html
 [TCL]: https://en.wikipedia.org/wiki/Tcl
 [stdio.h]: http://www.cplusplus.com/reference/cstdio/
