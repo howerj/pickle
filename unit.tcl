@@ -310,6 +310,8 @@ test {a hello} {set z "a b"; lset z 1 hello}
 test {a c} {set z "a b c";   lset z 1 ""}
 test {a} {set z "a b";   lset z 1 ""}
 test {} {set z "a";   lset z 0 ""}
+test {b} {set z "a b";   lset z 0 ""}
+test {a} {set z "a b";   lset z 1 ""}
 test {a b c} {split a.b.c .}
 test {a { } b { } c} {split "a b c" ""}
 test {a b} {split "a.b" "."}
@@ -320,7 +322,7 @@ test {} {split "" ""}
 # Fails for now
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
-test {b} {set z "a b";   lset z 0 ""}
+
 
 # Test upvar links
 set u 5

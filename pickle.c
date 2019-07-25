@@ -151,17 +151,17 @@ typedef struct {
 } pickle_parser_opts_t; /*< options for parser/evaluator */
 
 typedef PREPACK struct {
-	const char *text;       /**< the program */
-	const char *p;          /**< current text position */
-	const char *start;      /**< token start */
-	const char *end;        /**< token end */
-	int *line;              /**< pointer to line number */
-	const char **ch;        /**< pointer to global test position */
-	int len;                /**< remaining length */
-	int type;               /**< token type, PT_... */
-	int insidequote;        /**< true if inside " " */
-	pickle_parser_opts_t o; /**< parser options */
-} POSTPACK pickle_parser_t ;    /**< Parsing structure */
+	const char *text;          /**< the program */
+	const char *p;             /**< current text position */
+	const char *start;         /**< token start */
+	const char *end;           /**< token end */
+	int *line;                 /**< pointer to line number */
+	const char **ch;           /**< pointer to global test position */
+	int len;                   /**< remaining length */
+	int type;                  /**< token type, PT_... */
+	pickle_parser_opts_t o;    /**< parser options */
+	unsigned insidequote: 1;   /**< true if inside " " */
+} POSTPACK pickle_parser_t ;       /**< Parsing structure */
 
 typedef PREPACK struct {
 	char buf[SMALL_RESULT_BUF_SZ]; /**< small temporary buffer */
@@ -234,6 +234,7 @@ PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 	int line;                            /**< current line number */
 	unsigned initialized   :1;           /**< if true, interpreter is initialized and ready to use */
 	unsigned static_result :1;           /**< internal use only: if true, result should not be freed */
+	unsigned insideuplevel :1;           /**< true if executing inside an uplevel command */
 } POSTPACK;
 
 static char        string_empty[]     = "";              /* Space saving measure */
@@ -1480,7 +1481,7 @@ static inline void trimright(const char *class, char *s) { /* Modifies argument 
 	while (j > 0 && strchr(class, s[j]))
 		j--;
 	if (s[j])
-		s[j + !strchr(class, s[j])] = 0;
+		s[j + !strchr(class, s[j])] = '\0';
 }
 
 static inline int isFalse(const char *s) {
@@ -1998,13 +1999,12 @@ static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, voi
 				h.p[left]              = '{';
 				h.p[left + centre + 1] = '}';
 			}
-			if (!*newval && left) {
-			}
-			if (picolSetVarString(i, v, h.p) != PICKLE_OK)
+			const char *np = trimleft(string_white_space, h.p);
+			if (picolSetVarString(i, v,  np) != PICKLE_OK) {
+				(void)picolStackOrHeapFree(i, &h);
 				return PICKLE_ERROR;
-			if (h.p != h.buf) 
-				return picolForceResult(i, h.p, 0);
-			const int r = pickle_set_result_string(i, h.p);
+			}
+			const int r = pickle_set_result_string(i, np);
 			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
 				return PICKLE_ERROR;
 			return r;
@@ -2432,7 +2432,10 @@ static int picolCommandUpLevel(pickle_t *i, const int argc, char **argv, void *p
 			retcode = picolSetResultErrorOutOfMemory(i);
 			goto end;
 		}
+		const int insideuplevel = i->insideuplevel ;
+		i->insideuplevel = 1;
 		retcode = picolEval(i, e);
+		i->insideuplevel = insideuplevel;
 		picolFree(i, e);
 	}
 end:
@@ -2440,9 +2443,11 @@ end:
 	return retcode;
 }
 
-static inline int picolUnsetVar(pickle_t *i, const char *name) { /* TODO: Make sure no links point to this unset variable */
+static inline int picolUnsetVar(pickle_t *i, const char *name) {
 	assert(i);
 	assert(name);
+	if (i->insideuplevel)
+		return pickle_set_result_error(i, "Invalid unset");
 	struct pickle_call_frame *cf = i->callframe;
 	struct pickle_var *p = NULL, *deleteMe = picolGetVar(i, name, 0/*NB!*/);
 	if (!deleteMe)
