@@ -1267,6 +1267,8 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 	assert(i);
 	assert(argc >= 1);
 	assert(argv);
+	if (pickle_set_result_empty(i) != PICKLE_OK)
+		return PICKLE_ERROR;
 	struct pickle_command *c = picolGetCommand(i, argv[0]);
 	if (c == NULL) { 
 		if ((c = picolGetCommand(i, "unknown")) == NULL) 
