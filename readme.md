@@ -417,7 +417,7 @@ Class can be:
     - upper
     - xdigit
     - ascii
-    - control 
+    - control
     - integer
 
 Any other Class is invalid.
@@ -438,13 +438,13 @@ returned if the string has been found, negative one if it has not been found.
 Convert the first character in a string to a number that represents that
 character.
 
-  - string char Number 
+  - string char Number
 
 Convert a number to its character representation.
 
   - string hex2dec HexString
 
-Convert a lower or uppercase hexadecimal number to its decimal representation. 
+Convert a lower or uppercase hexadecimal number to its decimal representation.
 
   - string dec2hex Number
 
@@ -460,9 +460,37 @@ Create a sub-string from Index1 to Index2 from a String. If Index1 is greater
 than Index2 an empty string is returned. If Index1 is less than zero, it is set
 to zero, if Index2 is greater than the index of the last character, it is set
 to the index of the last character. Indexing starts at zero and goes up to one
-less than the strings length (or zero of empty string), which is the index of 
+less than the strings length (or zero of empty string), which is the index of
 the last character. The characters from Index1 to Index2 inclusive form the
 sub-string.
+
+ - string tr d set string *OR* string tr r set1 set2 string
+
+Much like the Unix utility 'tr', this performs various translations given a set
+(or two sets of characters). 'tr' can delete characters in the set of
+characters in 'set' from 'string' if the option provided to it is 'd', or it
+can perform a translation from one set to another if the 'r' specifier is
+given. If the second set is larger than the first for the 'r' command the last
+character applies to the rest of the characters in 'set2'.
+
+Both 'r' and 'd' options can both have the additional specifier 'c', which
+compliments the given 'set' or characters.
+
+'r' can also have the 's' specifier, which will squeeze repeated characters in
+the set
+
+Example:
+
+	proc lowercase {x} {
+		string tr r abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ $x
+	}
+
+Which creates a function with the same functionality as 'string lowercase $x'.
+
+ - string replace old-string first last new-string
+
+This subcommands replaces a substring starting at 'first' and ending at 'last'.
+The 'new-string' replaces the removed section of the 'old-string'.
 
 ### Extension Commands
 
@@ -683,7 +711,7 @@ steam. This file has been opened for writing.
 
 * stdout
 
-A file handle, as if returned by 'fopen', that reads from the standard error 
+A file handle, as if returned by 'fopen', that reads from the standard error
 output steam. This file has been opened for writing.
 
 * errno *OR* errno -string *OR* errno -string number *OR* errno -set number
@@ -710,13 +738,15 @@ not part of the language core.
 
 * gensym
 
-Generate a unique symbol of the form 'gensym.X', where 'X' is a number. 
+Generate a unique symbol of the form 'gensym.X', where 'X' is a number.
 This will return an error if it has run out of unique symbols. It should be
 noted that the symbols generated form a completely predictable sequence.
 
 * id arg?
 
 Return the argument.
+
+
 
 ## Compile Time Options
 
@@ -780,10 +810,14 @@ all of the unit tests and example programs run within that amount).
 * [x] Add a unit test framework
   * [x] In C
   * [x] In TCL
-* [ ] Remove internal limitations on string size
+* [x] Remove internal limitations on string size
+* [ ] Remove other internal limitations where possible (argument length)
 * [ ] Create a framework for adding modules external to this project
-* [ ] Move documentation to a manual page, or generate a man page from
-      this document.
+* [ ] Move manual page into this document and generate manual page
+      from this document.
+* [ ] Move most of 'main.c' to an external module. Very little is
+      needed to run unit tests which is all that really need to
+      be in this project. See <https://github.com/howerj/pickle-all>
 
 [block.h]: block.h
 [main.c]: main.c

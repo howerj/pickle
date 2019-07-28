@@ -421,7 +421,7 @@ static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_set_result_error_arity(i, 4, argc, argv);
 	const char *file = argv[1], *dump = argv[2], *mode = "wb";
 	if (argc == 4) {
-		if (strcmp(argv[1], "-append")) 
+		if (strcmp(argv[1], "-append"))
 			return pickle_set_result_error(i, "unexpected option: %s", argv[1]);
 		mode = "ab";
 		file = argv[2];
@@ -432,7 +432,7 @@ static int pickleCommandDump(pickle_t *i, const int argc, char **argv, void *pd)
 		return pickle_set_result_error(i, "Could not open file for writing: %s/%s", file, mode);
 	const size_t length = strlen(dump);
 	const size_t wrote  = fwrite(dump, 1, length, handle);
-	fclose(handle);	
+	fclose(handle);
 	return pickle_set_result_integer(i, wrote);
 }
 

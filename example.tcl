@@ -47,7 +47,7 @@ if {eq $program "-2"} {
 # Using 'incr loop -1' greatly speeds things up, but
 # exercises less.
 #
-if {eq $program "-3" } { 
+if {eq $program "-3" } {
 	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
 
 	proc waste {x} {

@@ -10,8 +10,8 @@
  * allocators of varying block widths.
  *
  * There are some restrictions on the block sizes, counts and alignment. The
- * block sizes need to be a power of two. All memory used by the block 
- * allocator must be aligned to the strictest alignment required by your 
+ * block sizes need to be a power of two. All memory used by the block
+ * allocator must be aligned to the strictest alignment required by your
  * system.
  *
  * @bug If block count is not a multiple or the sizeof bitmap_unit_t then

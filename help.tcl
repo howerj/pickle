@@ -42,10 +42,10 @@ puts {
 'if' is a command as well, it accepts a condition which it evaluates, and
 depending on the result evaluates one of two clauses.
 
-	if {== 2 3} { 
-		puts "Something is very wrong" 
-	} else { 
-		puts "All is okay." 
+	if {== 2 3} {
+		puts "Something is very wrong"
+	} else {
+		puts "All is okay."
 	}
 }
 
@@ -54,7 +54,7 @@ puts {
 We can also declare variables with 'set', setting a variable to a string. We
 can refer to this variable with a '$':
 
-	set a 3; 
+	set a 3;
 	puts "a is equal to $a";
 }
 

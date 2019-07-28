@@ -7,10 +7,6 @@
 # framework itself. Instead, those things should be considered tested if
 # the test framework itself runs.
 
-# TODO: Test failure conditions as well, this test bench only tests commands
-# and language features that do not return errors.
-#
-
 proc die {x} { puts $x; exit 1 }
 
 set passed 0
@@ -39,11 +35,12 @@ proc blue   {} { color "\x1b\[34;1m" }
 # BUG: If the unit test sets the value of 'x' then it can mess
 # up printing the error.
 proc test {result x} {
-	set r [eval $x]
+	set retcode 0
+	set r [catch $x retcode]
 	upvar #0 total t
 	incr t
 
-	if {eq $r $result} {
+	if {& [eq $r $result] [eq 0 $retcode]} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
 	} else {
@@ -281,6 +278,19 @@ test 5 {string base2dec 101 2}
 test 0 {string char 48}
 test 1 {string char 49}
 test a {string char 97}
+test {} {string tr d abc ""}
+test {ddeeff} {string tr d abc aabbccddeeff}
+test {aabbcc} {string tr dc abc aabbccddeeff}
+test {ddeeffddeeff} {string tr r abc def aabbccddeeff}
+test {defdefgg} {string tr s abc def aabbccddeeffgg}
+test {abcddeeffgg} {string tr s abc aabbccddeeffgg}
+test {ad} {string replace "abcd" 1 2 ""}
+test {acd} {string replace "abcd" 1 1 ""}
+test {abcd} {string replace "abcd" 2 1 ""}
+test {a123d} {string replace "abcd" 1 2 "123"}
+test {a1d} {string replace "abcd" 1 2 "1"}
+test {123} {string replace "" 0 0 "123"}
+test {hello world} {set tv1 hello; subst {$tv1 world}}
 test 0 {llength ""}
 test 0 {llength " "}
 test 1 {llength "a"}
@@ -291,16 +301,16 @@ test 3 {llength "a { b } c"}
 test 3 {llength "a { { b } } c"}
 test 3 {llength {a { { \" b \" } } c}}
 test 3 {llength {a " b " c}}
-# ERROR: test 2 {llength "a { b }c"}
 test a {lindex "a b c" 0}
 test b {lindex "a b c" 1}
 test c {lindex "a b c" 2}
 test c {lindex "a b c" 2}
+# Note this is different to TCL, where it is an error
+test 3 {llength "a { b }c"}
 test { b } {lindex "a { b } c" 1}
 test a {lindex "a { b } c" 0}
 test c {lindex "a { b } c" 2}
 test "" {lindex "a { b } c" 3}
-test {hello world} {set tv1 hello; subst {$tv1 world}; unset tv1}
 test {$x} {subst -novariables {$x}}
 test {$x 3} {subst -novariables {$x [+ 2 1]}}
 test {a 3} {subst {a [+ 2 1]}}
@@ -319,10 +329,8 @@ test {{a b} c} {split "a b.c" "."}
 test {abc d} {split "abc.d" "."}
 test {a {}} {split "a." "."}
 test {} {split "" ""}
-# Fails for now
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
-
 
 # Test upvar links
 set u 5
