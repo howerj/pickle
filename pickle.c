@@ -2388,8 +2388,8 @@ static int picolCommandReturn(pickle_t *i, const int argc, char **argv, void *pd
 	return retcode;
 }
 
-static int doJoin(pickle_t *i, const char *join, const int argc, char **argv) {
-	char *e = concatenate(i, join, argc, argv, 0);
+static int doJoin(pickle_t *i, const char *join, const int argc, char **argv, int list) {
+	char *e = concatenate(i, join, argc, argv, list);
 	if (!e)
 		return picolSetResultErrorOutOfMemory(i);
 	picolFreeResult(i);
@@ -2400,14 +2400,19 @@ static int doJoin(pickle_t *i, const char *join, const int argc, char **argv) {
 
 static int picolCommandConcat(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	return doJoin(i, " ", argc - 1, argv + 1);
+	return doJoin(i, " ", argc - 1, argv + 1, 0);
+}
+
+static int picolCommandList(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	return doJoin(i, " ", argc - 1, argv + 1, 1);
 }
 
 static int picolCommandJoinArgs(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc < 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
-	return doJoin(i, argv[1], argc - 2, argv + 2);
+	return doJoin(i, argv[1], argc - 2, argv + 2, 0);
 }
 
 static int picolCommandJoin(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2453,7 +2458,7 @@ static int picolCommandJoin(pickle_t *i, const int argc, char **argv, void *pd) 
 	}
 end:
 	if (r >= 0)
-		r = doJoin(i, join, count, (char **)arguments);
+		r = doJoin(i, join, count, (char **)arguments, 0);
 	for (size_t j = 0; j < count; j++)
 		picolFree(i, arguments[j]);
 	return r;
@@ -2461,7 +2466,7 @@ end:
 
 static int picolCommandEval(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	int r = doJoin(i, " ", argc - 1, argv + 1);
+	int r = doJoin(i, " ", argc - 1, argv + 1, 0);
 	if (r == PICKLE_OK) {
 		char *e = picolStrdup(i, i->result);
 		if (!e)
@@ -2730,6 +2735,7 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "break",     picolCommandRetCodes,  (char*)PICKLE_BREAK },
 		{ "catch",     picolCommandCatch,     NULL },
 		{ "concat",    picolCommandConcat,    NULL },
+		{ "list",      picolCommandList,      NULL },
 		{ "continue",  picolCommandRetCodes,  (char*)PICKLE_CONTINUE },
 		{ "eval",      picolCommandEval,      NULL },
 		{ "subst",     picolCommandSubst,     NULL },

@@ -331,6 +331,8 @@ test {a {}} {split "a." "."}
 test {} {split "" ""}
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
+test {a b {c d e  } {  f {g h}}} {list a b "c d e  " "  f {g h}"}
+# test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
 
 # Test upvar links
 set u 5
