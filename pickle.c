@@ -39,26 +39,9 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * Style/coding guide and notes:
- *   - 'pickle_' and snake_case is used for exported functions/variables/types
- *   - 'picol'  and camelCase  is used for internal functions/variables/types,
- *   with a few exceptions, such as 'advance' and 'compare', which are internal
- *   functions whose names are deliberately kept short.
- *   - Use asserts wherever you can for as many preconditions, postconditions
- *   and invariants that you can think of.
- *   - Make sure you make your functions static unless they are meant to
- *   be exported. You can use 'objdump -t | awk '$2 ~ /[Gg]/' to find
- *   all global functions. 'objdump -t | grep '\*UND\*' can be used to
- *   check that you are not pulling in functions from the C library you
- *   do not intend as well.
- *   - The core project is written strictly in C99 and uses only things
- *   that can be found in the standard library, and only things that are
- *   easy to implement on a microcontroller.
- *
- * NOTE: The callbacks all have their 'argv' argument defined as 'char **',
- * as they do not modify their arguments. However adding this in just adds
- * a lot of noise to the function definitions. Also see
- * <http://c-faq.com/ansi/constmismatch.html>.
+ * TODO: Rename maths functions '+' -> 'add', '|' -> or
+ * TODO: Remove list functions and something which creates a list or
+ * hash closure, or experiment with it.
  * TODO: Allow variadic procedures to be defined, they do not have to
  * have the same semantics as TCL. Instead of a new syntax, a new way
  * of defining procedures could be made.
@@ -177,20 +160,6 @@ typedef union {
 	     small[sizeof(char*)]; /**< string small enough to be stored in a pointer (including NUL terminator)*/
 } compact_string_t; /**< either a pointer to a string, or a string stored in a pointer */
 
-/* NOTES:
- * - On a 32 machine type, two bits could merged into the lowest bits
- *   on the 'next' pointer, as these pointers are most likely aligned
- *   on a 4 byte boundary, leaving the lowest bits free. However, this
- *   would be non-portable. There is nothing to be gained from this,
- *   as we have one bit left over.
- * - On a 64 bit machine, all three bits could be merged with a
- *   pointer, saving space in this structure.
- * - As we have left over bits, we could use them to mark the
- *   variable as being one to trace, with actions for (r)ead,
- *   (w)rite, and (u)nset. There are no bits left over in the
- *   pickle_command struct however. The function that handled the
- *   action would have to be global however as there is no space
- *   to store a pointer to a variable specific handler. */
 PREPACK struct pickle_var { /* strings are stored as either pointers, or as 'small' strings */
 	compact_string_t name; /**< name of variable */
 	union {
@@ -204,8 +173,6 @@ PREPACK struct pickle_var { /* strings are stored as either pointers, or as 'sma
 } POSTPACK;
 
 PREPACK struct pickle_command {
-	/* If online help in the form of help strings were to be added, we
-	 * could add another field for it here. */
 	char *name;                  /**< name of function */
 	pickle_command_func_t func;  /**< pointer to function that implements this command */
 	struct pickle_command *next; /**< next command in list (chained hash table) */
@@ -2086,6 +2053,64 @@ static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, v
 	return pickle_set_result_empty(i);
 }
 
+/* Super similar to lreplace, pro-tip - reuse this */
+static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc != 4)
+		return pickle_set_result_error_arity(i, 4, argc, argv);
+	pickle_parser_opts_t o = { 1, 1, 1, 1 };
+	pickle_parser_t p = { NULL };
+	char *parse = argv[1], *insert = argv[3];
+	const int escape = picolStringNeedsEscaping(insert, 0);
+	const size_t il = picolStrlen(insert), pl = picolStrlen(parse);
+       	size_t count = 0;
+	long index = 0;
+	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
+		return PICKLE_ERROR;
+	picolParserInitialize(&p, &o, parse, NULL, NULL);
+	for (;;) {
+		if (picolGetToken(&p) != PICKLE_OK)
+			return pickle_set_result_error(i, "Invalid parse");
+		const int t = p.type;
+		if (t == PT_EOF) {
+			char *r = concatenate(i, " ", 2, (char *[2]) { parse, insert }, 1);
+			if (!r)
+				return picolSetResultErrorOutOfMemory(i);
+			return picolForceResult(i, r, 0);
+		}
+		if (t == PT_STR || t == PT_ESC)
+			count++;
+		if (count > (size_t)index) {
+			pickle_stack_or_heap_t h = { .p = NULL };
+			const size_t l = il + pl + 1/*space*/ + (2 * escape /* { } */) + 1/*NUL*/;
+			const size_t left = p.start - parse;
+			const size_t right = pl - left;
+			implies(USE_MAX_STRING, l <= PICKLE_MAX_STRING);
+			if (picolStackOrHeapAlloc(i, &h, l) != PICKLE_OK)
+				return PICKLE_ERROR;
+
+			memcpy(h.p,                           parse,   left);
+			memcpy(h.p + left + escape,           insert,  il);
+			memcpy(h.p + left + 1 + il + (2 *escape), p.start, right + 1);
+			h.p[left + il] = ' ';
+			if (escape) {
+				h.p[left]          = '{';
+				h.p[left + il + 1] = '}';
+				h.p[left + il + 2] = ' ';
+			}
+
+			if (h.p != h.buf)
+				return picolForceResult(i, h.p, 0);
+			const int r = pickle_set_result_string(i, h.p);
+			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
+				return PICKLE_ERROR;
+			return r;
+		}
+	}
+	return pickle_set_result_empty(i);
+}
+
 static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
@@ -2127,7 +2152,7 @@ static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, voi
 			memcpy(h.p,                                parse,     left);
 			memcpy(h.p + left + escape,                newval,    centre);
 			memcpy(h.p + left + centre + (2 * escape), p.end + 1, right + 1);
-			if (escape) { /* TODO: Does not deal with embedded '{'/'"' which may need escaping */
+			if (escape) {
 				h.p[left]              = '{';
 				h.p[left + centre + 1] = '}';
 			}
@@ -2735,23 +2760,23 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "break",     picolCommandRetCodes,  (char*)PICKLE_BREAK },
 		{ "catch",     picolCommandCatch,     NULL },
 		{ "concat",    picolCommandConcat,    NULL },
-		{ "list",      picolCommandList,      NULL },
 		{ "continue",  picolCommandRetCodes,  (char*)PICKLE_CONTINUE },
 		{ "eval",      picolCommandEval,      NULL },
-		{ "subst",     picolCommandSubst,     NULL },
+		{ "for",       picolCommandFor,       NULL },
 		{ "if",        picolCommandIf,        NULL },
 		{ "info",      picolCommandInfo,      NULL },
 		{ "join",      picolCommandJoin,      NULL },
 		{ "join-args", picolCommandJoinArgs,  NULL },
+		{ "list",      picolCommandList,      NULL },
 		{ "proc",      picolCommandProc,      NULL },
+		{ "rename",    picolCommandRename,    NULL },
 		{ "return",    picolCommandReturn,    NULL },
 		{ "set",       picolCommandSet,       NULL },
+		{ "subst",     picolCommandSubst,     NULL },
 		{ "unset",     picolCommandUnSet,     NULL },
 		{ "uplevel",   picolCommandUpLevel,   NULL },
 		{ "upvar",     picolCommandUpVar,     NULL },
 		{ "while",     picolCommandWhile,     NULL },
-		{ "for",       picolCommandFor,       NULL },
-		{ "rename",    picolCommandRename,    NULL },
 	};
 	if (DEFINE_STRING)
 		if (picolRegisterCommand(i, "string", picolCommandString, NULL) != PICKLE_OK)
@@ -2760,6 +2785,7 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		pickle_register_command_t list[] = {
 			{ "lindex",    picolCommandLIndex,    NULL },
 			{ "llength",   picolCommandLLength,   NULL },
+			{ "linsert",   picolCommandLInsert,   NULL },
 			{ "lset",      picolCommandLSet,      NULL },
 			{ "split",     picolCommandSplit,     NULL },
 		};
@@ -2768,12 +2794,12 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 				return PICKLE_ERROR;
 	}
 	if (DEFINE_MATHS) {
-		static const char *unary[]  = { [UNOT] = "!", [UINV] = "~", [UABS] = "abs", [UBOOL] = "bool" };
+		static const char *unary[]  = { [UNOT] = "not", [UINV] = "invert", [UABS] = "abs", [UBOOL] = "bool" };
 		static const char *binary[] = {
-			[BADD]   =  "+",   [BSUB]     =  "-",    [BMUL]     =  "*",    [BDIV]  =  "/",    [BMOD]  =  "%",
-			[BMORE]  =  ">",   [BMEQ]     =  ">=",   [BLESS]    =  "<",    [BLEQ]  =  "<=",   [BEQ]   =  "==",
-			[BNEQ]   =  "!=",  [BLSHIFT]  =  "<<",   [BRSHIFT]  =  ">>",   [BAND]  =  "&",    [BOR]   =  "|",
-			[BXOR]   =  "^",   [BMIN]     =  "min",  [BMAX]     =  "max",  [BPOW]  =  "pow",  [BLOG]  =  "log"
+			[BADD]   =  "+",   [BSUB]     =  "-",      [BMUL]     =  "*",      [BDIV]  =  "div",  [BMOD]  =  "mod",
+			[BMORE]  =  ">",   [BMEQ]     =  ">=",     [BLESS]    =  "<",      [BLEQ]  =  "<=",   [BEQ]   =  "==",
+			[BNEQ]   =  "!=",  [BLSHIFT]  =  "lshift", [BRSHIFT]  =  "rshift", [BAND]  =  "and",    [BOR]   =  "or",
+			[BXOR]   =  "xor", [BMIN]     =  "min",    [BMAX]     =  "max",    [BPOW]  =  "pow",  [BLOG]  =  "log"
 		};
 		for (size_t j = 0; j < sizeof(unary)/sizeof(char*); j++)
 			if (picolRegisterCommand(i, unary[j], picolCommandMathUnary, (char*)(intptr_t)j) != PICKLE_OK)

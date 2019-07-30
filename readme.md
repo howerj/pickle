@@ -791,7 +791,7 @@ Apart from snprintf, and sscanf, the other functions pulled in from the C
 library are quite easy to implement. They include (but are not necessarily
 limited to); strlen, memcpy, memchr, memset and abort.
 
-## Interacting with the library and extension
+## C API
 
 The language can be extended by defining new commands in [C][] and registering
 those commands with the *pickle\_register\_command* function. The internal
@@ -800,6 +800,196 @@ language. As stated a custom allocator can be used and a block allocator is
 provided, it is possible to do quite a bit with this scripting language whilst
 only allocating about 32KiB of memory total on a 64-bit machine (for example
 all of the unit tests and example programs run within that amount).
+
+The C API is small and regular. All of the functions exported return the same
+error codes and implementing an interpreter loop is trivial.
+
+The language can be extended with new functions written in C, each function
+accepts an integer length, and an array of pointers to ASCIIZ strings - much
+like the 'main' function in C.
+
+User defined commands can be registered with the 'pickle_register_command'
+function. With in the user defined callbacks the 'pickle_set_result' family of
+functions can be used. The callbacks passed to 'pickle_register_command' look
+like this:
+
+	typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
+
+The callbacks accept a pointer to an instance of the pickle interpreter, and
+a list of strings (in 'argc' and 'argv'). Arbitrary data may be passed to the
+custom callback when the command is registered.
+
+The function returns one of the following status codes:
+
+	PICKLE_ERROR    = -1 (Throw an error until caught)
+	PICKLE_OK       =  0 (Signal success, continue on execution)
+	PICKLE_RETURN   =  1 (Return out of a function)
+	PICKLE_BREAK    =  2 (Break out of a while loop)
+	PICKLE_CONTINUE =  3 (Immediately proceed to next iteration of while loop)
+
+These error codes can affect the flow control within the interpreter. The
+actual return value of the callback is set with 'pickle_set_result' functions.
+
+Some functions are define purely for convenience and are not strictly
+necessary, such as 'pickle\_set\_result\_error' and 'pickle\_set\_result\_error\_arity',
+these return 'PICKLE\_ERROR' always, the latter function deals specifically with
+arity errors within functions, formatting the return buffer an number of
+arguments related error message. Likewise, the functions that set the return
+value to a number and not a string are wrappers around calls to 'snprintf'
+and 'pickle\_set\_result\_string'. The 'get' and 'set' functions return 'PICKLE\_OK'
+on success, and 'PICKLE\_ERROR' on failure. A 'get' fails if the variable does
+not exists, a 'set' on a variable that does not exist creates that variable
+(which may failure, returning 'PICKLE\_ERROR').
+
+Variables can be set either within or outside of the user defined callbacks
+with the 'pickle\_set\_variable' family of functions.
+
+The pickle library does not come with many built in functions, and comes with
+no Input/Output functions (even those available in the C standard library) to
+make porting to non-hosted environments easier. The example test driver program
+does add functions available in the standard library.
+
+The following is the source code for a simple interpreter loop that reads a
+line and then evaluates it:
+
+	#include "pickle.h"
+	#include <stdio.h>
+	#include <string.h>
+	
+	int main(void) {
+		pickle_t *p = NULL;
+		if (pickle_new(&p, NULL) < 0)
+			return -1;
+		const char *prompt = "> ";
+		fputs(prompt, stdout);
+		fflush(stdout);
+		for (char buf[80] = { 0 }; fgets(buf, sizeof buf, stdin); memset(buf, 0, sizeof buf)) {
+			const char *r = NULL;
+			const int er = pickle_eval(p, buf);
+			pickle_get_result_string(p, &r);
+			fprintf(stdout, "[%d]: %s\\n%s", er, r, prompt);
+			fflush(stdout);
+		}
+		return pickle_delete(p);
+	}
+
+Also present is a custom prompt.
+
+It should be obvious that the interface presented is not efficient for many
+uses, treating everything as a string has a cost. It is however simple and
+sufficient for many tasks.
+
+While API presented in 'pickle.h' is small there are a few areas of
+complication. They are: The memory allocation API, registering a command, the
+getopt function and the unit tests. The most involved is the memory allocation
+API and there is not too much to it, you do not even need to use it and can
+pass a NULL to 'pickle\_new' if for the allocator argument if you want to use
+the built in malloc/realloc/free based allocator (provided the library was
+built with support for it).
+
+It may not be obvious from the API how to go about designing functions to
+integrate with the interpreter. The C API is deliberately kept as simple as
+possible, more could be exported but there is a trade-off in doing so; it
+places more of a burden on backwards compatibility, limits the development
+of the library internals and makes the library more difficult to use. It is
+always possible to hack your own personal copy of the library to suite your
+purpose, the library is small enough that this should be possible.
+
+The Pickle interpreter has no way of registering different types with it, the
+string is king. As such, it is not immediately clear what the best way of
+adding functionality that requires manipulating non-string data (such as
+file handles or pointers to binary blobs) is. There are several ways of doing
+this:
+
+1. Convert the pointer to a string and add functions which deal with this string.
+2. Put data into the private data field
+3. Create a function which registers another function that contains private data.
+
+Option '1' may seem natural, but it is much more error prone. It is possible
+to pass the wrong string around and cause the program to crash. Option '2' is
+limiting, the C portion of the program is entirely in control of what resources
+get added, and only one handle to a resource can be controlled. Option '2' is
+a good option for certain cases.
+
+Option '3' is the most general and allows an arbitrary resource to be managed
+by the interpreter. The idea is to create a function that acquires the resource
+to be managed and registers a new function in the pickle global function
+namespace with the resource in the private data field of the newly registered
+function. The newly created function, a limited form of a closure, can then
+perform operations on the handle. It can also cleanup the resource by release
+the object in its private data field, and then deleting itself with the
+ 'pickle\_rename\_command' function. An example of this is the 'fopen' command,
+it returns a closure which contains a file handle.
+
+An example of using the 'fopen' command and the returned function from within
+the pickle interpeter is:
+
+	set fh [fopen file.txt rb]
+	set line [$fh -gets]
+	$fh -close
+
+And an example of how this might be implemented in C is:
+
+
+	int pickleCommandFile(pickle_t *i, int argc, char **argv, void *pd) {
+		FILE *fh = (FILE*)pd;
+		if (!strcmp(argv[1], "-close")) { /* delete self */
+			fclose(fh);                                /* free handle */
+			return pickle_rename_command(argv[0], ""); /* delete self */
+		}
+		if (!strcmp(argv[1], "-gets")) {
+			char buf[512];
+			fgets(buf, sizeof buf, fh);
+			return pickle_set_result_string(i, buf);
+		}
+		return pickle_set_result_error(i, "invalid option");
+	}
+
+	int pickleCommandFopen(pickle_t *i, int argc, char **argv, void *pd) {
+		char name[64];
+		FILE *fh = fopen(argv[1], argv[2]);
+		sprintf(name, "%p", fh); /* unique name */
+		pickle_register_command(i, name, pickleCommandFile, fh);
+		return pickle_set_result_string(i, name);
+	}
+
+The code illustrates the point, but lacks the assertions, error checking,
+and functionality of the real 'fopen' command. The 'pickleCommandFopen' should
+be registered with 'pickle\_register\_command', the 'pickleCommandFile' is not
+as 'pickleCommandFopen' does the registering when needed.
+
+## Style Guide
+
+Style/coding guide and notes, for the file [pickle.c][]:
+
+- 'pickle\_' and snake\_case is used for exported functions/variables/types
+- 'picol'  and camelCase  is used for internal functions/variables/types,
+with a few exceptions, such as 'advance' and 'compare', which are internal
+functions whose names are deliberately kept short.
+- Use asserts wherever you can for as many preconditions, postconditions
+and invariants that you can think of.
+- Make sure you make your functions static unless they are meant to
+be exported. You can use 'objdump -t | awk '$2 ~ /[Gg]/' to find
+all global functions. 'objdump -t | grep '\\\*UND\\\*' can be used to
+check that you are not pulling in functions from the C library you
+do not intend as well.
+- The core project is written strictly in C99 and uses only things
+that can be found in the standard library, and only things that are
+easy to implement on a microcontroller.
+
+The callbacks all have their 'argv' argument defined as 'char\*',
+as they do not modify their arguments. However adding this in just adds
+a lot of noise to the function definitions. Also see
+<http://c-faq.com/ansi/constmismatch.html>.
+
+## Interpreter Limitations
+
+Known limitations of the interpreter include:
+
+* Recursion Depth - 128, set via a compile time option.
+* Number of arguments to command/function - 128, set via a compile time option,
+this applies only to a few functions.
+* Maximum size of file - 2GiB
 
 ## Project Goals
 

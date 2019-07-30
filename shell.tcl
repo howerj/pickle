@@ -113,7 +113,7 @@ proc io {} {
 	puts -nonewline $p
 	set e -1
 	set l [catch {gets} e]
-	if {| [eq [decode $e] break] [eq [decode $e] error]} {
+	if {or [eq [decode $e] break] [eq [decode $e] error]} {
 		if {eq $l EOF} {
 			exit 0
 		}

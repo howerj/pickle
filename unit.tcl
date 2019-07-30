@@ -40,7 +40,7 @@ proc test {result x} {
 	upvar #0 total t
 	incr t
 
-	if {& [eq $r $result] [eq 0 $retcode]} {
+	if {and [eq $r $result] [eq 0 $retcode]} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
 	} else {
@@ -94,25 +94,25 @@ test 0 {> -6  9}
 test 1 {>= -6  -6}
 test 1 {>= 6  -6}
 test 0 {>= -6  6}
-test 4 {<< 1 2}
-test 5 {>> 10 1}
+test 4 {lshift 1 2}
+test 5 {rshift 10 1}
 test 9 {min 90 9}
 test -9 {min 90 -9}
 test -4 {max -5 -4}
 test 4 {abs 4}
 test 4 {abs -4}
-test -1 {+ [~ 1] 1}
-test 255 {| 85 170}
-test 255 {^ 85 170}
-test 0   {& 85 170}
-test 0 {! 3}
-test 1 {! 0}
+test -1 {+ [invert 1] 1}
+test 255 {or 85 170}
+test 255 {xor 85 170}
+test 0   {and 85 170}
+test 0 {not 3}
+test 1 {not 0}
 # test 1 {! x}
-test 3 {/ 12 4}
-test 4 {% 4 12}
-test 11 {% 11 12}
-test 0 {% 12 12}
-test 1 {% 13 12}
+test 3 {div 12 4}
+test 4 {mod 4 12}
+test 11 {mod 11 12}
+test 0 {mod 12 12}
+test 1 {mod 13 12}
 test 120 {set cnt 5; set acc 1; while {> $cnt 1} { set acc [* $acc $cnt]; decr cnt }; set acc; };
 test 1 {eq a a}
 test 0 {eq a b}
@@ -389,8 +389,8 @@ puts "FREED:      [heap freed]"
 puts "ALLOC:      [heap allocs]"
 puts ""
 puts "MEMORY:     $m"
-puts "EFFICIENCY: [/ [* [heap total] 100] [heap blocks]]%"
-puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
+puts "EFFICIENCY: [div [* [heap total] 100] [heap blocks]]%"
+puts "WASTED:     [- 100 [div [* [heap max] 100] $m]]%"
 
 unset heaps; unset i; unset m; unset blk; unset sz; unset used;
 
