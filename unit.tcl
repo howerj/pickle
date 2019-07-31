@@ -332,7 +332,19 @@ test {} {split "" ""}
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
 test {a b {c d e  } {  f {g h}}} {list a b "c d e  " "  f {g h}"}
-# test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
+test {a b c xyz} {linsert {a b c} 99 xyz}
+test {a b c xyz} {linsert {a b c} 3 xyz}
+test {xyz a b c} {linsert {a b c} 0 xyz}
+test {a {x yz} b c} {linsert {a b c} 1 {x yz}}
+test {} {lrepeat 0 a}
+test {a} {lrepeat 1 a}
+test {a a} {lrepeat 2 a}
+test {a a a} {lrepeat 3 a}
+test {ab ab ab} {lrepeat 3 ab}
+test {{a b} {a b} {a b}} {lrepeat 3 {a b}}
+
+# Fails for now
+#test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
 
 # Test upvar links
 set u 5

@@ -40,20 +40,14 @@
  * Also licensed under the same BSD license.
  *
  * TODO: Rename maths functions '+' -> 'add', '|' -> or
- * TODO: Remove list functions and something which creates a list or
- * hash closure, or experiment with it.
  * TODO: Allow variadic procedures to be defined, they do not have to
  * have the same semantics as TCL. Instead of a new syntax, a new way
  * of defining procedures could be made.
  * TODO: Assert that the correct 'PICKLE_*' is returned for API functions,
  * other API pre-and-post conditions to check for; presence of call-stack,
  * length is greater than zero, ...
- * TODO: Add list manipulation functions; 'lsort', 'linsert', 'list',
- * 'lsearch' and perhaps 'foreach'. There are only
- * a few other functions and features that can and should be added, along with these
- * list functions, before the interpreter can be considered complete. Other
- * functions for applying a list to a function as arguments and map/reduce
- * would be useful too. These should be made to be optional. */
+ * TODO: Add list manipulation functions; 'lsort', 'linsert', 'lsearch' 
+ * 'lrepeat', 'lreverse' and perhaps 'foreach'. */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -1009,8 +1003,10 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	va_start(ap, fmt);
 	char *r = picolVsprintf(i, fmt, ap);
 	va_end(ap);
-	if (r && i->line) {
-		/* TODO: Add line number */
+	if (r && i->line) { /* TODO: Add line number */
+		/*char buf[SMALL_RESULT_BUF_SZ] = { 0 };
+		if (picolLongToString(buf, i->line, 10) != PICKLE_OK) {
+		}*/
 	}
 	(void)(r ? picolForceResult(i, r, 0) : pickle_set_result_string(i, "Invalid vsnprintf"));
 	return PICKLE_ERROR;
@@ -1150,6 +1146,7 @@ static char *picolEscape(pickle_t *i, const char *s, size_t length, int string) 
 	if (length)
 		memcpy(m + 1, s, length);
 	m[length + 1] = string ? '"' : '}';
+	m[length + 2] = '\0';
 	return m;
 }
 
@@ -1237,7 +1234,6 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 	if (c == NULL) {
 		if ((c = picolGetCommand(i, "unknown")) == NULL)
 			return pickle_set_result_error(i, "Invalid command %s", argv[0]);
-		/* TODO: Turn 'argv' into a proper TCL list */
 		char *arg2 = concatenate(i, " ", argc, argv, 1);
 		if (!arg2)
 			return picolSetResultErrorOutOfMemory(i);
@@ -2068,16 +2064,24 @@ static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, 
 	long index = 0;
 	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
 		return PICKLE_ERROR;
+	if (index < 0)
+		index = 0;
 	picolParserInitialize(&p, &o, parse, NULL, NULL);
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
 			return pickle_set_result_error(i, "Invalid parse");
 		const int t = p.type;
-		if (t == PT_EOF) {
-			char *r = concatenate(i, " ", 2, (char *[2]) { parse, insert }, 1);
-			if (!r)
+		if (t == PT_EOF) { /* NB. It should be possible to remove this special case */
+			char *escaped = escape ? picolEscape(i, insert, il, 0) : insert;
+			if (!escaped)
 				return picolSetResultErrorOutOfMemory(i);
-			return picolForceResult(i, r, 0);
+			char *cat = concatenate(i, " ", 2, (char *[2]) { parse, escaped }, 0);
+			const int rv = !cat ? 
+				picolSetResultErrorOutOfMemory(i) :
+				picolForceResult(i, cat, 0);
+			if (escaped != insert && picolFree(i, escaped) != PICKLE_OK)
+				return PICKLE_ERROR;
+			return rv;
 		}
 		if (t == PT_STR || t == PT_ESC)
 			count++;
@@ -2089,17 +2093,16 @@ static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, 
 			implies(USE_MAX_STRING, l <= PICKLE_MAX_STRING);
 			if (picolStackOrHeapAlloc(i, &h, l) != PICKLE_OK)
 				return PICKLE_ERROR;
-
 			memcpy(h.p,                           parse,   left);
 			memcpy(h.p + left + escape,           insert,  il);
 			memcpy(h.p + left + 1 + il + (2 *escape), p.start, right + 1);
-			h.p[left + il] = ' ';
 			if (escape) {
 				h.p[left]          = '{';
 				h.p[left + il + 1] = '}';
 				h.p[left + il + 2] = ' ';
+			} else {
+				h.p[left + il] = ' ';
 			}
-
 			if (h.p != h.buf)
 				return picolForceResult(i, h.p, 0);
 			const int r = pickle_set_result_string(i, h.p);
@@ -2109,6 +2112,38 @@ static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, 
 		}
 	}
 	return pickle_set_result_empty(i);
+}
+
+static inline int picolCommandLRepeat(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc != 3)
+		return pickle_set_result_error_arity(i, 4, argc, argv);
+	long count = 0;
+	if (picolConvertLong(i, argv[1], &count) != PICKLE_OK)
+		return PICKLE_ERROR;
+	if (count < 0)
+		return pickle_set_result_error(i, "Invalid argument %s", argv[1]);
+	const int escape = picolStringNeedsEscaping(argv[2], 0);
+	const size_t rl  = picolStrlen(argv[2]);
+	char *escaped = escape ? picolEscape(i, argv[2], rl, 0) : argv[2];
+	const size_t el  = escape ? picolStrlen(escaped) : rl;
+	char *r = picolMalloc(i, ((el + 1) * count) + 1);
+	if (!r)
+		goto fail;
+	for (long j = 0; j < count; j++) {
+		memcpy(r + ((el + 1) * j), escaped, el);
+		r[((el + 1) * j) + el] = j < (count - 1) ? ' ' : '\0';
+	}
+	r[count*el + count] = '\0';
+	if (escaped != argv[2])
+		picolFree(i, escaped);
+	return picolForceResult(i, r, 0);
+fail:
+	if (escaped != argv[2])
+		picolFree(i, escaped);
+	picolFree(i, r);
+	return picolSetResultErrorOutOfMemory(i);
 }
 
 static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2452,7 +2487,7 @@ static int picolCommandJoin(pickle_t *i, const int argc, char **argv, void *pd) 
 	picolParserInitialize(&p, NULL, parse, NULL, NULL);
 	for (;;) {
 		if (picolGetToken(&p) == PICKLE_ERROR) {
-			r = pickle_set_result_error(i, "parser error");
+			r = pickle_set_result_error(i, "Invalid parse");
 			goto end;
 		}
 		if (p.type == PT_EOF)
@@ -2787,6 +2822,7 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 			{ "llength",   picolCommandLLength,   NULL },
 			{ "linsert",   picolCommandLInsert,   NULL },
 			{ "lset",      picolCommandLSet,      NULL },
+			{ "lrepeat",   picolCommandLRepeat,   NULL },
 			{ "split",     picolCommandSplit,     NULL },
 		};
 		for (size_t j = 0; j < sizeof(list)/sizeof(list[0]); j++)
