@@ -108,7 +108,7 @@ test 0   {and 85 170}
 test 0 {not 3}
 test 1 {not 0}
 # test 1 {! x}
-test 3 {div 12 4}
+test 3 {/ 12 4}
 test 4 {mod 4 12}
 test 11 {mod 11 12}
 test 0 {mod 12 12}
@@ -401,8 +401,8 @@ puts "FREED:      [heap freed]"
 puts "ALLOC:      [heap allocs]"
 puts ""
 puts "MEMORY:     $m"
-puts "EFFICIENCY: [div [* [heap total] 100] [heap blocks]]%"
-puts "WASTED:     [- 100 [div [* [heap max] 100] $m]]%"
+puts "EFFICIENCY: [/ [* [heap total] 100] [heap blocks]]%"
+puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
 
 unset heaps; unset i; unset m; unset blk; unset sz; unset used;
 

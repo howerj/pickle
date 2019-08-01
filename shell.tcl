@@ -42,9 +42,9 @@ proc words {} {
 		set l [+ $l [string length $n]]
 		set c " "
 		if {> $l 80} { set c "\n"; set l 0 }
-		puts -nonewline "$n$c"
+		stdout -puts "$n$c"
 	}
-	puts ""
+	stdout -puts "\n"
 }
 
 # Is a variable defined, and if so, is it a command or a variable?
@@ -110,7 +110,7 @@ puts "To quit, type 'exit', or press CTRL+D on a Unix (or CTRL-Z in Windows)"
 proc io {} {
 	upvar #0 prompt p
 	upvar #0 line l
-	puts -nonewline $p
+	stdout -puts $p
 	set e -1
 	set l [catch {gets} e]
 	if {or [eq [decode $e] break] [eq [decode $e] error]} {

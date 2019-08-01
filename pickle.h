@@ -15,9 +15,6 @@ extern "C" {
 
 #include <stddef.h>
 
-#define PICKLE_MAX_RECURSION (128) /* Recursion limit */
-#define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
-
 #ifndef PICKLE_API
 #define PICKLE_API /* Used to apply attributes to exported functions */
 #endif

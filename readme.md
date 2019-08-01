@@ -501,17 +501,16 @@ Shell.
 
 The following commands are defined:
 
-* puts -nonewline? string
+* puts string
 
 Write a string, followed by a newline, to the standard output stream,
 [stdout][]. If an EOF is encountered, a return code of '1' occurs and the
-string 'EOF' is returned. '-nonewline' can be given as an optional argument, to
-suppress the newline.
+string 'EOF' is returned.
 
 * error string
 
 Write an error message to the standard error stream, followed by a newline and
-return '1' for the return code.
+returns '1' for the return code.
 
 * gets
 
@@ -655,19 +654,6 @@ can use "string char" to convert this to a character). -1 is returned on EOF.
 Write a character, represented numerically, to standard output. The original
 character is returned if there is no error in doing this.
 
-* slurp file-name
-
-Read an entire file into a string. Bear in mind any 'NUL' characters in the
-file will terminate the string early. The file is always 'NUL' terminated by
-appending a 'NUL' character after the file contents into the character array
-read in. Only files which are seekable can be loaded correctly.
-
-* dump -append? file-name string
-
-Dump the contents of a string into a file, specified by 'file-name'. Optionally
-the string can be appended, if the '-append' is given, by default the file is
-overwritten.
-
 * fopen file-name mode
 
 This 'fopen' opens 'file-name' in 'mode', like the C library command 'fopen'.
@@ -735,18 +721,6 @@ efficient then defining 'incr' in TCL, like so:
 
 And it is used often in looping constructs, however it is not necessary so is
 not part of the language core.
-
-* gensym
-
-Generate a unique symbol of the form 'gensym.X', where 'X' is a number.
-This will return an error if it has run out of unique symbols. It should be
-noted that the symbols generated form a completely predictable sequence.
-
-* id arg?
-
-Return the argument.
-
-
 
 ## Compile Time Options
 

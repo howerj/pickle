@@ -45,9 +45,12 @@
  * of defining procedures could be made.
  * TODO: Assert that the correct 'PICKLE_*' is returned for API functions,
  * other API pre-and-post conditions to check for; presence of call-stack,
- * length is greater than zero, ...
+ * length is greater than zero, add more assertions in general, especially
+ * the new list code.
+ * TODO: Wrap up all standard library functions; memcpy, memset, memchr,
+ * etcetera.
  * TODO: Add list manipulation functions; 'lsort', 'linsert', 'lsearch' 
- * 'lrepeat', 'lreverse' and perhaps 'foreach'. */
+ * 'lreverse' and perhaps 'foreach'. */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -58,6 +61,9 @@
 #include <stdio.h>   /* vsnprintf */
 #include <stdlib.h>  /* !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
 #include <string.h>  /* memcpy, memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr */
+
+#define PICKLE_MAX_RECURSION (128) /* Recursion limit */
+#define PICKLE_MAX_ARGS      (128) /* Maximum arguments to some internal functions */
 
 #define SMALL_RESULT_BUF_SZ       (96)
 #define PRINT_NUMBER_BUF_SZ       (64 /* base 2 */ + 1 /* '-'/'+' */ + 1 /* NUL */)
@@ -995,6 +1001,23 @@ fail:
 	return NULL;
 }
 
+static char *astrcat(pickle_t *i, const char *a, const char *b) {
+	assert(i);
+	assert(a);
+	assert(b);
+	const size_t al = picolStrlen(a), bl = picolStrlen(b);
+	const size_t nl = al + bl + 1;
+	if (nl < al || nl < bl) /* overflow */
+		return NULL;
+	char *r = picolMalloc(i, nl);
+	if (!r)
+		return NULL;
+	memcpy(r, a, al);
+	memcpy(r + al, b, bl);
+	r[al + bl] = '\0';
+	return r;
+}
+
 int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	assert(i);
 	assert(i->initialized);
@@ -1003,10 +1026,16 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	va_start(ap, fmt);
 	char *r = picolVsprintf(i, fmt, ap);
 	va_end(ap);
-	if (r && i->line) { /* TODO: Add line number */
-		/*char buf[SMALL_RESULT_BUF_SZ] = { 0 };
-		if (picolLongToString(buf, i->line, 10) != PICKLE_OK) {
-		}*/
+	if (r && i->line) {
+		char buf[SMALL_RESULT_BUF_SZ + 5/*"line "*/ + 1/*':'*/ + 1/*' '*/] = "line ";
+		if (picolLongToString(buf + 5, i->line, 10) == PICKLE_OK) {
+			const size_t bl = picolStrlen(buf);
+			buf[bl + 0] = ':';
+			buf[bl + 1] = ' ';
+			char *rn = astrcat(i, buf, r);
+			picolFree(i, r);
+			r = rn;
+		}
 	}
 	(void)(r ? picolForceResult(i, r, 0) : pickle_set_result_string(i, "Invalid vsnprintf"));
 	return PICKLE_ERROR;
@@ -1698,6 +1727,8 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 		}
 		if (!compare(rq, "equal"))
 			return pickle_set_result_integer(i, !compare(arg1, arg2));
+		if (!compare(rq, "unequal"))
+			return pickle_set_result_integer(i, !!compare(arg1, arg2));
 		if (!compare(rq, "compare"))
 			return pickle_set_result_integer(i, compare(arg1, arg2));
 		if (!compare(rq, "compare-no-case"))
@@ -2571,7 +2602,7 @@ static int picolSetLevel(pickle_t *i, const char *levelStr) {
 	if (top)
 		level = i->level - level;
 	if (level < 0)
-		return pickle_set_result_error(i, "Invalid level passed to 'uplevel/upvar': %d", level);
+		return pickle_set_result_error(i, "Invalid uplevel/upvar %d", level);
 
 	for (int j = 0; j < level && i->callframe->parent; j++) {
 		assert(i->callframe != i->callframe->parent);
@@ -2832,9 +2863,9 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 	if (DEFINE_MATHS) {
 		static const char *unary[]  = { [UNOT] = "not", [UINV] = "invert", [UABS] = "abs", [UBOOL] = "bool" };
 		static const char *binary[] = {
-			[BADD]   =  "+",   [BSUB]     =  "-",      [BMUL]     =  "*",      [BDIV]  =  "div",  [BMOD]  =  "mod",
+			[BADD]   =  "+",   [BSUB]     =  "-",      [BMUL]     =  "*",      [BDIV]  =  "/",    [BMOD]  =  "mod",
 			[BMORE]  =  ">",   [BMEQ]     =  ">=",     [BLESS]    =  "<",      [BLEQ]  =  "<=",   [BEQ]   =  "==",
-			[BNEQ]   =  "!=",  [BLSHIFT]  =  "lshift", [BRSHIFT]  =  "rshift", [BAND]  =  "and",    [BOR]   =  "or",
+			[BNEQ]   =  "!=",  [BLSHIFT]  =  "lshift", [BRSHIFT]  =  "rshift", [BAND]  =  "and",  [BOR]   =  "or",
 			[BXOR]   =  "xor", [BMIN]     =  "min",    [BMAX]     =  "max",    [BPOW]  =  "pow",  [BLOG]  =  "log"
 		};
 		for (size_t j = 0; j < sizeof(unary)/sizeof(char*); j++)
@@ -3172,7 +3203,7 @@ static inline int picolTestGetSetVar(void) {
 	return r;
 }
 
-static inline int picolTestParser(void) { /**@todo The parser needs unit test writing for it */
+static inline int picolTestParser(void) {
 	int r = 0;
 	pickle_parser_t p = { NULL };
 
@@ -3196,7 +3227,7 @@ static inline int picolTestParser(void) { /**@todo The parser needs unit test wr
 				break;
 			assert(p.start && p.end);
 			assert(p.type <= PT_EOF);
-		} while(p.type != PT_EOF);
+		} while (p.type != PT_EOF);
 	}
 	return r;
 }
