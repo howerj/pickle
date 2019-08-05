@@ -1001,7 +1001,7 @@ fail:
 	return NULL;
 }
 
-static char *astrcat(pickle_t *i, const char *a, const char *b) {
+static char *picolAStrCat(pickle_t *i, const char *a, const char *b) {
 	assert(i);
 	assert(a);
 	assert(b);
@@ -1032,7 +1032,7 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 			const size_t bl = picolStrlen(buf);
 			buf[bl + 0] = ':';
 			buf[bl + 1] = ' ';
-			char *rn = astrcat(i, buf, r);
+			char *rn = picolAStrCat(i, buf, r);
 			picolFree(i, r);
 			r = rn;
 		}
@@ -2044,107 +2044,6 @@ static int picolCommandFor(pickle_t *i, const int argc, char **argv, void *pd) {
 	}
 }
 
-static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(pd);
-	assert(!pd);
-	if (argc != 3)
-		return pickle_set_result_error_arity(i, 3, argc, argv);
-	pickle_parser_opts_t o = { 1, 1, 1, 1 };
-	pickle_parser_t p = { NULL };
-	const char *parse = argv[1];
-       	size_t count = 0;
-	long index = 0;
-	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
-		return PICKLE_ERROR;
-	picolParserInitialize(&p, &o, parse, NULL, NULL);
-	for (;;) {
-		if (picolGetToken(&p) != PICKLE_OK)
-			return pickle_set_result_error(i, "Invalid parse");
-		const int t = p.type;
-		if (t == PT_EOF)
-			break;
-		if (t == PT_STR || t == PT_ESC)
-			count++;
-		if (count > (size_t)index) {
-			pickle_stack_or_heap_t h = { .p = NULL };
-			const size_t l = p.end - p.start + 1;
-			implies(USE_MAX_STRING, l <= PICKLE_MAX_STRING);
-			if (picolStackOrHeapAlloc(i, &h, l) != PICKLE_OK)
-				return PICKLE_ERROR;
-			const int r = pickle_set_result_string(i, memcpy(h.p, p.start, l));
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
-	}
-	return pickle_set_result_empty(i);
-}
-
-/* Super similar to lreplace, pro-tip - reuse this */
-static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(pd);
-	assert(!pd);
-	if (argc != 4)
-		return pickle_set_result_error_arity(i, 4, argc, argv);
-	pickle_parser_opts_t o = { 1, 1, 1, 1 };
-	pickle_parser_t p = { NULL };
-	char *parse = argv[1], *insert = argv[3];
-	const int escape = picolStringNeedsEscaping(insert, 0);
-	const size_t il = picolStrlen(insert), pl = picolStrlen(parse);
-       	size_t count = 0;
-	long index = 0;
-	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
-		return PICKLE_ERROR;
-	if (index < 0)
-		index = 0;
-	picolParserInitialize(&p, &o, parse, NULL, NULL);
-	for (;;) {
-		if (picolGetToken(&p) != PICKLE_OK)
-			return pickle_set_result_error(i, "Invalid parse");
-		const int t = p.type;
-		if (t == PT_EOF) { /* NB. It should be possible to remove this special case */
-			char *escaped = escape ? picolEscape(i, insert, il, 0) : insert;
-			if (!escaped)
-				return picolSetResultErrorOutOfMemory(i);
-			char *cat = concatenate(i, " ", 2, (char *[2]) { parse, escaped }, 0);
-			const int rv = !cat ? 
-				picolSetResultErrorOutOfMemory(i) :
-				picolForceResult(i, cat, 0);
-			if (escaped != insert && picolFree(i, escaped) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return rv;
-		}
-		if (t == PT_STR || t == PT_ESC)
-			count++;
-		if (count > (size_t)index) {
-			pickle_stack_or_heap_t h = { .p = NULL };
-			const size_t l = il + pl + 1/*space*/ + (2 * escape /* { } */) + 1/*NUL*/;
-			const size_t left = p.start - parse;
-			const size_t right = pl - left;
-			implies(USE_MAX_STRING, l <= PICKLE_MAX_STRING);
-			if (picolStackOrHeapAlloc(i, &h, l) != PICKLE_OK)
-				return PICKLE_ERROR;
-			memcpy(h.p,                           parse,   left);
-			memcpy(h.p + left + escape,           insert,  il);
-			memcpy(h.p + left + 1 + il + (2 *escape), p.start, right + 1);
-			if (escape) {
-				h.p[left]          = '{';
-				h.p[left + il + 1] = '}';
-				h.p[left + il + 2] = ' ';
-			} else {
-				h.p[left + il] = ' ';
-			}
-			if (h.p != h.buf)
-				return picolForceResult(i, h.p, 0);
-			const int r = pickle_set_result_string(i, h.p);
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
-	}
-	return pickle_set_result_empty(i);
-}
-
 static inline int picolCommandLRepeat(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
@@ -2175,6 +2074,154 @@ fail:
 		picolFree(i, escaped);
 	picolFree(i, r);
 	return picolSetResultErrorOutOfMemory(i);
+}
+
+/* TODO: Use this, and picolArgsGrow, elsewhere */
+static char **picolArgs(pickle_t *i, pickle_parser_opts_t *o, const char *s, int *argc) {
+	assert(i);
+	assert(s);
+	assert(o);
+	assert(argc);
+	*argc = 0;
+	int args = 0;
+	char **argv = NULL;
+	pickle_parser_t p = { NULL };
+	picolParserInitialize(&p, o, s, NULL, NULL);
+	for (;;) {
+		if (picolGetToken(&p) != PICKLE_OK)
+			goto err;
+		if (p.type == PT_EOF)
+			break;
+		if (p.type == PT_STR || p.type == PT_VAR || p.type == PT_CMD || p.type == PT_ESC) {
+			const size_t tl = (p.end - p.start) + 1;
+			char *t = picolMalloc(i, tl + 1);
+			char **old = argv;
+			if (!t)
+				goto err;
+			memcpy(t, p.start, tl);
+			t[tl] = '\0';
+			if (!(argv = picolRealloc(i, argv, sizeof(char*)*(args + 1)))) {
+				argv = old;
+				(void)picolSetResultErrorOutOfMemory(i);
+				goto err;
+			}
+			argv[args++] = t;
+		}
+	}
+	*argc = args;
+	if (!argv) {
+		assert(args == 0);
+		return picolMalloc(i, sizeof (char *));
+	}
+	return argv;
+err:
+	picolFreeArgList(i, args, argv);
+	return NULL;
+}
+
+static char **picolArgsGrow(pickle_t *i, int *argc, char **argv) {
+	assert(i);
+	assert(argc);
+	assert(argv);
+	const int n = *argc + 1;
+	assert(n > 0);
+	char **old = argv;
+	if (!(argv = picolRealloc(i, argv, sizeof(char*) * n))) {
+		picolFreeArgList(i, *argc, old);
+		(void)picolSetResultErrorOutOfMemory(i);
+		return NULL;
+	}
+	*argc = n;
+	argv[n - 1] = NULL;
+	return argv;
+}
+
+static inline int picolCommandLLength(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc != 2)
+		return pickle_set_result_error_arity(i, 2, argc, argv);
+	int as = 0;
+	char **av = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1], &as);
+	if (!av)
+		return picolSetResultErrorOutOfMemory(i);
+	if (picolFreeArgList(i, as, av) != PICKLE_OK)
+		return PICKLE_ERROR;
+	return pickle_set_result_integer(i, as);
+}
+
+static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc != 3)
+		return pickle_set_result_error_arity(i, 3, argc, argv);
+	long index = 0;
+	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
+		return PICKLE_ERROR;
+	int as = 0;
+	char **av = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1], &as);
+	if (!av)
+		return picolSetResultErrorOutOfMemory(i);
+	assert(as >= 0);
+	if (!as || index >= as) {
+		if (picolFreeArgList(i, as, av) != PICKLE_OK)
+			return PICKLE_ERROR;
+		return pickle_set_result_empty(i);
+	}
+	index = MAX(0, MIN(index, as - 1));
+	const int r1 = picolForceResult(i, av[index], 0);
+	av[index] = NULL;
+	const int r2 = picolFreeArgList(i, as, av);
+	return r1 == PICKLE_OK && r2 == PICKLE_OK ? PICKLE_OK : PICKLE_ERROR;
+}
+
+/* TODO: Reuse for LSet and LReplace */
+static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc != 4)
+		return pickle_set_result_error_arity(i, 4, argc, argv);
+	char *parse = argv[1], *insert = argv[3];
+	const int escape = picolStringNeedsEscaping(insert, 0);
+	const size_t il  = picolStrlen(insert);
+	long index = 0, r = PICKLE_OK;
+	if (picolConvertLong(i, argv[2], &index) != PICKLE_OK)
+		return PICKLE_ERROR;
+	if (!(insert = escape ? picolEscape(i, insert, il, 0) : insert))
+		return picolSetResultErrorOutOfMemory(i);
+	int as = 0;
+	char **av = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, parse, &as);
+	assert(as >= 0);
+	if (!av)
+		return picolSetResultErrorOutOfMemory(i);
+	if (!as) {
+		r = pickle_set_result_empty(i);
+		goto done;
+	}
+	index = MAX(0, MIN(index, as));
+	if (!(av = picolArgsGrow(i, &as, av))) {
+		r = PICKLE_ERROR;
+		goto done;
+	}
+	if (index < (as - 1))
+		memmove(&av[index + 1], &av[index], sizeof (*av) * (as - index - 1));
+	av[index] = insert;
+done:
+	if (r == PICKLE_OK) {
+		char *s = concatenate(i, " ", as, av, 0);
+		if (!s)
+			r = PICKLE_ERROR;
+		else if (picolForceResult(i, s, 0) != PICKLE_OK)
+			r = PICKLE_ERROR;
+	}
+	av[index] = NULL;
+
+	if (escape)
+		if (picolFree(i, insert) != PICKLE_OK)
+			r = PICKLE_ERROR;
+	if (picolFreeArgList(i, as, av) != PICKLE_OK)
+		r = PICKLE_ERROR;
+	return r;
 }
 
 static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2282,27 +2329,6 @@ fail:
 	picolFree(i, r);
 	picolFreeArgList(i, nargc, nargv);
 	return PICKLE_ERROR;
-}
-
-static inline int picolCommandLLength(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(pd);
-	assert(!pd);
-	if (argc != 2)
-		return pickle_set_result_error_arity(i, 2, argc, argv);
-	const char *parse = trimleft(string_white_space, argv[1]);
-	pickle_parser_opts_t o = { 1, 1, 1, 1 };
-	pickle_parser_t p = { NULL };
-	picolParserInitialize(&p, &o, parse, NULL, NULL);
-	size_t count = 0;
-	for (;;) {
-		if (picolGetToken(&p) != PICKLE_OK)
-			return pickle_set_result_error(i, "Invalid parse");
-		if (p.type == PT_EOF)
-			break;
-		if (p.type != PT_SEP)
-			count++;
-	}
-	return pickle_set_result_integer(i, count ? count - 1 : count);
 }
 
 static int picolCommandRetCodes(pickle_t *i, const int argc, char **argv, void *pd) {
