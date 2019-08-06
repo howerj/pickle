@@ -321,7 +321,6 @@ test {a c} {set z "a b c";   lset z 1 ""}
 test {a} {set z "a b";   lset z 1 ""}
 test {} {set z "a";   lset z 0 ""}
 test {b} {set z "a b";   lset z 0 ""}
-test {a} {set z "a b";   lset z 1 ""}
 test {a b c} {split a.b.c .}
 test {a { } b { } c} {split "a b c" ""}
 test {a b} {split "a.b" "."}
@@ -342,6 +341,22 @@ test {a a} {lrepeat 2 a}
 test {a a a} {lrepeat 3 a}
 test {ab ab ab} {lrepeat 3 ab}
 test {{a b} {a b} {a b}} {lrepeat 3 {a b}}
+test {a,b,c} {join {a b c} ,}
+test {a,b,c} {conjoin , a b c}
+test {a} {conjoin , a}
+test {a,b} {conjoin , a b}
+test {} {conjoin , ""}
+test {} {lreverse {}}
+test {a} {lreverse {a}}
+test {b a} {lreverse {a b}}
+test {c b a} {lreverse {a  b c}}
+test {{ c} a} {lreverse {a { c}}}
+test {{y y} {x x}} {lreverse {{x x} {y y}}}
+state {variadic v1 n { return $n 0 }}
+test {a b {c d}} {v1 a b {c d}}
+test {a} {v1 a}
+test {} {v1}
+state {rename v1 "" }
 
 # Fails for now
 #test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}

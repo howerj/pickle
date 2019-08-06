@@ -5,7 +5,7 @@
 | Author    | Salvator Sanfilippo (Original Interpreter) |
 | Author    | Richard James Howe (Modifications Only)    |
 | Copyright | 2007-2016 Salvatore Sanfilippo             |
-| Copyright | 2018 Richard James Howe                    |
+| Copyright | 2018-2019 Richard James Howe               |
 | License   | BSD                                        |
 | Email     | howe.r.j.89@gmail.com                      |
 | Website   | <https://github.com/howerj/pickle>         |
@@ -67,7 +67,7 @@ programs
 Disadvantages:
 
 * Everything is a string (math operations and data structure manipulation
-will be a pain).
+will be slow).
 * This is a Do-It-Yourself solution, it may require that you modify the library
 itself and will almost certainly require that you define your own new commands
 in [C][].
@@ -147,18 +147,13 @@ there really is not that much there.
 
 ### Internally Defined Commands
 
-Picol defines the following commands internally, that is, they will always be
-available.
+Picol defines the commands in this section internally, in a default build all
+of the commands in this section will be available. There are some build options
+to remove some commands (such as the string function, the math functions, and
+the list functions).
 
 The options passed to the command and type are indicated after the command, a
 question mark suffix on an argument indicates an optional command.
-
-All strings can be coerced into numbers, whether they are willing or not, for
-example the strings 'iamnotanumber' becomes 0 (not 6), '3d20' to 3, and '-50'
-to -50.
-
-Truth is represented as a string that evaluates to a non zero number, false
-as a string that evaluates to zero.
 
 * set variable value?
 
@@ -194,6 +189,31 @@ with the arguments in 'argument list', and code to be executed in the 'function
 body'. If the final command is not a 'return' then the result of the last
 command is used.
 
+* variadic identifier name {function body}
+
+In [TCL][] syntax can is used for variadic functions, this is one area in which
+pickle differs, instead a special type of procedure can be created with the
+'variadic' command. When the variadic function is called the arguments passed
+to it are concatenated together to form a list which is assigned to the
+argument 'name' given.
+
+For example:
+
+	variadic example l { puts $l }
+	example
+	example a
+	example a b
+	example a b {c d}
+
+Prints:
+
+	""
+	"a"
+	"a b"
+	"a b {c d}"
+
+Respectively.
+
 * return string? number?
 
 Optionally return a string, optionally with an internal number that can affect
@@ -221,10 +241,6 @@ strange, very strange. No arguments from me.
 
 Unset a variable, removing it from the current scope.
 
-* concat strings...
-
-Concatenate a list of strings with a space in-between them.
-
 * eval strings...
 
 Concatenate a list of strings with a space in-between them, as with 'concat',
@@ -234,14 +250,22 @@ then evaluate the string, returning the result of the evaluation.
 
 The following mathematical operations are defined:
 
-'+', '-', '\*', '/', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!='. It should be
-obvious what each one does. It should be noted that because all variables are
-stored internally as strings, mathematical operations are egregiously slow.
-Numbers are first converted to strings, the operation performed, then converted
-back to strings.
+'+', '-', '\*', '/', 'mod', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!=', 
+'min', 'max', 'pow', and 'log'. It should be obvious what each one does. 
+It should 
+be noted that because all variables are stored internally as strings, 
+mathematical operations are egregiously slow. Numbers are first converted to 
+strings, the operation performed, then converted back to strings. There are 
+also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'.
 
-There are also the following unary mathematical operators defined: '!', '~',
-'abs', 'bool'.
+There are also the following unary mathematical operators defined: 'not'
+(logical negation), 'invert' (bitwise inversion), 'abs' (absolute value), 
+'bool' (turn number into a boolean 0 or 1).
+
+Numbers conversion is strict, an invalid number will not be silently converted
+into a zero, or a string containing a part of a number will not become that
+number, for example: "0", "-1" and "12" are valid numbers, whilst; "0a", "x",
+"--2", "22x" are not.
 
 * catch expr varname
 
@@ -268,6 +292,16 @@ Given a [TCL][] list, 'join' will flatten that list and return a string by
 inserting a String in-between its elements. For example "join {a b c} ," yields
 "a,b,c".
 
+* conjoin String Arguments\*
+
+'conjoin' works the same as 'join' except instead of a list it joins its
+arguments, for example:
+
+	join {a b c} ,
+	conjoin , a b c
+
+Are equivalent.
+
 * for {start} {test} {next} {body}
 
 Implements a for loop.
@@ -291,7 +325,13 @@ or quote. For example the following lists each contain three elements:
 
 The list is the basic higher level data structure in Pickle, and as you can
 see, there is nothing special about them. They are just strings treated in a
-special way.
+special way. Processing these lists is incredibility inefficient as everything
+is stored as a string - a list needs to be parsed before it can be manipulated
+at all. This applies to all of the list functions. A more efficient, non-TCL
+compatible, set of list functions could be designed, or the internals of the
+library could be changed so they are more complex (which would help speeding
+up the mathematical functions), but either option is undesirable for different
+reasons.
 
 * lindex list index
 
@@ -299,6 +339,26 @@ See 'llength'.
 
 Index into a list, retrieving an element from that list. Indexing starts at
 zero, the first element being the zeroth element.
+
+* lrepeat number string
+
+Repeat a string a number of times to form a list.
+
+Examples:
+
+	pickle> lrepeat 3 abc
+	abc abc abc
+	pickle> lrepeat 2 {x x}
+	{x x} {x x}
+
+* lset
+* linsert
+* lreplace
+* lsort
+* lreverse
+* split
+* list
+* concat
 
 * unknown {list}
 
@@ -321,7 +381,7 @@ the system shell, including its arguments.
 
 #### String Operator
 
-* string option arg *OR* string option arg arg
+* string option arg *OR* string option arg arg *OR* string option arg arg arg
 
 The 'string' command in [TCL][] implements nearly every string command you
 could possibly want, however this version of 'string' is more limited and
@@ -677,7 +737,10 @@ To use this command:
 	$fh -puts "string"           # Write a string to a file
 
 As soon as '-close' is used on the returned function, it is removed and cannot
-be used again. Subsequent uses cause errors.
+be used again. Subsequent uses cause errors. A similar system could be used
+to implement a more efficient list data structure, whereby a small closure
+is generated that can manipulate the list, instead of the current list
+functions.
 
 * frename src dst
 
@@ -736,7 +799,16 @@ functions from being compiled. Assertions are used heavily to check that the
 library is being used correctly and to check the libraries internals, this
 applies both to the block allocation routines and pickle itself.
 
-This is all. Inevitably when an interpreter is made for a new language,
+There are other compile time options within [pickle.c][] that control;
+maximum string length and whether to use one, whether to provide the default
+allocator or not, whether certain functions are to be made available to the
+interpreter or not (such as the command 'string', the mathematical operators
+and the list functions), and whether strict numeric conversion is used. 
+These options are semi-internal, they are subject to change and removal, you
+should use the source to determine what they are and be aware that they may
+change across releases.
+
+Inevitably when an interpreter is made for a new language,
 [readline][] (or [linenoise][]) integration is a build option, usually because
 the author is tired of pressing the up arrow key and seeing '^\[\[A'. Naturally
 this increases the complexity of the build system, adds more options, and adds
@@ -748,7 +820,7 @@ around your program.
 To aid in porting the system to embedded platforms, [pickle.c][] contains no
 Input and Output functions (they are added in by registering commands in
 [main.c][]). [pickle.c][] does include [stdio.h][], but only to access
-[snprintf][]. The big problem with porting a string heavy language to an
+[vsnprintf][]. The big problem with porting a string heavy language to an
 embedded platform, unlike a language like [FORTH][], is memory allocation. It
 is unavoidable that some kind of dynamic memory allocation is required. For
 this purpose it is possible to provide your own allocator to the pickle
@@ -761,7 +833,7 @@ used, but unlike [malloc][] will require tweaking to suite your purposes. The
 maximum block size available to the allocator will also determine the maximum
 string size that can be used by pickle.
 
-Apart from snprintf, and sscanf, the other functions pulled in from the C
+Apart from [vsnprintf][], the other functions pulled in from the C
 library are quite easy to implement. They include (but are not necessarily
 limited to); strlen, memcpy, memchr, memset and abort.
 
@@ -809,7 +881,7 @@ necessary, such as 'pickle\_set\_result\_error' and 'pickle\_set\_result\_error\
 these return 'PICKLE\_ERROR' always, the latter function deals specifically with
 arity errors within functions, formatting the return buffer an number of
 arguments related error message. Likewise, the functions that set the return
-value to a number and not a string are wrappers around calls to 'snprintf'
+value to a number and not a string are wrappers around calls to [vsnprintf][]
 and 'pickle\_set\_result\_string'. The 'get' and 'set' functions return 'PICKLE\_OK'
 on success, and 'PICKLE\_ERROR' on failure. A 'get' fails if the variable does
 not exists, a 'set' on a variable that does not exist creates that variable
@@ -990,6 +1062,7 @@ this applies only to a few functions.
 [TCL]: https://en.wikipedia.org/wiki/Tcl
 [stdio.h]: http://www.cplusplus.com/reference/cstdio/
 [snprintf]: http://www.cplusplus.com/reference/cstdio/snprintf/
+[vsnprintf]: http://www.cplusplus.com/reference/cstdio/vsnprintf/
 [FORTH]: https://en.wikipedia.org/wiki/Forth_(programming_language)
 [C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
 [Make]: https://en.wikipedia.org/wiki/Make_(software)
