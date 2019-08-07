@@ -242,6 +242,7 @@ done:
 	return pickle_set_result_integer(i, info);
 }
 
+/* TODO: Replace with a TCL list of all arguments */
 static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	char **global_argv = ((argument_t*)pd)->argv;

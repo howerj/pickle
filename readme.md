@@ -260,7 +260,7 @@ also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'.
 
 There are also the following unary mathematical operators defined: 'not'
 (logical negation), 'invert' (bitwise inversion), 'abs' (absolute value), 
-'bool' (turn number into a boolean 0 or 1).
+'bool' (turn number into a boolean 0 or 1), 'negate' (negate a number).
 
 Numbers conversion is strict, an invalid number will not be silently converted
 into a zero, or a string containing a part of a number will not become that
