@@ -42,9 +42,9 @@ proc words {} {
 		set l [+ $l [string length $n]]
 		set c " "
 		if {> $l 80} { set c "\n"; set l 0 }
-		puts -nonewline "$n$c"
+		stdout -puts "$n$c"
 	}
-	puts ""
+	stdout -puts "\n"
 }
 
 # Is a variable defined, and if so, is it a command or a variable?
@@ -61,9 +61,7 @@ proc defined {x} {
 	return $r
 }
 
-proc help {} { source help.tcl }
-
-proc unknown {l} { system "$l" }
+proc unknown l { system "$l" }
 
 # Crude lsearch replacement, this expects a function and
 # an argument to that function.
@@ -84,7 +82,7 @@ proc lsearch {p arg1 l} {
 }
 
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
-# 'words.
+# 'words' which is also from Forth.
 proc see {w} {
 	if {eq [uplevel 1 "defined {$w}"] {2 variable}} {
 		puts "set $w [uplevel 1 "set $w"]"
@@ -92,28 +90,34 @@ proc see {w} {
 	}
 	set widx [info command $w]
 	if {< $widx 0} {
-		return "'$w' not defined" 1
+		return "'$w' not defined" -1
 	}
 
+	set type [info command type $widx]
 	set args [info command args $widx]
 	set body [info command body $widx]
 	set name [info command name $widx]
-	puts "proc $name {$args} {$body}"
+	puts "$type $name {$args} {$body}"
 }
 
-# puts "Commands defined:"
-# words
+variadic ? n { 
+	if { string is true [lindex $n 0] } {
+		return [lindex $n 1] 0
+	} else {
+		return [lindex $n 2] 0
+	}
+}
 
-puts "For help, type 'help', for a list of commands type 'words'"
-puts "To quit, type 'exit', or press CTRL+D on a Unix (or CTRL-Z in Windows)"
+puts "Manual available at: <https://github.com/howerj/pickle>"
+puts "To quit, type 'exit', or press CTRL+D on a Unix system (CTRL-Z in Windows)"
 
 proc io {} {
 	upvar #0 prompt p
 	upvar #0 line l
-	puts -nonewline $p
+	stdout -puts $p
 	set e -1
 	set l [catch {gets} e]
-	if {| [eq [decode $e] break] [eq [decode $e] error]} {
+	if {or [eq [decode $e] break] [eq [decode $e] error]} {
 		if {eq $l EOF} {
 			exit 0
 		}

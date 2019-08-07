@@ -6,6 +6,10 @@
 # or 'while') as we would have to use those constructs as part of the test
 # framework itself. Instead, those things should be considered tested if
 # the test framework itself runs.
+#
+# TODO: Test failure cases
+# TODO: Find a way to merge the 'shell.tcl' application, the 'help.tcl' and
+# the 'example.tcl'.
 
 proc die {x} { puts $x; exit 1 }
 
@@ -40,14 +44,28 @@ proc test {result x} {
 	upvar #0 total t
 	incr t
 
-	if {& [eq $r $result] [eq 0 $retcode]} {
+	if {and [eq $r $result] [eq 0 $retcode]} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
 	} else {
 		set f "[red]FAIL[normal]:  (expected \"$result\") "
 	}
 	puts "$f{$x} = \"$r\""
-	unset t
+}
+
+# Test failure cases
+proc fails {x} {
+	set retcode 0
+	set r [catch $x retcode]
+	upvar #0 total t
+	incr t
+	if {== $retcode -1} {
+		uplevel #0 { set passed [+ $passed 1] }
+		set f "[green]ok[normal]:    "
+	} else {
+		set f "[red]FAIL[normal]:    "
+	}
+	puts [string tr r "\n\r" " " "$f{$x} with error \"$r\""]
 }
 
 proc state {x} {
@@ -68,21 +86,46 @@ proc fib {x} {
 proc n2 {} { upvar 1 h u; set u [+ $u 1]; }
 proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }
 
+puts "SYSTEM OPTIONS"
+puts "Pointer Size: [info sizeof pointer]"
+puts "Number  Size: [info sizeof number]"
+puts "Limits: "
+puts "\trecursion:  [info limits recursion]"
+puts "\tstring:     [info limits string]"
+puts "\tminimum:    [info limits minimum]"
+puts "\tmaximum:    [info limits maximum]"
+puts "Features:"
+puts "\tallocator:  [info features allocator]"
+puts "\tstring:     [info features string]"
+puts "\tmaths:      [info features maths]"
+puts "\tdebugging:  [info features debugging]"
+puts "\tstrict:     [info features strict]"
+puts "\tstr-length: [info features string-length]"
+
+
 puts "\[Pickle Tests\]"
 
 test hello {if {bool 1} { concat "hello" }}
 test 1 {bool 4}
 test 0 {bool 0}
-# test 0 {bool 0b1}
-# test 1 {bool 9b1}
+fails {bool}
+
+if {== 0 [info features strict]} {
+	test 0 {bool 0b1}
+	test 1 {bool 9b1}
+	test 1 {== 0 abc}
+	test 1 {!= 0 1abc}
+	test 1 {not x}
+}
+
 test 1 {== 2 2}
-# test 1 {== 0 abc}
-# test 1 {!= 0 1abc}
 test 1 {!= 0 2}
 test 1 {== -0 0}
 test 0 {== -1 1}
 test 4 {+ 2 2}
 test -4 {+ 2 -6}
+fails {+ 2 a}
+fails {+ 2}
 test -4 {- 2 6}
 test 16 {* -2 -8}
 test 1 "< 3 4"
@@ -94,32 +137,40 @@ test 0 {> -6  9}
 test 1 {>= -6  -6}
 test 1 {>= 6  -6}
 test 0 {>= -6  6}
-test 4 {<< 1 2}
-test 5 {>> 10 1}
+test 4 {lshift 1 2}
+test 5 {rshift 10 1}
 test 9 {min 90 9}
 test -9 {min 90 -9}
 test -4 {max -5 -4}
 test 4 {abs 4}
 test 4 {abs -4}
-test -1 {+ [~ 1] 1}
-test 255 {| 85 170}
-test 255 {^ 85 170}
-test 0   {& 85 170}
-test 0 {! 3}
-test 1 {! 0}
-# test 1 {! x}
+test -1 {+ [invert 1] 1}
+test 255 {or 85 170}
+test 255 {xor 85 170}
+test 0   {and 85 170}
+test 0 {not 3}
+test 1 {not 0}
 test 3 {/ 12 4}
-test 4 {% 4 12}
-test 11 {% 11 12}
-test 0 {% 12 12}
-test 1 {% 13 12}
+fails {/ 1 0}
+fails {/ 0 0}
+test 4 {mod 4 12}
+fails {mod 4 0}
+test 11 {mod 11 12}
+test 0 {mod 12 12}
+test 1 {mod 13 12}
+test -3 {negate 3}
+test 3 {negate -3}
 test 120 {set cnt 5; set acc 1; while {> $cnt 1} { set acc [* $acc $cnt]; decr cnt }; set acc; };
 test 1 {eq a a}
+fails {eq}
+fails {eq a}
 test 0 {eq a b}
 test 1 {ne abc ""}
 test 1 {eq "" ""}
 test 1 {eq "a b" [concat a b]}
 test a,b,c {join {a b c} ,}
+fails {join}
+fails {join {}}
 test 16 {square 4}
 test 89 {fib 10}
 test 0 {> 0 [info command fib]}
@@ -128,6 +179,7 @@ test -1 {info command fib}
 state {rename square sq}
 test 16 {sq 4}
 state {rename sq ""}
+fails {string}
 test 3 {string length 123}
 test 4 {string length 1234}
 test 4 {string length abcd}
@@ -156,18 +208,22 @@ test 1 {string match "abc*d" "abcXXXXd"}
 test 1 {string match "*" "ahoy!"}
 test 1 {string match "*abc*c?d" "xxxxxabcxxxxc3d"}
 test 1 {string match "*abc*c?d" "xxxxxabcxxxxc?d"}
+fails {string match}
+fails {string match ""}
 test ""     {string reverse ""}
 test "a"    {string reverse "a"}
 test "ba"   {string reverse "ab"}
 test "cba"  {string reverse "abc"}
 test "dcba" {string reverse "abcd"}
 test "ba0"  {string reverse "\x30ab"}
+fails {string reverse}
 test ""        {string trimleft ""}
 test ""        {string trimleft "   "}
 test "x "      {string trimleft "  x "}
 test "x b"     {string trimleft "  x b"}
 test "123ABC." {string toupper "123aBc."}
 test "123abc." {string tolower "123aBc."}
+fails {string tolower}
 test 0 {string equal a b}
 test 1 {string equal a a}
 test 1 {< 0 [string compare a A]}
@@ -186,10 +242,16 @@ test o {string index hello 9}
 test o {string index hello -1}
 test l {string index hello -2}
 test h {string index hello -9}
+fails {string index hello}
+fails {string index}
 test "" {string repeat abc 0}
 test "abc" {string repeat abc 1}
 test "abcabc" {string repeat abc 2}
 test "aaa" {string repeat a 3}
+fails {string repeat}
+fails {string repeat a}
+fails {string repeat a -1}
+fails {string is}
 test 1 {string is digit ""}
 test 1 {string is digit 1234567890}
 test 0 {string is digit 123a}
@@ -272,9 +334,14 @@ test 49 {string ordinal "1abc"}
 test ff {string dec2hex 255}
 test 1000 {string dec2hex 4096}
 test 4096 {string hex2dec 1000}
-test 65535 {string hex2dec FffF}
+if {== [info sizeof number] 16} { test -1 {string hex2dec FffF} } else { test 65535 {string hex2dec FffF} }
 test 101 {string dec2base 5 2}
+fails {string dec2base A 2}
 test 5 {string base2dec 101 2}
+fails {string base2dec 0 0}
+fails {string base2dec 0 1}
+fails {string base2dec 0 37}
+fails {string base2dec 2 2}
 test 0 {string char 48}
 test 1 {string char 49}
 test a {string char 97}
@@ -284,6 +351,7 @@ test {aabbcc} {string tr dc abc aabbccddeeff}
 test {ddeeffddeeff} {string tr r abc def aabbccddeeff}
 test {defdefgg} {string tr s abc def aabbccddeeffgg}
 test {abcddeeffgg} {string tr s abc aabbccddeeffgg}
+fails {string tr}
 test {ad} {string replace "abcd" 1 2 ""}
 test {acd} {string replace "abcd" 1 1 ""}
 test {abcd} {string replace "abcd" 2 1 ""}
@@ -301,6 +369,7 @@ test 3 {llength "a { b } c"}
 test 3 {llength "a { { b } } c"}
 test 3 {llength {a { { \" b \" } } c}}
 test 3 {llength {a " b " c}}
+fails {llength}
 test a {lindex "a b c" 0}
 test b {lindex "a b c" 1}
 test c {lindex "a b c" 2}
@@ -313,6 +382,7 @@ test c {lindex "a { b } c" 2}
 test "" {lindex "a { b } c" 3}
 test {$x} {subst -novariables {$x}}
 test {$x 3} {subst -novariables {$x [+ 2 1]}}
+fails {subst}
 test {a 3} {subst {a [+ 2 1]}}
 test {a [+ 2 1]} {subst -nocommands {a [+ 2 1]}}
 test {a hello c} {set z "a b c"; lset z 1 hello}
@@ -321,7 +391,6 @@ test {a c} {set z "a b c";   lset z 1 ""}
 test {a} {set z "a b";   lset z 1 ""}
 test {} {set z "a";   lset z 0 ""}
 test {b} {set z "a b";   lset z 0 ""}
-test {a} {set z "a b";   lset z 1 ""}
 test {a b c} {split a.b.c .}
 test {a { } b { } c} {split "a b c" ""}
 test {a b} {split "a.b" "."}
@@ -332,7 +401,53 @@ test {} {split "" ""}
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
 test {a b {c d e  } {  f {g h}}} {list a b "c d e  " "  f {g h}"}
-# test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
+test {a b c xyz} {linsert {a b c} 99 xyz}
+test {a b c xyz} {linsert {a b c} 3 xyz}
+test {xyz a b c} {linsert {a b c} 0 xyz}
+test {a {x yz} b c} {linsert {a b c} 1 {x yz}}
+test {} {lrepeat 0 a}
+test {a} {lrepeat 1 a}
+test {a a} {lrepeat 2 a}
+test {a a a} {lrepeat 3 a}
+test {ab ab ab} {lrepeat 3 ab}
+test {{a b} {a b} {a b}} {lrepeat 3 {a b}}
+test {a,b,c} {join {a b c} ,}
+test {a,b,c} {conjoin , a b c}
+test {a} {conjoin , a}
+test {a,b} {conjoin , a b}
+test {} {conjoin , ""}
+fails {conjoin}
+test {} {lreverse {}}
+test {a} {lreverse {a}}
+test {b a} {lreverse {a b}}
+test {c b a} {lreverse {a  b c}}
+test {{ c} a} {lreverse {a { c}}}
+test {{y y} {x x}} {lreverse {{x x} {y y}}}
+fails {lreverse}
+fails {proc}
+fails {variadic}
+state {variadic v1 n { return $n 0 }}
+test {a b {c d}} {v1 a b {c d}}
+test {a} {v1 a}
+test {} {v1}
+state {rename v1 "" }
+fails {rename}
+fails {rename XXX}
+fails {rename XXX YYY}
+test {} {lsort {}}
+test {a} {lsort {a}}
+test {a b} {lsort {a b}}
+test {a b} {lsort {b a}}
+test {a b c} {lsort {b a c}}
+test {c b a} {lsort -decreasing {b a c}}
+test {a b c} {lsort {a b c}}
+test {1 2 3} {lsort -integer {1 2 3}}
+test {3 2 1} {lsort -integer -decreasing {1 2 3}}
+fails {lsort}
+fails {lsort -integer {1 2 a}}
+
+# Fails for now
+#test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
 
 # Test upvar links
 set u 5
@@ -340,10 +455,6 @@ puts "u = $u"
 puts "[n1]"
 test 1 "== $u 7"
 unset u
-
-# puts "[n1]"
-# test 1 "== $u 2"
-# unset u
 
 assert [<= $passed $total]
 assert [>= $passed 0]

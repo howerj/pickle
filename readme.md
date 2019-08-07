@@ -5,7 +5,7 @@
 | Author    | Salvator Sanfilippo (Original Interpreter) |
 | Author    | Richard James Howe (Modifications Only)    |
 | Copyright | 2007-2016 Salvatore Sanfilippo             |
-| Copyright | 2018 Richard James Howe                    |
+| Copyright | 2018-2019 Richard James Howe               |
 | License   | BSD                                        |
 | Email     | howe.r.j.89@gmail.com                      |
 | Website   | <https://github.com/howerj/pickle>         |
@@ -67,7 +67,7 @@ programs
 Disadvantages:
 
 * Everything is a string (math operations and data structure manipulation
-will be a pain).
+will be slow).
 * This is a Do-It-Yourself solution, it may require that you modify the library
 itself and will almost certainly require that you define your own new commands
 in [C][].
@@ -147,18 +147,13 @@ there really is not that much there.
 
 ### Internally Defined Commands
 
-Picol defines the following commands internally, that is, they will always be
-available.
+Picol defines the commands in this section internally, in a default build all
+of the commands in this section will be available. There are some build options
+to remove some commands (such as the string function, the math functions, and
+the list functions).
 
 The options passed to the command and type are indicated after the command, a
 question mark suffix on an argument indicates an optional command.
-
-All strings can be coerced into numbers, whether they are willing or not, for
-example the strings 'iamnotanumber' becomes 0 (not 6), '3d20' to 3, and '-50'
-to -50.
-
-Truth is represented as a string that evaluates to a non zero number, false
-as a string that evaluates to zero.
 
 * set variable value?
 
@@ -194,6 +189,31 @@ with the arguments in 'argument list', and code to be executed in the 'function
 body'. If the final command is not a 'return' then the result of the last
 command is used.
 
+* variadic identifier name {function body}
+
+In [TCL][] syntax can is used for variadic functions, this is one area in which
+pickle differs, instead a special type of procedure can be created with the
+'variadic' command. When the variadic function is called the arguments passed
+to it are concatenated together to form a list which is assigned to the
+argument 'name' given.
+
+For example:
+
+	variadic example l { puts $l }
+	example
+	example a
+	example a b
+	example a b {c d}
+
+Prints:
+
+	""
+	"a"
+	"a b"
+	"a b {c d}"
+
+Respectively.
+
 * return string? number?
 
 Optionally return a string, optionally with an internal number that can affect
@@ -221,10 +241,6 @@ strange, very strange. No arguments from me.
 
 Unset a variable, removing it from the current scope.
 
-* concat strings...
-
-Concatenate a list of strings with a space in-between them.
-
 * eval strings...
 
 Concatenate a list of strings with a space in-between them, as with 'concat',
@@ -234,14 +250,22 @@ then evaluate the string, returning the result of the evaluation.
 
 The following mathematical operations are defined:
 
-'+', '-', '\*', '/', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!='. It should be
-obvious what each one does. It should be noted that because all variables are
-stored internally as strings, mathematical operations are egregiously slow.
-Numbers are first converted to strings, the operation performed, then converted
-back to strings.
+'+', '-', '\*', '/', 'mod', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!=', 
+'min', 'max', 'pow', and 'log'. It should be obvious what each one does. 
+It should 
+be noted that because all variables are stored internally as strings, 
+mathematical operations are egregiously slow. Numbers are first converted to 
+strings, the operation performed, then converted back to strings. There are 
+also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'.
 
-There are also the following unary mathematical operators defined: '!', '~',
-'abs', 'bool'.
+There are also the following unary mathematical operators defined: 'not'
+(logical negation), 'invert' (bitwise inversion), 'abs' (absolute value), 
+'bool' (turn number into a boolean 0 or 1), 'negate' (negate a number).
+
+Numbers conversion is strict, an invalid number will not be silently converted
+into a zero, or a string containing a part of a number will not become that
+number, for example: "0", "-1" and "12" are valid numbers, whilst; "0a", "x",
+"--2", "22x" are not.
 
 * catch expr varname
 
@@ -268,6 +292,16 @@ Given a [TCL][] list, 'join' will flatten that list and return a string by
 inserting a String in-between its elements. For example "join {a b c} ," yields
 "a,b,c".
 
+* conjoin String Arguments\*
+
+'conjoin' works the same as 'join' except instead of a list it joins its
+arguments, for example:
+
+	join {a b c} ,
+	conjoin , a b c
+
+Are equivalent.
+
 * for {start} {test} {next} {body}
 
 Implements a for loop.
@@ -291,7 +325,13 @@ or quote. For example the following lists each contain three elements:
 
 The list is the basic higher level data structure in Pickle, and as you can
 see, there is nothing special about them. They are just strings treated in a
-special way.
+special way. Processing these lists is incredibility inefficient as everything
+is stored as a string - a list needs to be parsed before it can be manipulated
+at all. This applies to all of the list functions. A more efficient, non-TCL
+compatible, set of list functions could be designed, or the internals of the
+library could be changed so they are more complex (which would help speeding
+up the mathematical functions), but either option is undesirable for different
+reasons.
 
 * lindex list index
 
@@ -299,6 +339,26 @@ See 'llength'.
 
 Index into a list, retrieving an element from that list. Indexing starts at
 zero, the first element being the zeroth element.
+
+* lrepeat number string
+
+Repeat a string a number of times to form a list.
+
+Examples:
+
+	pickle> lrepeat 3 abc
+	abc abc abc
+	pickle> lrepeat 2 {x x}
+	{x x} {x x}
+
+* lset
+* linsert
+* lreplace
+* lsort
+* lreverse
+* split
+* list
+* concat
 
 * unknown {list}
 
@@ -321,7 +381,7 @@ the system shell, including its arguments.
 
 #### String Operator
 
-* string option arg *OR* string option arg arg
+* string option arg *OR* string option arg arg *OR* string option arg arg arg
 
 The 'string' command in [TCL][] implements nearly every string command you
 could possibly want, however this version of 'string' is more limited and
@@ -501,17 +561,16 @@ Shell.
 
 The following commands are defined:
 
-* puts -nonewline? string
+* puts string
 
 Write a string, followed by a newline, to the standard output stream,
 [stdout][]. If an EOF is encountered, a return code of '1' occurs and the
-string 'EOF' is returned. '-nonewline' can be given as an optional argument, to
-suppress the newline.
+string 'EOF' is returned.
 
 * error string
 
 Write an error message to the standard error stream, followed by a newline and
-return '1' for the return code.
+returns '1' for the return code.
 
 * gets
 
@@ -655,19 +714,6 @@ can use "string char" to convert this to a character). -1 is returned on EOF.
 Write a character, represented numerically, to standard output. The original
 character is returned if there is no error in doing this.
 
-* slurp file-name
-
-Read an entire file into a string. Bear in mind any 'NUL' characters in the
-file will terminate the string early. The file is always 'NUL' terminated by
-appending a 'NUL' character after the file contents into the character array
-read in. Only files which are seekable can be loaded correctly.
-
-* dump -append? file-name string
-
-Dump the contents of a string into a file, specified by 'file-name'. Optionally
-the string can be appended, if the '-append' is given, by default the file is
-overwritten.
-
 * fopen file-name mode
 
 This 'fopen' opens 'file-name' in 'mode', like the C library command 'fopen'.
@@ -691,7 +737,10 @@ To use this command:
 	$fh -puts "string"           # Write a string to a file
 
 As soon as '-close' is used on the returned function, it is removed and cannot
-be used again. Subsequent uses cause errors.
+be used again. Subsequent uses cause errors. A similar system could be used
+to implement a more efficient list data structure, whereby a small closure
+is generated that can manipulate the list, instead of the current list
+functions.
 
 * frename src dst
 
@@ -736,18 +785,6 @@ efficient then defining 'incr' in TCL, like so:
 And it is used often in looping constructs, however it is not necessary so is
 not part of the language core.
 
-* gensym
-
-Generate a unique symbol of the form 'gensym.X', where 'X' is a number.
-This will return an error if it has run out of unique symbols. It should be
-noted that the symbols generated form a completely predictable sequence.
-
-* id arg?
-
-Return the argument.
-
-
-
 ## Compile Time Options
 
 I am not a big fan of using the [C Preprocessor][] to define a myriad of
@@ -762,7 +799,16 @@ functions from being compiled. Assertions are used heavily to check that the
 library is being used correctly and to check the libraries internals, this
 applies both to the block allocation routines and pickle itself.
 
-This is all. Inevitably when an interpreter is made for a new language,
+There are other compile time options within [pickle.c][] that control;
+maximum string length and whether to use one, whether to provide the default
+allocator or not, whether certain functions are to be made available to the
+interpreter or not (such as the command 'string', the mathematical operators
+and the list functions), and whether strict numeric conversion is used. 
+These options are semi-internal, they are subject to change and removal, you
+should use the source to determine what they are and be aware that they may
+change across releases.
+
+Inevitably when an interpreter is made for a new language,
 [readline][] (or [linenoise][]) integration is a build option, usually because
 the author is tired of pressing the up arrow key and seeing '^\[\[A'. Naturally
 this increases the complexity of the build system, adds more options, and adds
@@ -774,7 +820,7 @@ around your program.
 To aid in porting the system to embedded platforms, [pickle.c][] contains no
 Input and Output functions (they are added in by registering commands in
 [main.c][]). [pickle.c][] does include [stdio.h][], but only to access
-[snprintf][]. The big problem with porting a string heavy language to an
+[vsnprintf][]. The big problem with porting a string heavy language to an
 embedded platform, unlike a language like [FORTH][], is memory allocation. It
 is unavoidable that some kind of dynamic memory allocation is required. For
 this purpose it is possible to provide your own allocator to the pickle
@@ -787,11 +833,11 @@ used, but unlike [malloc][] will require tweaking to suite your purposes. The
 maximum block size available to the allocator will also determine the maximum
 string size that can be used by pickle.
 
-Apart from snprintf, and sscanf, the other functions pulled in from the C
+Apart from [vsnprintf][], the other functions pulled in from the C
 library are quite easy to implement. They include (but are not necessarily
 limited to); strlen, memcpy, memchr, memset and abort.
 
-## Interacting with the library and extension
+## C API
 
 The language can be extended by defining new commands in [C][] and registering
 those commands with the *pickle\_register\_command* function. The internal
@@ -800,6 +846,196 @@ language. As stated a custom allocator can be used and a block allocator is
 provided, it is possible to do quite a bit with this scripting language whilst
 only allocating about 32KiB of memory total on a 64-bit machine (for example
 all of the unit tests and example programs run within that amount).
+
+The C API is small and regular. All of the functions exported return the same
+error codes and implementing an interpreter loop is trivial.
+
+The language can be extended with new functions written in C, each function
+accepts an integer length, and an array of pointers to ASCIIZ strings - much
+like the 'main' function in C.
+
+User defined commands can be registered with the 'pickle_register_command'
+function. With in the user defined callbacks the 'pickle_set_result' family of
+functions can be used. The callbacks passed to 'pickle_register_command' look
+like this:
+
+	typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
+
+The callbacks accept a pointer to an instance of the pickle interpreter, and
+a list of strings (in 'argc' and 'argv'). Arbitrary data may be passed to the
+custom callback when the command is registered.
+
+The function returns one of the following status codes:
+
+	PICKLE_ERROR    = -1 (Throw an error until caught)
+	PICKLE_OK       =  0 (Signal success, continue on execution)
+	PICKLE_RETURN   =  1 (Return out of a function)
+	PICKLE_BREAK    =  2 (Break out of a while loop)
+	PICKLE_CONTINUE =  3 (Immediately proceed to next iteration of while loop)
+
+These error codes can affect the flow control within the interpreter. The
+actual return value of the callback is set with 'pickle_set_result' functions.
+
+Some functions are define purely for convenience and are not strictly
+necessary, such as 'pickle\_set\_result\_error' and 'pickle\_set\_result\_error\_arity',
+these return 'PICKLE\_ERROR' always, the latter function deals specifically with
+arity errors within functions, formatting the return buffer an number of
+arguments related error message. Likewise, the functions that set the return
+value to a number and not a string are wrappers around calls to [vsnprintf][]
+and 'pickle\_set\_result\_string'. The 'get' and 'set' functions return 'PICKLE\_OK'
+on success, and 'PICKLE\_ERROR' on failure. A 'get' fails if the variable does
+not exists, a 'set' on a variable that does not exist creates that variable
+(which may failure, returning 'PICKLE\_ERROR').
+
+Variables can be set either within or outside of the user defined callbacks
+with the 'pickle\_set\_variable' family of functions.
+
+The pickle library does not come with many built in functions, and comes with
+no Input/Output functions (even those available in the C standard library) to
+make porting to non-hosted environments easier. The example test driver program
+does add functions available in the standard library.
+
+The following is the source code for a simple interpreter loop that reads a
+line and then evaluates it:
+
+	#include "pickle.h"
+	#include <stdio.h>
+	#include <string.h>
+	
+	int main(void) {
+		pickle_t *p = NULL;
+		if (pickle_new(&p, NULL) < 0)
+			return -1;
+		const char *prompt = "> ";
+		fputs(prompt, stdout);
+		fflush(stdout);
+		for (char buf[80] = { 0 }; fgets(buf, sizeof buf, stdin); memset(buf, 0, sizeof buf)) {
+			const char *r = NULL;
+			const int er = pickle_eval(p, buf);
+			pickle_get_result_string(p, &r);
+			fprintf(stdout, "[%d]: %s\\n%s", er, r, prompt);
+			fflush(stdout);
+		}
+		return pickle_delete(p);
+	}
+
+Also present is a custom prompt.
+
+It should be obvious that the interface presented is not efficient for many
+uses, treating everything as a string has a cost. It is however simple and
+sufficient for many tasks.
+
+While API presented in 'pickle.h' is small there are a few areas of
+complication. They are: The memory allocation API, registering a command, the
+getopt function and the unit tests. The most involved is the memory allocation
+API and there is not too much to it, you do not even need to use it and can
+pass a NULL to 'pickle\_new' if for the allocator argument if you want to use
+the built in malloc/realloc/free based allocator (provided the library was
+built with support for it).
+
+It may not be obvious from the API how to go about designing functions to
+integrate with the interpreter. The C API is deliberately kept as simple as
+possible, more could be exported but there is a trade-off in doing so; it
+places more of a burden on backwards compatibility, limits the development
+of the library internals and makes the library more difficult to use. It is
+always possible to hack your own personal copy of the library to suite your
+purpose, the library is small enough that this should be possible.
+
+The Pickle interpreter has no way of registering different types with it, the
+string is king. As such, it is not immediately clear what the best way of
+adding functionality that requires manipulating non-string data (such as
+file handles or pointers to binary blobs) is. There are several ways of doing
+this:
+
+1. Convert the pointer to a string and add functions which deal with this string.
+2. Put data into the private data field
+3. Create a function which registers another function that contains private data.
+
+Option '1' may seem natural, but it is much more error prone. It is possible
+to pass the wrong string around and cause the program to crash. Option '2' is
+limiting, the C portion of the program is entirely in control of what resources
+get added, and only one handle to a resource can be controlled. Option '2' is
+a good option for certain cases.
+
+Option '3' is the most general and allows an arbitrary resource to be managed
+by the interpreter. The idea is to create a function that acquires the resource
+to be managed and registers a new function in the pickle global function
+namespace with the resource in the private data field of the newly registered
+function. The newly created function, a limited form of a closure, can then
+perform operations on the handle. It can also cleanup the resource by release
+the object in its private data field, and then deleting itself with the
+ 'pickle\_rename\_command' function. An example of this is the 'fopen' command,
+it returns a closure which contains a file handle.
+
+An example of using the 'fopen' command and the returned function from within
+the pickle interpeter is:
+
+	set fh [fopen file.txt rb]
+	set line [$fh -gets]
+	$fh -close
+
+And an example of how this might be implemented in C is:
+
+
+	int pickleCommandFile(pickle_t *i, int argc, char **argv, void *pd) {
+		FILE *fh = (FILE*)pd;
+		if (!strcmp(argv[1], "-close")) { /* delete self */
+			fclose(fh);                                /* free handle */
+			return pickle_rename_command(argv[0], ""); /* delete self */
+		}
+		if (!strcmp(argv[1], "-gets")) {
+			char buf[512];
+			fgets(buf, sizeof buf, fh);
+			return pickle_set_result_string(i, buf);
+		}
+		return pickle_set_result_error(i, "invalid option");
+	}
+
+	int pickleCommandFopen(pickle_t *i, int argc, char **argv, void *pd) {
+		char name[64];
+		FILE *fh = fopen(argv[1], argv[2]);
+		sprintf(name, "%p", fh); /* unique name */
+		pickle_register_command(i, name, pickleCommandFile, fh);
+		return pickle_set_result_string(i, name);
+	}
+
+The code illustrates the point, but lacks the assertions, error checking,
+and functionality of the real 'fopen' command. The 'pickleCommandFopen' should
+be registered with 'pickle\_register\_command', the 'pickleCommandFile' is not
+as 'pickleCommandFopen' does the registering when needed.
+
+## Style Guide
+
+Style/coding guide and notes, for the file [pickle.c][]:
+
+- 'pickle\_' and snake\_case is used for exported functions/variables/types
+- 'picol'  and camelCase  is used for internal functions/variables/types,
+with a few exceptions, such as 'advance' and 'compare', which are internal
+functions whose names are deliberately kept short.
+- Use asserts wherever you can for as many preconditions, postconditions
+and invariants that you can think of.
+- Make sure you make your functions static unless they are meant to
+be exported. You can use 'objdump -t | awk '$2 ~ /[Gg]/' to find
+all global functions. 'objdump -t | grep '\\\*UND\\\*' can be used to
+check that you are not pulling in functions from the C library you
+do not intend as well.
+- The core project is written strictly in C99 and uses only things
+that can be found in the standard library, and only things that are
+easy to implement on a microcontroller.
+
+The callbacks all have their 'argv' argument defined as 'char\*',
+as they do not modify their arguments. However adding this in just adds
+a lot of noise to the function definitions. Also see
+<http://c-faq.com/ansi/constmismatch.html>.
+
+## Interpreter Limitations
+
+Known limitations of the interpreter include:
+
+* Recursion Depth - 128, set via a compile time option.
+* Number of arguments to command/function - 128, set via a compile time option,
+this applies only to a few functions.
+* Maximum size of file - 2GiB
 
 ## Project Goals
 
@@ -826,6 +1062,7 @@ all of the unit tests and example programs run within that amount).
 [TCL]: https://en.wikipedia.org/wiki/Tcl
 [stdio.h]: http://www.cplusplus.com/reference/cstdio/
 [snprintf]: http://www.cplusplus.com/reference/cstdio/snprintf/
+[vsnprintf]: http://www.cplusplus.com/reference/cstdio/vsnprintf/
 [FORTH]: https://en.wikipedia.org/wiki/Forth_(programming_language)
 [C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
 [Make]: https://en.wikipedia.org/wiki/Make_(software)

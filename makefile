@@ -1,33 +1,46 @@
-CFLAGS=-std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv ${DEFINES}
-AR=ar
-ARFLAGS=rcs
-RANLIB=ranlib
-TRACE=rlwrap
+# PROJECT: pickle, a TCL like interpreter
+# LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
+# SITE:    https://github.com/howerj/pickle
+#
+# NOTES: 
+# * We could detect the OS, and whether 'rlwrap' exists on the system, it is
+# not worth the complexity however. See 
+# <https://stackoverflow.com/questions/5618615> and 
+# <https://stackoverflow.com/questions/714100>
+# * This makefile should be kept as simple as possible.
+# * Use the ${DEFINES} macro to turn on/off options in the program. 
 
-.PHONY: all run test wrap clean dist
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv ${DEFINES}
+AR      = ar
+ARFLAGS = rcs
+RANLIB  = ranlib
+TARGET  = pickle
+TRACE   =
 
-all: pickle
+.PHONY: all run test clean dist
 
-run: pickle
-	${TRACE} ./pickle ${FILE}
+all: ${TARGET}
 
-test: pickle unit.tcl
-	./pickle -t
-	./pickle -a unit.tcl
+run: ${TARGET}
+	${TRACE} ./${TARGET} ${FILE}
 
-main.o: main.c pickle.h block.h
+test: ${TARGET} unit.tcl
+	./${TARGET} -t
+	./${TARGET} -a unit.tcl
 
-pickle.o: pickle.c pickle.h
+main.o: main.c ${TARGET}.h block.h
+
+${TARGET}.o: ${TARGET}.c ${TARGET}.h
 
 block.o: block.c block.h
 
-simple: libpickle.a simple.o
+simple: lib${TARGET}.a simple.o
 
-libpickle.a: pickle.o
+lib${TARGET}.a: ${TARGET}.o
 	${AR} ${ARFLAGS} $@ $<
 	${RANLIB} $@
 
-pickle: main.o block.o libpickle.a
+${TARGET}: main.o block.o lib${TARGET}.a
 	${CC} ${CFLAGS} $^ -o $@
 
 check:
@@ -37,7 +50,7 @@ clean:
 	git clean -dfx
 
 SHELL := sh
-date := $(shell date "+%Y%m%d%H%M%S")
+date  := $(shell date "+%Y%m%d%H%M%S")
 dist:
-	tar zcf ../pickle-${date}.tgz ../pickle
+	tar zcf ../${TARGET}-${date}.tgz ../${TARGET}
 
