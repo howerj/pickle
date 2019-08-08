@@ -3,7 +3,10 @@
  * interpreter is a copy and modification of the 'picol' interpreter
  * by antirez. See the 'pickle.h' header for more information.
  * @author Richard James Howe
- * @license BSD*/
+ * @license BSD
+ *
+ * TODO: Simplify/remove commands and keep enough so the unit tests and
+ * example applications run. Moving the bulk of this to 'pickle-all' */
 
 #include "pickle.h"
 #include "block.h"
@@ -201,7 +204,7 @@ static void memory_tracer(void *file, const char *fmt, ...) {
 }
 
 static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) {
-	assert(pd || !pd); /* a neat way of saying 'may or may not be NULL */
+	/*assert(pd || !pd);*/ /* a neat way of saying 'may or may not be NULL */
 	pool_t *p = pd;
 	long info = PICKLE_ERROR;
 

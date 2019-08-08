@@ -10,6 +10,12 @@
 # TODO: Test failure cases
 # TODO: Find a way to merge the 'shell.tcl' application, the 'help.tcl' and
 # the 'example.tcl'.
+# TODO: Define various functions if they are not; 'ne', 'eq', 'incr'
+# TODO: Being able to run this test suite in the 'simple' version of the
+# interpreter would allow the removal of many commands written in C. It may
+# require some extensions to the simple version of the interpreter (gets, puts,
+# exit, getenv, and reading from a file if one has been given).
+#
 
 proc die {x} { puts $x; exit 1 }
 
@@ -172,6 +178,7 @@ test a,b,c {join {a b c} ,}
 fails {join}
 fails {join {}}
 test 16 {square 4}
+fails {square a}
 test 89 {fib 10}
 test 0 {> 0 [info command fib]}
 state {rename fib ""}
@@ -445,9 +452,7 @@ test {1 2 3} {lsort -integer {1 2 3}}
 test {3 2 1} {lsort -integer -decreasing {1 2 3}}
 fails {lsort}
 fails {lsort -integer {1 2 a}}
-
-# Fails for now
-#test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
+test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
 
 # Test upvar links
 set u 5
