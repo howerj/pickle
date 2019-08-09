@@ -7,15 +7,58 @@
 # framework itself. Instead, those things should be considered tested if
 # the test framework itself runs.
 #
-# TODO: Test failure cases
-# TODO: Find a way to merge the 'shell.tcl' application, the 'help.tcl' and
-# the 'example.tcl'.
+# TODO: Find a way to merge the 'shell.tcl' application
+# TODO: Test parse/recursion failure, other failure cases.
 # TODO: Define various functions if they are not; 'ne', 'eq', 'incr'
 # TODO: Being able to run this test suite in the 'simple' version of the
 # interpreter would allow the removal of many commands written in C. It may
 # require some extensions to the simple version of the interpreter (gets, puts,
 # exit, getenv, and reading from a file if one has been given).
 #
+
+set program [argv 2]
+set argc [argv]
+
+proc usage {} {
+	puts "Usage: [argv 0] -\[pht\]"
+	puts ""
+	puts "\t-h\tPrint this help message and quit"
+	puts "\t-p\tPerformance test"
+	puts ""
+	bye
+}
+
+# if {> $argc 2} { usage }
+if {eq $program "-h" } { usage }
+
+# Crude Performance Test
+#
+# Using 'incr loop -1' greatly speeds things up, but
+# exercises less.
+#
+if {eq $program "-p" } {
+	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
+
+	proc waste {x} {
+		set loop $x;
+		while {!= 0 $loop} {
+			decr loop
+		}
+	}
+
+	# Takes about a second on my machine
+	waste 200000;
+	puts [clock];
+	bye
+}
+
+# ### Clean up   ### #
+
+rename usage ""
+unset program
+unset argc
+
+# ### Unit Tests ### #
 
 proc die {x} { puts $x; exit 1 }
 
@@ -28,19 +71,30 @@ proc assert {x} {
 	}
 }
 
-proc decr {x} { uplevel 1 "incr {$x} -1" }
-
 # Set environment variable COLOR to 'on' to turn on color
 set colorize [getenv COLOR]
 proc color {x} {
 	upvar #0 colorize c;
-	if {eq $c on } { return $x } else { return "" }
+	if {eq $c on} { return $x } else { return "" }
 }
 
 proc normal {} { color "\x1b\[0m" }
 proc red    {} { color "\x1b\[31;1m" }
 proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
+
+proc defined {x} {
+	set i 0
+	set m [info command]
+	set r undefined
+	while {< $i $m} {
+		if {eq $x [info command name $i]} { return command }
+		incr i
+	}
+	catch {uplevel 1 "set $x"} e
+	if {eq 0 $e} { return variable }
+	return $r
+}
 
 # BUG: If the unit test sets the value of 'x' then it can mess
 # up printing the error.
@@ -69,7 +123,7 @@ proc fails {x} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
 	} else {
-		set f "[red]FAIL[normal]:    "
+		set f "[red]FAIL[normal]:  "
 	}
 	puts [string tr r "\n\r" " " "$f{$x} with error \"$r\""]
 }
@@ -78,19 +132,6 @@ proc state {x} {
 		puts "[blue]state[normal]: $x"
 		eval $x
 }
-
-proc square {x} { * $x $x }
-
-proc fib {x} {
-	if {<= $x 1} {
-		return 1
-	} else {
-		+ [fib [- $x 1]] [fib [- $x 2]]
-	}
-}
-
-proc n2 {} { upvar 1 h u; set u [+ $u 1]; }
-proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }
 
 puts "SYSTEM OPTIONS"
 puts "Pointer Size: [info sizeof pointer]"
@@ -115,6 +156,7 @@ test hello {if {bool 1} { concat "hello" }}
 test 1 {bool 4}
 test 0 {bool 0}
 fails {bool}
+fails {$a}
 
 if {== 0 [info features strict]} {
 	test 0 {bool 0b1}
@@ -166,7 +208,7 @@ test 0 {mod 12 12}
 test 1 {mod 13 12}
 test -3 {negate 3}
 test 3 {negate -3}
-test 120 {set cnt 5; set acc 1; while {> $cnt 1} { set acc [* $acc $cnt]; decr cnt }; set acc; };
+test 120 {set cnt 5; set acc 1; while {> $cnt 1} { set acc [* $acc $cnt]; incr cnt -1 }; set acc; };
 test 1 {eq a a}
 fails {eq}
 fails {eq a}
@@ -174,16 +216,19 @@ test 0 {eq a b}
 test 1 {ne abc ""}
 test 1 {eq "" ""}
 test 1 {eq "a b" [concat a b]}
+test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
 test a,b,c {join {a b c} ,}
 fails {join}
 fails {join {}}
+state {proc square {x} { * $x $x }}
 test 16 {square 4}
 fails {square a}
+state {rename square sq}
+state {proc fib {x} { if {<= $x 1} { return 1; } else { + [fib [- $x 1]] [fib [- $x 2]]; } }}
 test 89 {fib 10}
 test 0 {> 0 [info command fib]}
 state {rename fib ""}
 test -1 {info command fib}
-state {rename square sq}
 test 16 {sq 4}
 state {rename sq ""}
 fails {string}
@@ -192,6 +237,7 @@ test 4 {string length 1234}
 test 4 {string length abcd}
 test 0 {string length ""}
 test 0 {string length {}}
+fails {string length}
 test 1 {string match %% %}
 test 1 {string match "" ""}
 test 1 {string match "*" ""}
@@ -249,6 +295,7 @@ test o {string index hello 9}
 test o {string index hello -1}
 test l {string index hello -2}
 test h {string index hello -9}
+fails {string index hello x}
 fails {string index hello}
 fails {string index}
 test "" {string repeat abc 0}
@@ -258,6 +305,7 @@ test "aaa" {string repeat a 3}
 fails {string repeat}
 fails {string repeat a}
 fails {string repeat a -1}
+fails {string repeat a a}
 fails {string is}
 test 1 {string is digit ""}
 test 1 {string is digit 1234567890}
@@ -338,6 +386,7 @@ test 48 {string ordinal "0"}
 test 49 {string ordinal "1"}
 test 49 {string ordinal "1a"}
 test 49 {string ordinal "1abc"}
+fails {string ordinal }
 test ff {string dec2hex 255}
 test 1000 {string dec2hex 4096}
 test 4096 {string hex2dec 1000}
@@ -349,6 +398,7 @@ fails {string base2dec 0 0}
 fails {string base2dec 0 1}
 fails {string base2dec 0 37}
 fails {string base2dec 2 2}
+fails {string base2dec 2}
 test 0 {string char 48}
 test 1 {string char 49}
 test a {string char 97}
@@ -359,6 +409,7 @@ test {ddeeffddeeff} {string tr r abc def aabbccddeeff}
 test {defdefgg} {string tr s abc def aabbccddeeffgg}
 test {abcddeeffgg} {string tr s abc aabbccddeeffgg}
 fails {string tr}
+fails {string tr d}
 test {ad} {string replace "abcd" 1 2 ""}
 test {acd} {string replace "abcd" 1 1 ""}
 test {abcd} {string replace "abcd" 2 1 ""}
@@ -407,6 +458,8 @@ test {a {}} {split "a." "."}
 test {} {split "" ""}
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
+fails {split}
+fails {split "abc"}
 test {a b {c d e  } {  f {g h}}} {list a b "c d e  " "  f {g h}"}
 test {a b c xyz} {linsert {a b c} 99 xyz}
 test {a b c xyz} {linsert {a b c} 3 xyz}
@@ -419,6 +472,7 @@ test {a a a} {lrepeat 3 a}
 test {ab ab ab} {lrepeat 3 ab}
 test {{a b} {a b} {a b}} {lrepeat 3 {a b}}
 test {a,b,c} {join {a b c} ,}
+test {abc} {join [split "abc" ""] ""}
 test {a,b,c} {conjoin , a b c}
 test {a} {conjoin , a}
 test {a,b} {conjoin , a b}
@@ -432,12 +486,17 @@ test {{ c} a} {lreverse {a { c}}}
 test {{y y} {x x}} {lreverse {{x x} {y y}}}
 fails {lreverse}
 fails {proc}
+fails {proc x}
+fails {proc x n}
+state {proc def {x} {}}
+fails {proc def {x} {}}
+state {rename def ""}
 fails {variadic}
 state {variadic v1 n { return $n 0 }}
 test {a b {c d}} {v1 a b {c d}}
 test {a} {v1 a}
 test {} {v1}
-state {rename v1 "" }
+state {rename v1 ""}
 fails {rename}
 fails {rename XXX}
 fails {rename XXX YYY}
@@ -452,14 +511,27 @@ test {1 2 3} {lsort -integer {1 2 3}}
 test {3 2 1} {lsort -integer -decreasing {1 2 3}}
 fails {lsort}
 fails {lsort -integer {1 2 a}}
-test {a b c d e f {g h}} {concat a b "c d e  " "  f {g h}"}
 
 # Test upvar links
-set u 5
-puts "u = $u"
-puts "[n1]"
-test 1 "== $u 7"
-unset u
+state {proc n2 {} { upvar 1 h u; set u [+ $u 1]; }}
+state {proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }}
+test {done} {set u 5; puts "u = $u"; puts "[n1]"; test 1 "== $u 7"; unset u; return "done" 0; }
+state {rename n1 ""}
+state {rename n2 ""}
+
+fails {set}
+fails {unset}
+fails {if}
+# NB. Different from TCL, which is an error
+test {1} {if { } { return 1 0 } else { return 2 0 }}
+fails {if {== 0 0} { puts a } not-else { puts b }}
+fails {while}
+fails {while {== 0 x} { puts "not run" }}
+state {proc recurse {} { recurse }}
+fails {recurse}
+state {rename recurse ""}
+fails {[}
+fails {]}
 
 assert [<= $passed $total]
 assert [>= $passed 0]
@@ -476,7 +548,7 @@ puts "\[[blue]DONE[normal]\]"
 
 if {== "[heap]" 0 } {
 	puts "Custom allocator not used"
-	# BUG: Causes memory leak to appear in Valgrind, not a real leak however.
+	# Causes memory leak to appear in Valgrind, not a real leak however.
 	# We should not really exit here as it prevents cleanup
 	exit $failed
 }

@@ -51,13 +51,13 @@ proc words {} {
 proc defined {x} {
 	set i 0
 	set m [info command]
-	set r {0 undefined}
+	set r undefined
 	while {< $i $m} {
-		if {eq $x [info command name $i]} { return {1 command} }
+		if {eq $x [info command name $i]} { return command }
 		incr i
 	}
 	catch {uplevel 1 "set $x"} e
-	if {eq 0 $e} { return {2 variable} }
+	if {eq 0 $e} { return variable }
 	return $r
 }
 
@@ -98,14 +98,6 @@ proc see {w} {
 	set body [info command body $widx]
 	set name [info command name $widx]
 	puts "$type $name {$args} {$body}"
-}
-
-variadic ? n { 
-	if { string is true [lindex $n 0] } {
-		return [lindex $n 1] 0
-	} else {
-		return [lindex $n 2] 0
-	}
 }
 
 puts "Manual available at: <https://github.com/howerj/pickle>"
