@@ -166,6 +166,19 @@ if {== 0 [info features strict]} {
 	test 1 {not x}
 }
 
+fails {set}
+fails {unset}
+fails {if}
+# NB. Different from TCL, which is an error
+test {1} {if { } { return 1 0 } else { return 2 0 }}
+fails {if {== 0 0} { puts a } not-else { puts b }}
+fails {while}
+fails {while {== 0 x} { puts "not run" }}
+state {proc recurse {} { recurse }}
+fails {recurse}
+state {rename recurse ""}
+fails {[}
+fails {]}
 test 1 {== 2 2}
 test 1 {!= 0 2}
 test 1 {== -0 0}
@@ -519,19 +532,32 @@ test {done} {set u 5; puts "u = $u"; puts "[n1]"; test 1 "== $u 7"; unset u; ret
 state {rename n1 ""}
 state {rename n2 ""}
 
-fails {set}
-fails {unset}
-fails {if}
-# NB. Different from TCL, which is an error
-test {1} {if { } { return 1 0 } else { return 2 0 }}
-fails {if {== 0 0} { puts a } not-else { puts b }}
-fails {while}
-fails {while {== 0 x} { puts "not run" }}
-state {proc recurse {} { recurse }}
-fails {recurse}
-state {rename recurse ""}
-fails {[}
-fails {]}
+fails {lreplace}
+fails {lreplace ""}
+fails {lreplace "" 1}
+test {a foo c d e} {lreplace {a b c d e} 1 1 foo}
+test {a {x x} c d e} {lreplace {a b c d e} 1 1 {x x}}
+test {a three more elements d e} {lreplace {a b c d e} 1 2 three more elements}
+test {a b} {lrange {a b c d e} 0 1}
+test {a b c d e} {lrange {a b c d e} 0 4}
+test {a} {lrange {a b c d e} 0 0}
+test {c d} {lrange {a b c d e} 2 3}
+test {a b c d} {lrange {a b c d e} -2 3}
+test 1 {lsearch {x abc def} abc}
+test -1 {lsearch {x abc def} xyz}
+test 0 {lsearch {x abc def} *x*}
+test 2 {lsearch -exact {x abc *x*} *x*}
+test 4 {lsearch -exact -start 2 {a a b c a} a}
+test 2 {lsearch {4 5 6} 6}
+test 4 {lsearch -not {a a a a b a a} a}
+test bbbb {lsearch -not -inline {a aaa  aa bbbb aaa aa} a*}
+fails {lsearch}
+fails {lsearch {1 2 3}}
+fails {lsearch -integer {1 2 3} x}
+
+# # Fails for now
+# test {x y z a b c} {lreplace {a b c} -1 -2 x y z}
+# test {a b x y z c} {lreplace {a b c} 2 1 x y z}
 
 assert [<= $passed $total]
 assert [>= $passed 0]

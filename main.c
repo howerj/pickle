@@ -448,24 +448,6 @@ static int pickleCommandFRename(pickle_t *i, const int argc, char **argv, void *
 	return pickle_set_result_error_arity(i, 3, argc, argv);
 }
 
-static int pickleCommandIncr(pickle_t *i, const int argc, char **argv, void *pd) {
-	assert(i);
-	assert(argv);
-	assert(!pd);
-	UNUSED(pd);
-	long incr = 1, n = 0;
-	if (argc != 2 && argc != 3)
-		return pickle_set_result_error_arity(i, 3, argc, argv);
-	if (argc == 3)
-		incr = atol(argv[2]);
-	if (pickle_get_var_integer(i, argv[1], &n) != PICKLE_OK)
-		return pickle_set_result_error(i, "Unknown variable: %s", argv[1]);
-	n += incr;
-	if (pickle_set_var_integer(i, argv[1], n) != PICKLE_OK)
-		return pickle_set_result_error(i, "Unable to set variable: %s", argv[1]);
-	return pickle_set_result_integer(i, n);
-}
-
 static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, int prompt) {
 	assert(i);
 	assert(args);
@@ -488,7 +470,6 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "stdout",   pickleCommandFile,      stdout },
 		{ "stderr",   pickleCommandFile,      stderr },
 		{ "errno",    pickleCommandErrno,     NULL },
-		{ "incr",     pickleCommandIncr,      NULL },
 	};
 	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
 		return PICKLE_ERROR;
@@ -719,8 +700,6 @@ int main(int argc, char **argv) {
 		"proc gets {}  { stdin -gets }",
 		"proc putch {c} { stdout -putc $c }",
 		"proc getch {} { stdin -getc }",
-		"proc eq {a b} { string equal $a $b }",
-		"proc ne {a b} { string unequal $a $b }"
 	};
 
 	for (size_t i = 0; i < NELEM(ns); i++)

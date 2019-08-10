@@ -58,7 +58,7 @@ language, and implementation of it, is suitable.
 Language and implementation advantages:
 
 * Small and compact, easy to integrate into a wide variety of platforms and
-programs
+programs. (4000 [LoC][] is the limit for the core library in [pickle.c][]).
 * Fairly good at string handling
 * Can be ported to a variety of platforms
 * Customizable
@@ -351,14 +351,19 @@ Examples:
 	pickle> lrepeat 2 {x x}
 	{x x} {x x}
 
-* lset
-* linsert
-* lreplace
-* lsort
-* lreverse
-* split
-* list
-* concat
+* lset variable index value
+
+Look up a variable containing a list and set the element specified by an index to
+be equal to 'value'.
+
+* linsert list index value
+* lreplace list first last values...
+* lsort opts... list
+* lreverse list
+* lsearch opts... list
+* split list splitter
+* list args...
+* concat args...
 
 * unknown {list}
 
@@ -552,6 +557,26 @@ Which creates a function with the same functionality as 'string lowercase $x'.
 This subcommands replaces a substring starting at 'first' and ending at 'last'.
 The 'new-string' replaces the removed section of the 'old-string'.
 
+* eq string string
+
+Returns '0' is two strings are not equal and '1' if they are. Unlike '==' this
+acts on the entire string.
+
+* ne string string
+
+Returns '1' is two strings are not equal and '0' if they are. Unlike '!=' this
+acts on the entire string.
+
+* incr variable number?
+
+Increment a variable by 1, or by an optional value. 'incr' returns the
+incremented variable. 'incr' being implemented in C is usually a lot more
+efficient then defining 'incr' in TCL, like so:
+
+	proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
+
+And it is used often in looping constructs.
+
 ### Extension Commands
 
 [main.c][] extends the interpreter with some commands that make the language
@@ -625,16 +650,6 @@ Returns the String:
 When no argument is given the time since start of program execution is given.
 On some systems this is the CPU time and not the total time that the program
 has been executed.
-
-* eq string string
-
-Returns '0' is two strings are not equal and '1' if they are. Unlike '==' this
-acts on the entire string.
-
-* ne string string
-
-Returns '1' is two strings are not equal and '0' if they are. Unlike '!=' this
-acts on the entire string.
 
 * raise number
 
@@ -773,17 +788,6 @@ optional '-string' command it returns the string corresponding to the current
 error number. To set the current error number use 'errno -set number'. To get
 the error string corresponding to an arbitrary error number, use 'errno -string
 number'.
-
-* incr variable number?
-
-Increment a variable by 1, or by an optional value. 'incr' returns the
-incremented variable. 'incr' being implemented in C is usually a lot more
-efficient then defining 'incr' in TCL, like so:
-
-	proc incr {x} { upvar 1 $x i; set i [+ $i 1] }
-
-And it is used often in looping constructs, however it is not necessary so is
-not part of the language core.
 
 ## Compile Time Options
 
@@ -1079,3 +1083,4 @@ this applies only to a few functions.
 [rlwrap]: https://linux.die.net/man/1/rlwrap
 [lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
 [homoiconic]: https://en.wikipedia.org/wiki/Homoiconicity
+[loc]: https://en.wikipedia.org/wiki/Source_lines_of_code
