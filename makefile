@@ -10,7 +10,12 @@
 # * This makefile should be kept as simple as possible.
 # * Use the ${DEFINES} macro to turn on/off options in the program. 
 
-CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv ${DEFINES}
+# <https://news.ycombinator.com/item?id=15400396>
+# EXTRA = -Wduplicated-cond -Wlogical-op \
+#	-Wnull-dereference -Wjump-misses-init \
+#	-Wshadow 
+
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv ${DEFINES} ${EXTRA}
 AR      = ar
 ARFLAGS = rcs
 RANLIB  = ranlib

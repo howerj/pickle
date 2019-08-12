@@ -1,4 +1,4 @@
-#!./pickle -a
+#!./pickle
 #
 # This file contains unit tests for the Pickle Interpreter. The things tested
 # in this file are mainly the commands and sub-commands that perform simple
@@ -8,16 +8,14 @@
 # the test framework itself runs.
 #
 # TODO: Find a way to merge the 'shell.tcl' application
-# TODO: Test parse/recursion failure, other failure cases.
-# TODO: Define various functions if they are not; 'ne', 'eq', 'incr'
 # TODO: Being able to run this test suite in the 'simple' version of the
 # interpreter would allow the removal of many commands written in C. It may
 # require some extensions to the simple version of the interpreter (gets, puts,
 # exit, getenv, and reading from a file if one has been given).
 #
 
-set program [argv 2]
-set argc [argv]
+set program [lindex $argv 2]
+set argc [llength $argv]
 
 proc usage {} {
 	puts "Usage: [argv 0] -\[pht\]"
@@ -554,6 +552,12 @@ test bbbb {lsearch -not -inline {a aaa  aa bbbb aaa aa} a*}
 fails {lsearch}
 fails {lsearch {1 2 3}}
 fails {lsearch -integer {1 2 3} x}
+test  {1 2 3 a b {c d}} {set l1 {1 2 3}; lappend l1 a b {c d}}
+test  {1 2 3 a b {c d}} {set l1 {1 2 3}; lappend l1 a b {c d}; set l1}
+test  {a b {c d}} {lappend l1 a b {c d}; set l1}
+test  {} {lappend l2}
+test  {a b c} {lappend l3 a b c}
+fails {lappend}
 
 # # Fails for now
 # test {x y z a b c} {lreplace {a b c} -1 -2 x y z}
@@ -609,8 +613,4 @@ puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
 unset heaps; unset i; unset m; unset blk; unset sz; unset used;
 
 # Prints wrong line number on Windows, related (depends on this line!)
-puts "line: [info line]"
-
-# exit $failed
-return "" $failed
 

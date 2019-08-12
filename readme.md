@@ -1008,6 +1008,19 @@ and functionality of the real 'fopen' command. The 'pickleCommandFopen' should
 be registered with 'pickle\_register\_command', the 'pickleCommandFile' is not
 as 'pickleCommandFopen' does the registering when needed.
 
+It should be possible to implement the commands 'update', 'after' and 'vwait',
+extending the interpreter with task management like behavior without any changes
+to the API.
+
+## Extensions and Modules
+
+The repository [pickle-all][] contains extensions to this interpreter. It might
+be worth simplifying the [main.c][] application and removing a lot of
+functionality from the interpreter so it has just enough functions to run the
+unit tests ('getenv', 'exit', and 'puts' are all that are really needed).
+
+Operation system dependent code should be placed in the [pickle-all][] module.
+
 ## Style Guide
 
 Style/coding guide and notes, for the file [pickle.c][]:
@@ -1037,8 +1050,6 @@ a lot of noise to the function definitions. Also see
 Known limitations of the interpreter include:
 
 * Recursion Depth - 128, set via a compile time option.
-* Number of arguments to command/function - 128, set via a compile time option,
-this applies only to a few functions.
 * Maximum size of file - 2GiB
 
 ## Project Goals
@@ -1051,9 +1062,9 @@ this applies only to a few functions.
   * [x] In C
   * [x] In TCL
 * [x] Remove internal limitations on string size
-* [ ] Remove other internal limitations where possible (argument length)
-* [ ] Create a framework for adding modules external to this project
-* [ ] Move manual page into this document and generate manual page
+* [x] Remove other internal limitations where possible (argument length)
+* [x] Create a framework for adding modules external to this project
+* [x] Move manual page into this document and generate manual page
       from this document.
 * [ ] Move most of 'main.c' to an external module. Very little is
       needed to run unit tests which is all that really need to
@@ -1084,3 +1095,4 @@ this applies only to a few functions.
 [lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
 [homoiconic]: https://en.wikipedia.org/wiki/Homoiconicity
 [loc]: https://en.wikipedia.org/wiki/Source_lines_of_code
+[pickle-all]: https://github.com/howerj/pickle-all

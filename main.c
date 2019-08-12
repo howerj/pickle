@@ -3,10 +3,7 @@
  * interpreter is a copy and modification of the 'picol' interpreter
  * by antirez. See the 'pickle.h' header for more information.
  * @author Richard James Howe
- * @license BSD
- *
- * TODO: Simplify/remove commands and keep enough so the unit tests and
- * example applications run. Moving the bulk of this to 'pickle-all' */
+ * @license BSD */
 
 #include "pickle.h"
 #include "block.h"
@@ -33,7 +30,7 @@ typedef struct {
 	    reset;   /* set to reset */
 	char *place; /* internal use: scanner position */
 	int  init;   /* internal use: initialized or not */
-} pickle_getopt_t; /* getopt clone; with a few modifications */
+} pickle_getopt_t;   /* getopt clone; with a few modifications */
 
 typedef struct {
 	const char *name;
@@ -207,6 +204,7 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 	/*assert(pd || !pd);*/ /* a neat way of saying 'may or may not be NULL */
 	pool_t *p = pd;
 	long info = PICKLE_ERROR;
+	const char *rq = NULL;
 
 	if (argc > 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
@@ -217,7 +215,7 @@ static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) 
 
 	if (!p)
 		return pickle_set_result_string(i, "unknown");
-	const char *const rq = argv[1];
+	rq = argv[1];
 	if (argc == 2) {
 		if      (!strcmp(rq, "freed"))    { info = p->freed; }
 		else if (!strcmp(rq, "allocs"))   { info = p->allocs;  }
@@ -245,28 +243,13 @@ done:
 	return pickle_set_result_integer(i, info);
 }
 
-/* TODO: Replace with a TCL list of all arguments */
-static int pickleCommandArgv(pickle_t *i, const int argc, char **argv, void *pd) {
-	assert(pd);
-	char **global_argv = ((argument_t*)pd)->argv;
-	const int global_argc = ((argument_t*)pd)->argc;
-	if (argc != 1 && argc != 2)
-		return pickle_set_result_error_arity(i, 2, argc, argv);
-	if (argc == 1)
-		return pickle_set_result_integer(i, global_argc);
-	const int j = atoi(argv[1]);
-	if (j < 0 || j >= global_argc)
-		return pickle_set_result_string(i, "");
-	else
-		return pickle_set_result_string(i, global_argv[j]);
-}
-
 static char *slurp(FILE *input) {
 	assert(input);
 	char *r = NULL;
+	long pos = 0;
 	if (fseek(input, 0, SEEK_END) < 0)
 		goto fail;
-	const long pos = ftell(input);
+	pos = ftell(input);
 	if (pos < 0)
 		goto fail;
 	if (fseek(input, 0, SEEK_SET) < 0)
@@ -461,7 +444,6 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "clock",    pickleCommandClock,     NULL },
 		{ "raise",    pickleCommandRaise,     NULL },
 		{ "signal",   pickleCommandSignal,    NULL },
-		{ "argv",     pickleCommandArgv,      args },
 		{ "source",   pickleCommandSource,    stdout },
 		{ "heap",     pickleCommandHeapUsage, p },
 		{ "fopen",    pickleCommandFOpen,     NULL },
@@ -506,7 +488,7 @@ static int interactive(pickle_t *i, FILE *input, FILE *output) { /* NB. This cou
 }
 
 /* Adapted from: <https://stackoverflow.com/questions/10404448> */
-int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], const char *fmt) {
+static int pickle_getopt(pickle_getopt_t *opt, const int argc, char *const argv[], const char *fmt) {
 	assert(opt);
 	assert(fmt);
 	assert(argv);
@@ -706,12 +688,14 @@ int main(int argc, char **argv) {
 		if ((r = pickle_eval(interp, ns[i])) != PICKLE_OK)
 			goto end;
 
+	pickle_set_argv(interp, argc, argv);
 	if (argc == opt.index) {
 		r = interactive(interp, stdin, stdout);
 	} else {
-		for (int j = opt.index; j < argc; j++)
+		for (int j = opt.index; j < argc; j++) {
 			if ((r = file(interp, argv[j], stdout, 0)) != PICKLE_OK)
 				break;
+		}
 	}
 end:
 	cleanup();
