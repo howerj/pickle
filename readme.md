@@ -155,6 +155,11 @@ the list functions).
 The options passed to the command and type are indicated after the command, a
 question mark suffix on an argument indicates an optional command.
 
+* argv
+
+'argv' is a variable, not a function, which should contain the arguments passed
+to the pickle interpreter on the command line in a TCL list.
+
 * set variable value?
 
 Create a variable, or overwrite an existing variable, with a value. If only one
@@ -362,6 +367,7 @@ be equal to 'value'.
 * lreverse list
 * lsearch opts... list
 * split list splitter
+* lappend
 * list args...
 * concat args...
 
@@ -673,12 +679,6 @@ An "ignored" signal will be ignored and a signal with "default" behavior will
 use the systems defaults. On successful installation of the handler, a "1" is
 returned, and on failure "0".
 
-* argv number?
-
-'argv' is a function at the moment, it could be made into a variable. If given
-no arguments it will return the number of arguments passed to 'main()'. If a
-number is given it will retrieved that argument from the argument list passed
-to 'main()'.
 
 * source file.tcl
 

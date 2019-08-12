@@ -40,6 +40,8 @@
  * Also licensed under the same BSD license.
  *
  * TODO: Fix 'lreplace'
+ * TODO: Make sure all errors are test for, or marked as 'can ignore',
+ * specifically 'picolFree' needs to have be checked everywhere.
  * TODO: Make an API for events to be run on each eval, or get/set/unset
  * of a variable? Or perhaps a 'yield' function so 'vwait'/'update' can
  * be implemented.
