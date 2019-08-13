@@ -39,7 +39,9 @@ ${TARGET}.o: ${TARGET}.c ${TARGET}.h
 
 block.o: block.c block.h
 
-simple: lib${TARGET}.a simple.o
+small: lib${TARGET}.a small.o
+
+unit: lib${TARGET}.a block.o unit.o
 
 lib${TARGET}.a: ${TARGET}.o
 	${AR} ${ARFLAGS} $@ $<

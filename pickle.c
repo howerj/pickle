@@ -39,13 +39,11 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * TODO: Fix 'lreplace'
- * TODO: Make sure all errors are test for, or marked as 'can ignore',
- * specifically 'picolFree' needs to have be checked everywhere.
+ * TODO: Implement the '-all' option on 'lsearch'.
  * TODO: Make an API for events to be run on each eval, or get/set/unset
  * of a variable? Or perhaps a 'yield' function so 'vwait'/'update' can
  * be implemented.
- * TODO: Fix string escaping, and make a function for validate lists
+ * TODO: Fix string escaping, and make a function for validating lists
  * TODO: Add 'foreach'? */
 
 #include "pickle.h"
@@ -401,13 +399,9 @@ static int picolPower(number_t base, number_t exp, number_t *r) {
 	return PICKLE_OK;
 }
 
-/**This is may seem like an odd function, say for small allocation we want to
+/* This is may seem like an odd function, say for small allocation we want to
  * keep them on the stack, but move them to the heap when they get too big, we can use
- * the picolStackOrHeapAlloc/picolStackOrHeapFree functions to manage this.
- * @param i, instances of the pickle interpreter.
- * @param s, a small buffer, pointers and some length.
- * @param needed, number of bytes that are needed.
- * @return PICKLE_OK on success, PICKLE_ERROR on failure. */
+ * the 'picolStackOrHeapAlloc'/'picolStackOrHeapFree' functions to manage this. */
 static int picolStackOrHeapAlloc(pickle_t *i, pickle_stack_or_heap_t *s, size_t needed) {
 	assert(i);
 	assert(s);
@@ -429,7 +423,7 @@ static int picolStackOrHeapAlloc(pickle_t *i, pickle_stack_or_heap_t *s, size_t 
 	}
 	void *new = picolRealloc(i, s->p, needed);
 	if (!new) {
-		picolFree(i, s->p);
+		(void)picolFree(i, s->p);
 		s->p = NULL;
 		s->length = 0;
 		return PICKLE_ERROR;
@@ -486,10 +480,7 @@ static inline pickle_command_t *picolGetCommand(pickle_t *i, const char *s) {
 
 static int picolFreeResult(pickle_t *i) {
 	assert(i);
-	int r = PICKLE_OK;
-	if (!(i->static_result))
-		r = picolFree(i, (char*)i->result); /* !! */
-	return r;
+	return i->static_result ? PICKLE_OK : picolFree(i, (char*)i->result);
 }
 
 static int picolForceResult(pickle_t *i, const char *result, const int is_static) {
@@ -517,9 +508,9 @@ static int picolRegisterCommand(pickle_t *i, const char *name, pickle_command_fu
 	if (np) {
 		if (picolIsDefinedProc(func)) {
 			char **procdata = privdata;
-			picolFree(i, procdata[0]);
-			picolFree(i, procdata[1]);
-			picolFree(i, procdata);
+			(void)picolFree(i, procdata[0]);
+			(void)picolFree(i, procdata[1]);
+			(void)picolFree(i, procdata);
 		}
 		return pickle_set_result_error(i, "Invalid redefinition %s", name);
 	}
@@ -826,17 +817,13 @@ static pickle_var_t *picolGetVar(pickle_t *i, const char *name, int link) {
 static int picolFreeVarName(pickle_t *i, pickle_var_t *v) {
 	assert(i);
 	assert(v);
-	if (!(v->smallname))
-		return picolFree(i, v->name.ptr);
-	return PICKLE_OK;
+	return v->smallname ? PICKLE_OK : picolFree(i, v->name.ptr);
 }
 
 static int picolFreeVarVal(pickle_t *i, pickle_var_t *v) {
 	assert(i);
 	assert(v);
-	if (v->type == PV_STRING)
-		return picolFree(i, v->data.val.ptr);
-	return PICKLE_OK;
+	return v->type == PV_STRING ? picolFree(i, v->data.val.ptr) : PICKLE_OK;
 }
 
 /* return: non-zero if and only if val fits in a small string */
@@ -1212,9 +1199,9 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 		return h.p;
 	str = picolStrdup(i, h.p);
 end:
-	picolFree(i, ls);
-	picolFree(i, esc);
-	picolStackOrHeapFree(i, &h);
+	(void)picolFree(i, ls);
+	(void)picolFree(i, esc);
+	(void)picolStackOrHeapFree(i, &h);
 	return str;
 }
 
@@ -1288,7 +1275,8 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 		picolAssertCommandPreConditions(i, 2, nargv, c->privdata);
 		const int r = c->func(i, 2, nargv, c->privdata);
 		picolAssertCommandPostConditions(i, r);
-		picolFree(i, arg2);
+		if (picolFree(i, arg2) != PICKLE_OK)
+			return PICKLE_ERROR;
 		return r;
 	}
 	picolAssertCommandPreConditions(i, argc, argv, c->privdata);
@@ -1328,17 +1316,19 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 			pickle_var_t * const v = picolGetVar(i, t, 1);
 			if (!v) {
 				retcode = pickle_set_result_error(i, "Invalid variable %s", t);
-				picolFree(i, t);
+				(void)picolFree(i, t);
 				goto err;
 			}
-			picolFree(i, t);
+			if (picolFree(i, t) != PICKLE_OK)
+				goto err;
 			if (!(t = picolStrdup(i, picolGetVarVal(v)))) {
 				retcode = PICKLE_ERROR;
 				goto err;
 			}
 		} else if (p.type == PT_CMD) {
 			retcode = picolEvalAndSubst(i, NULL, t); // NB!
-			picolFree(i, t);
+			if (picolFree(i, t) != PICKLE_OK)
+				goto err;
 			if (retcode != PICKLE_OK)
 				goto err;
 			if (!(t = picolStrdup(i, i->result))) {
@@ -1348,17 +1338,19 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 		} else if (p.type == PT_ESC) {
 			if (picolUnEscape(t, tlen + 1/*NUL terminator*/) < 0) {
 				retcode = pickle_set_result_error(i, "Invalid escape sequence %s", t); /* BUG: %s is probably mangled by now */
-				picolFree(i, t);
+				(void)picolFree(i, t);
 				goto err;
 			}
 		} else if (p.type == PT_SEP) {
 			prevtype = p.type;
-			picolFree(i, t);
+			if (picolFree(i, t) != PICKLE_OK)
+				goto err;
 			continue;
 		}
 
 		if (p.type == PT_EOL) { /* We have a complete command + args. Call it! */
-			picolFree(i, t);
+			if (picolFree(i, t) != PICKLE_OK)
+				goto err;
 			prevtype = p.type;
 			if (p.o.noeval) {
 				char *result = concatenate(i, " ", argc, argv, 0, 0);
@@ -1396,14 +1388,15 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 			char *arg = picolRealloc(i, argv[argc - 1], oldlen + ilen + 1);
 			if (!arg) {
 				retcode = PICKLE_ERROR;
-				picolFree(i, t);
+				(void)picolFree(i, t);
 				goto err;
 			}
 			argv[argc - 1] = arg;
 			move(argv[argc - 1] + oldlen, t, ilen);
 			argv[argc - 1][oldlen + ilen] = '\0';
 		}
-		picolFree(i, t);
+		if (picolFree(i, t) != PICKLE_OK)
+			goto err;
 		prevtype = p.type;
 	}
 err:
@@ -2024,6 +2017,24 @@ static int picolCommandWhile(pickle_t *i, const int argc, char **argv, void *pd)
 	}
 }
 
+static int picolCommandApply(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc < 2)
+		return pickle_set_result_error_arity(i, 2, argc, argv);
+	args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1]);
+	if (!a.argv)
+		return PICKLE_ERROR;
+	if (a.argc != 2) {
+		(void)picolFreeArgList(i, a.argc, a.argv);
+		return pickle_set_result_error(i, "Invalid apply %s", argv[1]);
+	}
+	const int r = picolCommandCallProc(i, argc - 1, argv + 1, a.argv);
+	if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
+		return PICKLE_ERROR;
+	return r;
+}
+
 static int picolCommandFor(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
@@ -2146,12 +2157,12 @@ static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, v
 
 enum { INSERT, DELETE, SET };
 
-static inline int picolListOperation(pickle_t *i, const char *parse, const char *position, char *insert, int op) {
+static inline int picolListOperation(pickle_t *i, const char *parse, const char *position, char *insert, int op, int doEsc) {
 	assert(i);
 	assert(parse);
 	assert(position);
 	assert(insert);
-	const int escape = picolStringNeedsEscaping(insert, 0);
+	const int escape = doEsc && picolStringNeedsEscaping(insert, 0);
 	const size_t il  = picolStrlen(insert);
 	number_t index = 0, r = PICKLE_OK;
 	if (picolStringToNumber(i, position, &index) != PICKLE_OK)
@@ -2204,7 +2215,7 @@ done:
 }
 
 
-static inline int picolDoLInsert(pickle_t *i, char *list, char *position, const int argc, char **argv) {
+static inline int picolDoLInsert(pickle_t *i, char *list, char *position, const int argc, char **argv, int doEsc) {
 	assert(i);
 	assert(list);
 	assert(position);
@@ -2212,7 +2223,7 @@ static inline int picolDoLInsert(pickle_t *i, char *list, char *position, const 
 	char *insert = concatenate(i, " ", argc, argv, 0, 0);
 	if (!insert)
 		return PICKLE_ERROR;
-	const int r1 = picolListOperation(i, list, position, insert, INSERT);
+	const int r1 = picolListOperation(i, list, position, insert, INSERT, doEsc);
 	const int r2 = picolFree(i, insert);
 	return r1 != PICKLE_OK || r2 != PICKLE_OK ? PICKLE_ERROR : PICKLE_OK;
 }
@@ -2222,7 +2233,7 @@ static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, 
 	assert(!pd);
 	if (argc < 4)
 		return pickle_set_result_error_arity(i, 4, argc, argv);
-	return picolDoLInsert(i, argv[1], argv[2], argc - 3, argv + 3);
+	return picolDoLInsert(i, argv[1], argv[2], argc - 3, argv + 3, 1);
 }
 
 static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2235,7 +2246,7 @@ static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, voi
 	pickle_var_t *v = picolGetVar(i, argv[1], 1);
 	if (!v)
 		return pickle_set_result_error(i, "Invalid variable %s", argv[1]);
-	if (picolListOperation(i, picolGetVarVal(v), argv[2], argv[3], argv[3][0] ? SET : DELETE) != PICKLE_OK)
+	if (picolListOperation(i, picolGetVarVal(v), argv[2], argv[3], argv[3][0] ? SET : DELETE, 1) != PICKLE_OK)
 		return PICKLE_ERROR;
 	return picolSetVarString(i, v,  i->result);
 }
@@ -2336,8 +2347,14 @@ static inline int picolCommandLReplace(pickle_t *i, const int argc, char **argv,
 		return PICKLE_ERROR;
 	if (picolStringToNumber(i, argv[3], &last) != PICKLE_OK)
 		return PICKLE_ERROR;
-	if (last < first || first < 0)
-		return picolDoLInsert(i, argv[1], argv[2], argc - 4, argv + 4);
+	if (last < first || first < 0) {
+		char *args = concatenate(i, " ", argc - 4, argv + 4, 1, 0); 
+		if (!args)
+			return PICKLE_ERROR;
+		const int r1 = picolDoLInsert(i, argv[1], argv[2], 1, (char *[1]) { args }, 0);
+		const int r2 = picolFree(i, args);
+		return r1 == PICKLE_OK && r2 == PICKLE_OK ? PICKLE_OK : PICKLE_ERROR;
+	}
 	int r = 0, empty = 0;
 	args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1]);
 	char *repl = concatenate(i, " ", argc - 4, argv + 4, 1, 0), *n = NULL;
@@ -2358,7 +2375,8 @@ static inline int picolCommandLReplace(pickle_t *i, const int argc, char **argv,
 		goto err;
 	r = picolForceResult(i, n, 0);
 	if (empty)
-		picolFree(i, repl);
+		if (picolFree(i, repl) != PICKLE_OK)
+			r = PICKLE_ERROR;
 	if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
 		return PICKLE_ERROR;
 	return r;
@@ -2369,7 +2387,6 @@ err:
 	return PICKLE_ERROR;
 }
 
-/* Option '-all' would be useful */
 static inline int picolCommandLSearch(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
@@ -2622,12 +2639,14 @@ static int picolCommandCallVariadic(pickle_t *i, const int argc, char **argv, vo
 	if (pickle_set_var_string(i, x[0], val) != PICKLE_OK)
 		goto error;
 	errcode = picolEval(i, x[1]);
-	picolDropCallFrame(i);
-	picolFree(i, val);
+	if (picolDropCallFrame(i) != PICKLE_OK)
+		errcode = PICKLE_ERROR;
+	if (picolFree(i, val) != PICKLE_OK)
+		errcode = PICKLE_ERROR;
 	return errcode;
 error:
-	picolDropCallFrame(i);
-	picolFree(i, val);
+	(void)picolDropCallFrame(i);
+	(void)picolFree(i, val);
 	return PICKLE_ERROR;
 }
 
@@ -2792,7 +2811,8 @@ static int picolCommandEval(pickle_t *i, const int argc, char **argv, void *pd) 
 		if (!e)
 			return PICKLE_ERROR;
 		r = picolEval(i, e);
-		picolFree(i, e);
+		if (picolFree(i, e) != PICKLE_OK)
+			r = PICKLE_ERROR;
 	}
 	return r;
 }
@@ -2891,7 +2911,8 @@ static int picolCommandUpLevel(pickle_t *i, const int argc, char **argv, void *p
 		i->insideuplevel = 1;
 		retcode = picolEval(i, e);
 		i->insideuplevel = insideuplevel;
-		picolFree(i, e);
+		if (picolFree(i, e) != PICKLE_OK)
+			retcode = PICKLE_ERROR;
 	}
 end:
 	i->callframe = cf;
@@ -3085,6 +3106,7 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "uplevel",   picolCommandUpLevel,   NULL },
 		{ "upvar",     picolCommandUpVar,     NULL },
 		{ "while",     picolCommandWhile,     NULL },
+		{ "apply",     picolCommandApply,     NULL },
 	};
 	if (DEFINE_STRING)
 		if (picolRegisterCommand(i, "string", picolCommandString, NULL) != PICKLE_OK)
@@ -3133,17 +3155,23 @@ static int picolFreeCmd(pickle_t *i, pickle_command_t *p) {
 	assert(i);
 	if (!p)
 		return PICKLE_OK;
-	if (p->func == picolCommandCallProc || p->func == picolCommandCallVariadic) {
+	int r = PICKLE_OK;
+	if (picolIsDefinedProc(p->func)) {
 		char **procdata = (char**) p->privdata;
 		if (procdata) {
-			picolFree(i, procdata[0]);
-			picolFree(i, procdata[1]);
+			if (picolFree(i, procdata[0]) != PICKLE_OK)
+				r = PICKLE_ERROR;
+			if (picolFree(i, procdata[1]) != PICKLE_OK)
+				r = PICKLE_ERROR;
 		}
-		picolFree(i, procdata);
+		if (picolFree(i, procdata) != PICKLE_OK)
+			r = PICKLE_ERROR;
 	}
-	picolFree(i, p->name);
-	picolFree(i, p);
-	return PICKLE_OK;
+	if (picolFree(i, p->name) != PICKLE_OK)
+		r = PICKLE_ERROR;
+	if (picolFree(i, p) != PICKLE_OK)
+		r = PICKLE_ERROR;
+	return r;
 }
 
 static int picolDeinitialize(pickle_t *i) {
@@ -3627,6 +3655,7 @@ int pickle_eval(pickle_t *i, const char *t) {
 	return picolEval(i, t); /* may return any int */
 }
 
+/* Arity error messages could be improved by allowing a string to describe the allowed arguments */
 int pickle_set_result_error_arity(pickle_t *i, const int expected, const int argc, char **argv) {
 	pre(i);
 	assert(argc >= 1);
@@ -3651,7 +3680,7 @@ int pickle_rename_command(pickle_t *i, const char *src, const char *dst) {
 	if (!np)
 		return post(i, pickle_set_result_error(i, "Invalid proc %s", src));
 	int r = PICKLE_ERROR;
-	if (np->func == picolCommandCallProc || np->func == picolCommandCallVariadic) {
+	if (picolIsDefinedProc(np->func)) {
 		char **procdata = (char**)np->privdata;
 		r = picolCommandAddProc(i, dst, procdata[0], procdata[1], np->func == picolCommandCallVariadic);
 	} else {
@@ -3669,11 +3698,9 @@ int pickle_set_argv(pickle_t *i, int argc, char **argv) {
 	char *args = concatenate(i, " ", argc, argv, 1, 0);
 	if (!args)
 		return post(i, PICKLE_ERROR);
-	if (pickle_set_var_string(i, "argv", args) != PICKLE_OK) {
-		(void)picolFree(i, args);
-		post(i, PICKLE_ERROR);
-	}
-	return post(i, PICKLE_OK);
+	const int r = pickle_set_var_string(i, "argv", args);
+	(void)picolFree(i, args);
+	return post(i, r);
 }
 
 int pickle_new(pickle_t **i, const pickle_allocator_t *a) {

@@ -153,7 +153,11 @@ to remove some commands (such as the string function, the math functions, and
 the list functions).
 
 The options passed to the command and type are indicated after the command, a
-question mark suffix on an argument indicates an optional command.
+question mark suffix on an argument indicates an optional command, an ellipsis
+indicates an optional series of arguments.
+
+For some concrete examples of commands being run, see [unit.tcl][], which
+contains [unit tests][] for the project.
 
 * argv
 
@@ -250,6 +254,20 @@ Unset a variable, removing it from the current scope.
 
 Concatenate a list of strings with a space in-between them, as with 'concat',
 then evaluate the string, returning the result of the evaluation.
+
+* apply {{arg-list} {body}} args
+
+Applies an argument list to a function body, substituting the provided 
+arguments into the variables.
+
+Examples:
+
+	# Returns 4
+	apply {{x} {* $x $x}} 2
+	# Returns 7
+	apply {{x y} {+ $x $y}} 3 4
+
+It essential allows for anonymous functions to be made.
 
 * mathematical operations
 
@@ -362,14 +380,90 @@ Look up a variable containing a list and set the element specified by an index t
 be equal to 'value'.
 
 * linsert list index value
+
+Insert a value into a list at a specified index, indices less than zero are
+treated as zero and greater than the last element are appended to the end of
+the list.
+
 * lreplace list first last values...
 * lsort opts... list
+
+This command sorts a list, it uses [insertion sort][] internally and lacks
+many of the options of the full command. It does implement the following
+options:
+
+  - '-increasing' (default)
+
+Sort the list in increasing order.
+
+  - '-decreasing'
+
+Sort the list in decreasing order.
+
+  - '-ascii' (default)
+
+The list is a series of strings that should be stored in [ASCII][] order.
+
+  - '-integer'
+
+The list is a series of numbers that should be sorted numerically.
+
 * lreverse list
-* lsearch opts... list
-* split list splitter
-* lappend
+
+Reverse the elements in a list.
+
+* lsearch opts... list pattern
+
+The search command attempts to find a pattern within a list and if found it
+returns the index as which the pattern was found within the list, or '-1' if
+it was not found.
+
+  - '-not'
+
+Invert the selection, matching patterns that *do not* match.
+
+  - '-exact'
+
+Pattern is an exact string to search for.
+
+  - '-integer'
+
+The pattern is a number to search for.
+
+  - '-glob' (default)
+
+This subcommand uses the same [regex][] syntax (and engine) as the 
+'string match' subcommand, it is quite limited, and it is the default search
+option.
+
+  - '-inline'
+
+Instead of returning the index, return the found element.
+
+  - '-start index'
+
+Start at the specified index instead of at zero.
+
+* split string splitter
+
+Split a string into a list, the value to split on is not a regular expression,
+but a string literal. There is a special case where the value to split on is
+the empty string, in this case it splits a string into a list of its 
+constituent characters.
+
+* lappend variable values...
+
+Append values to a list, stored in a variable, the function returns the newly
+created list.
+
 * list args...
+
+Turn arguments into a list, arguments with spaces in them are quoted, the
+list command returns the concatenation of the escaped elements.
+
 * concat args...
+
+Trim arguments before concatenating them into a string.
 
 * unknown {list}
 
@@ -397,7 +491,7 @@ the system shell, including its arguments.
 The 'string' command in [TCL][] implements nearly every string command you
 could possibly want, however this version of 'string' is more limited and
 behaves differently in many circumstances. 'string' also pulls in more standard
-C library functions from 'ctype.h' and 'string.h'.
+C library functions from '[ctype.h][]' and '[string.h][]'.
 
 Some of the commands that are implemented:
 
@@ -477,21 +571,22 @@ a decimal number with an optional '+' or '-' prefix.
 
 Class can be:
 
-    - alnum
-    - alpha
-    - digit
-    - graph
-    - lower
-    - print
-    - punct
-    - space
-    - upper
-    - xdigit
+    - [alnum][]
+    - [alpha][]
+    - [digit][]
+    - [graph][]
+    - [lower][]
+    - [print][]
+    - [punct][]
+    - [space][]
+    - [upper][]
+    - [xdigit][]
     - ascii
-    - control
+    - [control][]
     - integer
 
-Any other Class is invalid.
+Any other Class is invalid. Most classes are based on a C function (or macro)
+available in the [ctype.h][] header.
 
   - string repeat String Count
 
@@ -858,9 +953,9 @@ The language can be extended with new functions written in C, each function
 accepts an integer length, and an array of pointers to ASCIIZ strings - much
 like the 'main' function in C.
 
-User defined commands can be registered with the 'pickle_register_command'
-function. With in the user defined callbacks the 'pickle_set_result' family of
-functions can be used. The callbacks passed to 'pickle_register_command' look
+User defined commands can be registered with the 'pickle\_register\_command'
+function. With in the user defined callbacks the 'pickle\_set\_result' family of
+functions can be used. The callbacks passed to 'pickle\_register\_command' look
 like this:
 
 	typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
@@ -878,7 +973,7 @@ The function returns one of the following status codes:
 	PICKLE_CONTINUE =  3 (Immediately proceed to next iteration of while loop)
 
 These error codes can affect the flow control within the interpreter. The
-actual return value of the callback is set with 'pickle_set_result' functions.
+actual return value of the callback is set with 'pickle\_set\_result' functions.
 
 Some functions are define purely for convenience and are not strictly
 necessary, such as 'pickle\_set\_result\_error' and 'pickle\_set\_result\_error\_arity',
@@ -1010,7 +1105,8 @@ as 'pickleCommandFopen' does the registering when needed.
 
 It should be possible to implement the commands 'update', 'after' and 'vwait',
 extending the interpreter with task management like behavior without any changes
-to the API.
+to the API. It should be possible to implement most commands, although it might
+be awkward to do so. Cleanup is still a problem.
 
 ## Extensions and Modules
 
@@ -1019,7 +1115,7 @@ be worth simplifying the [main.c][] application and removing a lot of
 functionality from the interpreter so it has just enough functions to run the
 unit tests ('getenv', 'exit', and 'puts' are all that are really needed).
 
-Operation system dependent code should be placed in the [pickle-all][] module.
+Operating system dependent code should be placed in the [pickle-all][] module.
 
 ## Style Guide
 
@@ -1039,6 +1135,9 @@ do not intend as well.
 - The core project is written strictly in C99 and uses only things
 that can be found in the standard library, and only things that are
 easy to implement on a microcontroller.
+- Error messages should begin with the string 'Invalid', even it is
+does not make the best grammatical sense, this is so error messages can
+be grepped for easily.
 
 The callbacks all have their 'argv' argument defined as 'char\*',
 as they do not modify their arguments. However adding this in just adds
@@ -1066,13 +1165,17 @@ Known limitations of the interpreter include:
 * [x] Create a framework for adding modules external to this project
 * [x] Move manual page into this document and generate manual page
       from this document.
+* [ ] Fix all TODO messages, there are minor changes that need to be
+      made throughout the interpreter.
 * [ ] Move most of 'main.c' to an external module. Very little is
       needed to run unit tests which is all that really need to
       be in this project. See <https://github.com/howerj/pickle-all>
+* [ ] Move development to the [pickle-all][] project.
 
 [block.h]: block.h
 [main.c]: main.c
 [picol.c]: picol.c
+[unit.tcl]: unit.tcl
 [picol]: http://oldblog.antirez.com/post/picol.html
 [TCL]: https://en.wikipedia.org/wiki/Tcl
 [stdio.h]: http://www.cplusplus.com/reference/cstdio/
@@ -1096,3 +1199,20 @@ Known limitations of the interpreter include:
 [homoiconic]: https://en.wikipedia.org/wiki/Homoiconicity
 [loc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 [pickle-all]: https://github.com/howerj/pickle-all
+[insertion sort]: https://en.wikipedia.org/wiki/Insertion_sort
+[regex]: http://c-faq.com/lib/regex.html
+[ASCII]: https://en.wikipedia.org/wiki/ASCII
+[unit tests]: https://en.wikipedia.org/wiki/Unit_testing
+[ctype.h]: http://www.cplusplus.com/reference/cctype/
+[string.h]: http://www.cplusplus.com/reference/cstring/
+[alnum]: http://www.cplusplus.com/reference/cctype/isalnum/
+[alpha]: http://www.cplusplus.com/reference/cctype/isalpha/
+[digit]: http://www.cplusplus.com/reference/cctype/isdigit/
+[graph]: http://www.cplusplus.com/reference/cctype/isgraph/
+[lower]: http://www.cplusplus.com/reference/cctype/islower/
+[print]: http://www.cplusplus.com/reference/cctype/isprint/
+[punct]: http://www.cplusplus.com/reference/cctype/ispunct/
+[space]: http://www.cplusplus.com/reference/cctype/isspace/
+[upper]: http://www.cplusplus.com/reference/cctype/isupper/
+[xdigit]: http://www.cplusplus.com/reference/cctype/isxdigit/
+[control]: http://www.cplusplus.com/reference/cctype/iscntrl/

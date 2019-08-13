@@ -9,4 +9,5 @@ picol
 *.gcov
 afl/
 afl/*
-simple
+small
+unit

@@ -536,6 +536,8 @@ fails {lreplace "" 1}
 test {a foo c d e} {lreplace {a b c d e} 1 1 foo}
 test {a {x x} c d e} {lreplace {a b c d e} 1 1 {x x}}
 test {a three more elements d e} {lreplace {a b c d e} 1 2 three more elements}
+test {x y z a b c} {lreplace {a b c} -1 -2 x y z}
+test {a b x y z c} {lreplace {a b c} 2 1 x y z}
 test {a b} {lrange {a b c d e} 0 1}
 test {a b c d e} {lrange {a b c d e} 0 4}
 test {a} {lrange {a b c d e} 0 0}
@@ -558,10 +560,15 @@ test  {a b {c d}} {lappend l1 a b {c d}; set l1}
 test  {} {lappend l2}
 test  {a b c} {lappend l3 a b c}
 fails {lappend}
+test "hello" {apply {{} { return hello 0; }}}
+test 4 {apply {{x} {* $x $x}} 2}
+test 8 {apply {{x y} {* $x $y}} 2 4}
+fails {apply}
+fails {apply {}}
+fails {apply x}
+fails {apply {x}}
 
-# # Fails for now
-# test {x y z a b c} {lreplace {a b c} -1 -2 x y z}
-# test {a b x y z c} {lreplace {a b c} 2 1 x y z}
+test {a b {x y} z c} {lreplace {a b c} 2 1 {x y} z}
 
 assert [<= $passed $total]
 assert [>= $passed 0]
