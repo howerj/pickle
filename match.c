@@ -3,6 +3,8 @@
  * Modified from:
  * https://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html 
  *
+ * TODO: Fix START/END escaping, change escape character, more tests
+ *
  * Supports: "^$.*+?" and escaping
  * Nice to have: hex escape sequences, case insensitivity option, work on
  * binary data. */
