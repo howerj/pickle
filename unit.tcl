@@ -8,10 +8,6 @@
 # the test framework itself runs.
 #
 # TODO: Find a way to merge the 'shell.tcl' application
-# TODO: Being able to run this test suite in the 'simple' version of the
-# interpreter would allow the removal of many commands written in C. It may
-# require some extensions to the simple version of the interpreter (gets, puts,
-# exit, getenv, and reading from a file if one has been given).
 #
 
 set program [lindex $argv 2]

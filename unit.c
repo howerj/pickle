@@ -1,3 +1,4 @@
+/* TODO: Replace 'main.c' with this file after adding arena allocator */
 #include "pickle.h"
 #include <stdlib.h>
 #include <stdio.h>

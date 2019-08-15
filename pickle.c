@@ -39,12 +39,10 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * TODO: Implement the '-all' option on 'lsearch'.
  * TODO: Make an API for events to be run on each eval, or get/set/unset
  * of a variable? Or perhaps a 'yield' function so 'vwait'/'update' can
  * be implemented.
- * TODO: Fix string escaping, and make a function for validating lists
- * TODO: Add 'foreach'? */
+ * TODO: Fix string escaping, and make a function for validating lists */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
