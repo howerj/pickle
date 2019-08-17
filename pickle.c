@@ -39,10 +39,9 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * TODO: Make an API for events to be run on each eval, or get/set/unset
- * of a variable? Or perhaps a 'yield' function so 'vwait'/'update' can
- * be implemented.
- * TODO: Fix string escaping, and make a function for validating lists */
+ * TODO: Remove 'pickle_set_argv' and instead provide a concatenate 
+ * function, which would escape things.
+ * TODO: Fix string escaping */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -62,6 +61,7 @@
 #define UNUSED(X)                 ((void)(X))
 #define BUILD_BUG_ON(condition)   ((void)sizeof(char[1 - 2*!!(condition)]))
 #define implies(P, Q)             assert(!(P) || (Q)) /* material implication, immaterial if NDEBUG defined */
+#define mutual(P, Q)              (implies((P), (Q)), implies((Q), (P)))
 #define verify(X)                 do { if (!(X)) { abort(); } } while (0)
 #define member_size(TYPE, MEMBER) (sizeof(((TYPE *)0)->MEMBER)) /* apparently fine */
 #define MIN(X, Y)                 ((X) > (Y) ? (Y) : (X))
@@ -95,6 +95,10 @@
 
 #ifndef DEFINE_LIST
 #define DEFINE_LIST       (1)
+#endif
+
+#ifndef DEFINE_REGEX
+#define DEFINE_REGEX      (1)
 #endif
 
 #ifndef DEFAULT_ALLOCATOR
@@ -185,7 +189,15 @@ PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 	unsigned initialized   :1;           /**< if true, interpreter is initialized and ready to use */
 	unsigned static_result :1;           /**< internal use only: if true, result should not be freed */
 	unsigned insideuplevel :1;           /**< true if executing inside an uplevel command */
+	unsigned insideunknown :1;           /**< true if executing inside the 'unknown' proc */
 } POSTPACK;
+
+typedef PREPACK struct {
+	const char *start, *end;
+	int max;
+	unsigned type   :2, 
+		 nocase :1;
+} POSTPACK pickle_regex_t;
 
 typedef struct PREPACK { int argc; char **argv; } POSTPACK args_t;
 
@@ -1038,10 +1050,14 @@ static int picolUnEscape(char *r, size_t length) {
 			j++;
 			switch (r[j]) {
 			case '\\': r[k] = '\\'; break;
-			case  'n': r[k] = '\n'; break;
-			case  't': r[k] = '\t'; break;
-			case  'r': r[k] = '\r'; break;
+			case  'a': r[k] = '\a'; break;
+			case  'b': r[k] = '\b'; break;
 			case  'e': r[k] = 27;   break;
+			case  'f': r[k] = '\f'; break;
+			case  'n': r[k] = '\n'; break;
+			case  'r': r[k] = '\r'; break;
+			case  't': r[k] = '\t'; break;
+			case  'v': r[k] = '\v'; break;
 			case  'x': {
 				int val = 0;
 				const int pos = hexStr2ToInt(&r[j + 1], &val);
@@ -1062,35 +1078,38 @@ static int picolUnEscape(char *r, size_t length) {
 	return k;
 }
 
-static char *picolEscape(pickle_t *i, const char *s, size_t length, int string) {
+static char *picolEscape(pickle_t *i, const char *s, size_t length) {
 	assert(i);
 	assert(s);
 	char *m = picolMalloc(i, length + 2 + 1/*NUL*/);
 	if (!m)
 		return m;
-	m[0] = string ? '"' : '{';
+	m[0] = '{';
 	if (length)
 		move(m + 1, s, length);
-	m[length + 1] = string ? '"' : '}';
+	m[length + 1] = '}';
 	m[length + 2] = '\0';
 	return m;
 }
 
-static int picolStringNeedsEscaping(const char *s, int string) {
+static int picolStringNeedsEscaping(const char *s) {
 	assert(s);
-	UNUSED(string);
+	long braces = 0;
 	char start = s[0], end = 0, ch = 0, sp = 0;
 	for (size_t i = 0; (ch = s[i]); s++) {
 		end = ch;
 		if (locateChar(string_white_space, ch))
 			sp = 1;
+		if (ch == '{') braces++;
+		if (ch == '}') braces--;
+		if (ch == '\\') {
+			ch = s[++i];
+			if (!ch)
+				return 1;
+		}
 	}
-	if (!start || sp) {
-		if (string)
-			return !(start == '"' && end == '"');
-		else
-			return !(start == '{' && end == '}');
-	}
+	if (!start || sp)
+		return braces || !(start == '{' && end == '}');
 	return 0;
 }
 
@@ -1154,7 +1173,7 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 		args++;
 		const size_t sz = picolStrlen(argv[j]);
 		if (doEscape)
-			esc[j] = picolStringNeedsEscaping(argv[j], 0);
+			esc[j] = picolStringNeedsEscaping(argv[j]);
 		ls[j] = sz;
 		l += sz + jl;
 	}
@@ -1177,7 +1196,7 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 
 		k++;
 		const int escape = esc[j];
-		char *f = escape ? picolEscape(i, arg, ls[j], arg[0] == '"') : NULL;
+		char *f = escape ? picolEscape(i, arg, ls[j]) : NULL;
 		char *p = escape ? f : arg;
 		if (!p)
 			goto end;
@@ -1264,15 +1283,17 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 		return PICKLE_ERROR;
 	pickle_command_t *c = picolGetCommand(i, argv[0]);
 	if (c == NULL) {
-		if ((c = picolGetCommand(i, "unknown")) == NULL)
+		if (i->insideunknown || ((c = picolGetCommand(i, "unknown")) == NULL))
 			return pickle_set_result_error(i, "Invalid command %s", argv[0]);
 		char *arg2 = concatenate(i, " ", argc, argv, 1, 0);
 		if (!arg2)
 			return PICKLE_ERROR;
 		char *nargv[] = { "unknown", arg2 };
+		i->insideunknown = 1;
 		picolAssertCommandPreConditions(i, 2, nargv, c->privdata);
 		const int r = c->func(i, 2, nargv, c->privdata);
 		picolAssertCommandPostConditions(i, r);
+		i->insideunknown = 0;
 		if (picolFree(i, arg2) != PICKLE_OK)
 			return PICKLE_ERROR;
 		return r;
@@ -1349,6 +1370,7 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 		if (p.type == PT_EOL) { /* We have a complete command + args. Call it! */
 			if (picolFree(i, t) != PICKLE_OK)
 				goto err;
+			t = NULL;
 			prevtype = p.type;
 			if (p.o.noeval) {
 				char *result = concatenate(i, " ", argc, argv, 0, 0);
@@ -2073,9 +2095,9 @@ static inline int picolCommandLRepeat(pickle_t *i, const int argc, char **argv, 
 		return PICKLE_ERROR;
 	if (count < 0)
 		return pickle_set_result_error(i, "Invalid argument %s", argv[1]);
-	const int escape = picolStringNeedsEscaping(argv[2], 0);
+	const int escape = picolStringNeedsEscaping(argv[2]);
 	const size_t rl  = picolStrlen(argv[2]);
-	char *escaped = escape ? picolEscape(i, argv[2], rl, 0) : argv[2];
+	char *escaped = escape ? picolEscape(i, argv[2], rl) : argv[2];
 	const size_t el  = escape ? picolStrlen(escaped) : rl;
 	char *r = picolMalloc(i, ((el + 1) * count) + 1);
 	if (!r)
@@ -2160,12 +2182,12 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 	assert(parse);
 	assert(position);
 	assert(insert);
-	const int escape = doEsc && picolStringNeedsEscaping(insert, 0);
+	const int escape = doEsc && picolStringNeedsEscaping(insert);
 	const size_t il  = picolStrlen(insert);
 	number_t index = 0, r = PICKLE_OK;
 	if (picolStringToNumber(i, position, &index) != PICKLE_OK)
 		return PICKLE_ERROR;
-	if (!(insert = escape ? picolEscape(i, insert, il, 0) : insert))
+	if (!(insert = escape ? picolEscape(i, insert, il) : insert))
 		return PICKLE_ERROR;
 	char *prev = NULL;
 	args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, parse);
@@ -2385,6 +2407,7 @@ err:
 	return PICKLE_ERROR;
 }
 
+/* implementing the '-all' option would be useful */
 static inline int picolCommandLSearch(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
@@ -2395,12 +2418,12 @@ static inline int picolCommandLSearch(pickle_t *i, const int argc, char **argv, 
 	int op = oGLOB, last = argc - 2, index = -1, not = 0, inl = 0;
 	char *list = argv[argc - 2], *pattern = argv[argc - 1];
 	for (int j = 1; j < last; j++) {
-		     if (!strcmp(argv[j], "-integer")) { op = oINTEGER; } 
-		else if (!strcmp(argv[j], "-exact"))   { op = oEXACT; } 
-		else if (!strcmp(argv[j], "-inline"))  { inl = 1; } 
-		else if (!strcmp(argv[j], "-not"))     { not = 1; } 
-		else if (!strcmp(argv[j], "-glob"))    { op = oGLOB; }
-		else if (!strcmp(argv[j], "-start")) {
+		     if (!compare(argv[j], "-integer")) { op = oINTEGER; } 
+		else if (!compare(argv[j], "-exact"))   { op = oEXACT; } 
+		else if (!compare(argv[j], "-inline"))  { inl = 1; } 
+		else if (!compare(argv[j], "-not"))     { not = 1; } 
+		else if (!compare(argv[j], "-glob"))    { op = oGLOB; }
+		else if (!compare(argv[j], "-start")) {
 			if (!((j + 1) < last))
 				return pickle_set_result_error(i, "Invalid option %s", argv[j]);
 			j++;
@@ -2949,6 +2972,7 @@ static int picolCommandUnSet(pickle_t *i, const int argc, char **argv, void *pd)
 	return picolUnsetVar(i, argv[1]);
 }
 
+/* returning a command list would be a good move */
 static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc == 1) {
@@ -3070,6 +3094,238 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 	return pickle_set_result_error(i, "Invalid subcommand %s", rq);
 }
 
+/* Regular Expression Engine
+ * Modified from:
+ * https://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html 
+ *
+ * Supports: "^$.*+?" and escaping, and classes "\w\W\s\S\d\D"
+ * Nice to have: hex escape sequences, ability to work on binary data. */
+
+enum { /* watch out for those negatives */
+	START =  '^', ESC    =  '\\', EOI  = '\0',
+	END   = -'$', ANY    = -'.', MANY = -'*', ATLEAST = -'+', MAYBE  = -'?', 
+	ALPHA = -'w', NALPHA = -'W',
+	DIGIT = -'d', NDIGIT = -'D',
+	SPACE = -'s', NSPACE = -'S',
+};
+
+enum { LAZY, GREEDY, POSSESSIVE };
+
+/* escape a character, or return an operator */
+static int regexEscape(const unsigned ch, const int esc) {
+	switch (ch) {
+	case -END: case -ANY: case -MANY: case -ATLEAST: case -MAYBE: 
+		return esc ? ch : -ch;
+	case 'w': return esc ? ALPHA  : 'w';
+	case 'W': return esc ? NALPHA : 'W';
+	case 'd': return esc ? DIGIT  : 'd';
+	case 'D': return esc ? NDIGIT : 'D';
+	case 's': return esc ? SPACE  : 's';
+	case 'S': return esc ? NSPACE : 'S';
+	case 'a': return esc ? '\a'   : 'a';
+	case 'b': return esc ? '\b'   : 'b';
+	case 'e': return esc ?  27    : 'e';
+	case 'f': return esc ? '\f'   : 'f';
+	case 'n': return esc ? '\n'   : 'n';
+	case 'r': return esc ? '\r'   : 'r';
+	case 't': return esc ? '\t'   : 't';
+	case 'v': return esc ? '\v'   : 'v';
+	case START: case ESC: case EOI: break;
+	}
+	return ch;
+}
+
+static int regexChar(const pickle_regex_t *x, const int pattern, const int ch) {
+	assert(x);
+	switch (pattern) {
+	case ANY:    return 1;
+	case ALPHA:  return  isalpha(ch); case NALPHA: return !isalpha(ch);
+	case DIGIT:  return  isdigit(ch); case NDIGIT: return !isdigit(ch);
+	case SPACE:  return  isspace(ch); case NSPACE: return !isspace(ch);
+	}
+	if (x->nocase)
+		return tolower(pattern) == tolower(ch);
+	return pattern == ch;
+}
+
+static int regexStar(pickle_regex_t *x, int depth, int c, const char *regexp, const char *text);
+
+/* search for regexp at beginning of text */
+static int regexHere(pickle_regex_t *x, const int depth, const char *regexp, const char *text) {
+	assert(x);
+	assert(regexp);
+	assert(text);
+	if (x->max && depth > x->max)
+		return -1;
+	int r1 = EOI, r2 = EOI;
+again:
+	r1 = regexEscape(regexp[0], 0);
+	if (r1 == EOI) {
+		x->end = text;
+		return 1;
+	}
+	if (r1 == START)
+		return -1;
+	if (r1 == ESC) {
+		r1 = regexEscape(regexp[1], 1);
+		if (r1 == EOI)
+			return -1;
+		regexp++;
+	}
+	r2 = regexEscape(regexp[1], 0);
+	if (r2 == MAYBE) {
+		const int is = regexChar(x, r1, *text);
+		if (x->type == GREEDY) {
+			if (is) {
+				const int m = regexHere(x, depth + 1, regexp + 2, text + 1);
+				if (m)
+					return m;
+			}
+			regexp += 2;
+			goto again;
+		} else if (x->type == LAZY) {
+			const int m = regexHere(x, depth + 1, regexp + 2, text);
+			if (m)
+				return m;
+			if (!is)
+				return 0;
+			regexp += 2, text++;
+			goto again;
+		} else {
+			assert(x->type == POSSESSIVE);
+			regexp += 2, text += is;
+			goto again;
+		}
+	}
+	if (r2 == ATLEAST) {
+		if (!regexChar(x, r1, *text))
+			return 0;
+		return regexStar(x, depth + 1, r1, regexp + 2, text + 1);
+	}
+	if (r2 == MANY)
+		return regexStar(x, depth + 1, r1, regexp + 2, text);
+	if (r1 == END) {
+		if (r2 != EOI)
+			return -1;
+		return *text == EOI;
+	}
+	if (*text != EOI && regexChar(x, r1, *text)) {
+		regexp++, text++;
+		goto again;
+	}
+	return 0;
+}
+
+/* search for c*regexp at beginning of text */
+static int regexStar(pickle_regex_t *x, const int depth, const int c, const char *regexp, const char *text) {
+	assert(x);
+	assert(regexp);
+	assert(text);
+	if (x->max && depth > x->max)
+		return -1;
+	if (x->type == GREEDY || x->type == POSSESSIVE) {
+		const char *t = NULL;
+		for (t = text; *t != EOI && regexChar(x, c, *t); t++)
+			;
+		if (x->type == POSSESSIVE)
+			return regexHere(x, depth + 1, regexp, t);
+		do {
+			const int m = regexHere(x, depth + 1, regexp, t);
+			if (m)
+				return m;
+		} while (t-- > text);
+		return 0;
+	}
+	/* lazy */	
+	do {    /* a '*' matches zero or more instances */
+		const int m = regexHere(x, depth + 1, regexp, text);
+		if (m)
+			return m;
+	} while (*text != EOI && regexChar(x, c, *text++));
+	return 0;
+}
+
+/* search for regexp anywhere in text */
+static int picolRegexExtract(pickle_regex_t *x, const char *regexp, const char *text) {
+	assert(x);
+	assert(regexp);
+	assert(text);
+	x->start = NULL;
+	x->end   = NULL;
+	if (regexp[0] == START)
+		return regexHere(x, 0, regexp + 1, text);
+	do {    /* must look even if string is empty */
+		const int m = regexHere(x, 0, regexp, text);
+		if (m) {
+			if (m > 0)
+				x->start = text;
+			return m;
+		}
+	} while (*text++ != EOI);
+	x->start = NULL;
+	x->end   = NULL;
+	return 0;
+}
+
+static int picolRegex(const char *regexp, const char *text) {
+	assert(regexp);
+	assert(text);
+	pickle_regex_t x = { NULL, NULL, PICKLE_MAX_RECURSION, LAZY, 0 };
+	return picolRegexExtract(&x, regexp, text);
+}
+
+static inline int picolCommandRegex(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	assert(!pd);
+	if (argc < 3)
+		return pickle_set_result_error_arity(i, 3, argc, argv);
+	number_t index = 0;
+	unsigned type = GREEDY, nocase = 0;	
+	const int last = argc - 2;
+	for (int j = 1; j < last; j++) {
+		if (!compare(argv[j], "-nocase")) {
+			nocase = 1;
+		} else if (!compare(argv[j], "-possessive")) {
+			type = POSSESSIVE;
+		} else if (!compare(argv[j], "-lazy")) {
+			type = LAZY;
+		} else if (!compare(argv[j], "-greedy")) {
+			type = GREEDY;
+		} else if (!compare(argv[j], "-start")) {
+			if (!((j + 1) < last))
+				return pickle_set_result_error(i, "Invalid option %s", argv[j]);
+			j++;
+			if (picolStringToNumber(i, argv[j], &index) != PICKLE_OK)
+				return PICKLE_ERROR;
+		} else {
+			return pickle_set_result_error(i, "Invalid option %s", argv[j]);
+		}
+	}
+	const char *pattern = argv[last], *string = argv[last + 1], *orig = argv[last + 1];
+	if (index) {
+		const size_t l = picolStrlen(string);
+		if (index < 0)
+			index = 0;
+		if ((size_t)index > l)
+			index = l;
+		string += index;
+	}
+	pickle_regex_t x = { NULL, NULL, PICKLE_MAX_RECURSION, type, nocase };
+	mutual(x.start, x.end);
+	const int r = picolRegexExtract(&x, pattern, string);
+	if (r < 0)
+		return pickle_set_result_error(i, "Invalid regex %s", pattern);
+	if (r == 0)
+		return pickle_set_result_string(i, "-1 -1");
+	assert(x.start);
+	assert(x.end);
+	implies(x.start, x.start >= orig);
+	implies(x.end,   x.end   >= x.start);
+	number_t start = x.start - orig, end = x.end - orig;
+	end -= (end != start);
+	return pickle_set_result(i, "%ld %ld", (long)start, (long)end);
+}
+
 static int picolRegisterCoreCommands(pickle_t *i) {
 	assert(i);
 
@@ -3106,6 +3362,10 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "while",     picolCommandWhile,     NULL },
 		{ "apply",     picolCommandApply,     NULL },
 	};
+	if (DEFINE_REGEX) {
+		if (picolRegisterCommand(i, "reg", picolCommandRegex, NULL) != PICKLE_OK)
+			return PICKLE_ERROR;
+	}
 	if (DEFINE_STRING)
 		if (picolRegisterCommand(i, "string", picolCommandString, NULL) != PICKLE_OK)
 			return PICKLE_ERROR;
@@ -3428,25 +3688,18 @@ static inline int picolTestGetSetVar(void) {
 	long val = 0;
 	int r = 0;
 	pickle_t *p = NULL;
-
 	if (pickle_new(&p, NULL) != PICKLE_OK || !p)
 		return -1;
-
 	if (pickle_eval(p, "set a 54; set b 3; set c -4x") != PICKLE_OK)
 		r = -2;
-
 	if (pickle_get_var_integer(p, "a", &val) != PICKLE_OK || val != 54)
 		r = -3;
-
 	if (pickle_get_var_integer(p, "c", &val) == PICKLE_OK || val != 0)
 		r = -4;
-
 	if (pickle_set_var_string(p, "d", "123") != PICKLE_OK)
 		r = -5;
-
 	if (pickle_get_var_integer(p, "d", &val) != PICKLE_OK || val != 123)
 		r = -6;
-
 	if (pickle_delete(p) != PICKLE_OK)
 		r = -7;
 	return r;
@@ -3479,6 +3732,37 @@ static inline int picolTestParser(void) {
 		} while (p.type != PT_EOF);
 	}
 	return r;
+}
+
+static int picolTestRegex(void) {
+	int r = 0;
+	r += !(1 == picolRegex("a", "bba"));
+	r += !(1 == picolRegex(".", "x"));
+	r += !(1 == picolRegex("\\.", "."));
+	r += !(0 == picolRegex("\\.", "x"));
+	r += !(0 == picolRegex(".", ""));
+	r += !(0 == picolRegex("a", "b"));
+	r += !(1 == picolRegex("^a*b$", "b"));
+	r += !(0 == picolRegex("^a*b$", "bx"));
+	r += !(1 == picolRegex("a*b", "b"));
+	r += !(1 == picolRegex("a*b", "ab"));
+	r += !(1 == picolRegex("a*b", "aaaab"));
+	r += !(1 == picolRegex("a*b", "xaaaab"));
+	r += !(0 == picolRegex("^a*b", "xaaaab"));
+	r += !(1 == picolRegex("a*b", "xaaaabx"));
+	r += !(1 == picolRegex("a*b", "xaaaaxb"));
+	r += !(0 == picolRegex("a*b", "xaaaax"));
+	r += !(0 == picolRegex("a$", "ab"));
+	r += !(1 == picolRegex("a*", ""));
+	r += !(1 == picolRegex("a*", "a"));
+	r += !(1 == picolRegex("a*", "aa"));
+	r += !(1 == picolRegex("a+", "a"));
+	r += !(0 == picolRegex("a+", ""));
+	r += !(1 == picolRegex("ca?b", "cab"));
+	r += !(1 == picolRegex("ca?b", "cb"));
+	r += !(1 == picolRegex("\\sz", " \t\r\nz"));
+	r += !(0 == picolRegex("\\s", "x"));
+	return -r;
 }
 
 static inline void pre(pickle_t *i) { /* assert API pre-conditions */
@@ -3557,6 +3841,7 @@ int pickle_set_var_string(pickle_t *i, const char *name, const char *val) {
 	} else {
 		if (!(v = picolMalloc(i, sizeof(*v))))
 			return post(i, PICKLE_ERROR);
+		zero(v, sizeof *v);
 		const int r1 = picolSetVarName(i, v, name);
 		const int r2 = picolSetVarString(i, v, val);
 		if (r1 != PICKLE_OK || r2 != PICKLE_OK) {
@@ -3747,6 +4032,7 @@ int pickle_tests(void) {
 		picolTestGetSetVar,
 		picolTestLineNumber,
 		picolTestParser,
+		picolTestRegex,
 	};
 	int r = 0;
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++)

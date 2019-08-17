@@ -39,8 +39,6 @@ ${TARGET}.o: ${TARGET}.c ${TARGET}.h
 
 block.o: block.c block.h
 
-small: lib${TARGET}.a small.o
-
 unit: lib${TARGET}.a block.o unit.o
 
 lib${TARGET}.a: ${TARGET}.o
@@ -55,9 +53,4 @@ check:
 
 clean:
 	git clean -dfx
-
-SHELL := sh
-date  := $(shell date "+%Y%m%d%H%M%S")
-dist:
-	tar zcf ../${TARGET}-${date}.tgz ../${TARGET}
 

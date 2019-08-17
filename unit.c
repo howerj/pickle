@@ -11,7 +11,7 @@
 static int CommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *in = pd;
 	if (argc != 1)
-		return pickle_set_result_error_arity(i, 2, argc, argv);
+		return pickle_set_result_error_arity(i, 1, argc, argv);
 	char buf[LINESZ] = { 0 };
 	if (!fgets(buf, sizeof buf, in))
 		return pickle_set_result_error(i, "EOF");

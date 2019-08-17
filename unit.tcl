@@ -18,6 +18,7 @@ proc usage {} {
 	puts ""
 	puts "\t-h\tPrint this help message and quit"
 	puts "\t-p\tPerformance test"
+	puts "\t-s\tRun a shell"
 	puts ""
 	bye
 }
@@ -41,8 +42,9 @@ if {eq $program "-p" } {
 	}
 
 	# Takes about a second on my machine
+	set c [clock];
 	waste 200000;
-	puts [clock];
+	puts "elapsed: [- [clock] $c]";
 	bye
 }
 
@@ -534,6 +536,7 @@ test {a {x x} c d e} {lreplace {a b c d e} 1 1 {x x}}
 test {a three more elements d e} {lreplace {a b c d e} 1 2 three more elements}
 test {x y z a b c} {lreplace {a b c} -1 -2 x y z}
 test {a b x y z c} {lreplace {a b c} 2 1 x y z}
+test {a b {x y} z c} {lreplace {a b c} 2 1 {x y} z}
 test {a b} {lrange {a b c d e} 0 1}
 test {a b c d e} {lrange {a b c d e} 0 4}
 test {a} {lrange {a b c d e} 0 0}
@@ -563,8 +566,33 @@ fails {apply}
 fails {apply {}}
 fails {apply x}
 fails {apply {x}}
-
-test {a b {x y} z c} {lreplace {a b c} 2 1 {x y} z}
+fails {reg}
+fails {reg a}
+fails {reg \\ ""}
+test  {1 4} {reg {ba+} "xbaaaz"}
+test  {3 7} {reg {\s+} "@@@    \t@@"}
+test  {-1 -1} {reg x a}
+test  {0 0} {reg . a}
+# Might want to return something different for this, like {-1 0}
+test  {0 0} {reg "" "abc"}
+test  {3 3} {reg -nocase x abcXd}
+test  {-1 -1} {reg -start 3 x xxxabc}
+test  {6 6} {reg -start 3 x xxxabcx}
+# NB. Subtle difference between failure conditions
+test  {-1 -1} {reg "a^" ""}
+test  {-1 -1} {reg {\{} ""}
+test  {2 4} {reg {\{+} "??\{\{\{p"}
+fails {reg "a^" "a^"}
+fails {reg {$a} {$a}}
+test  {0 0} {reg -lazy {ab*} {abbbbbb}}
+test  {0 6} {reg {ab*} {abbbbbb}}
+# Hmm, probably need to differentiate between these two
+# test  {0 0} {reg {a?} {a}}
+# test  {0 0} {reg -lazy {a?} {a}}
+test  {0 1} {reg {ba?} {ba}}
+test  {0 2} {reg {ba?c?} {bac}}
+test  {0 0} {reg -lazy {ba?} {ba}}
+test  {0 0} {reg -lazy {ba?c?} {ba}}
 
 assert [<= $passed $total]
 assert [>= $passed 0]

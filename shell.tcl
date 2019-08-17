@@ -61,7 +61,7 @@ proc defined {x} {
 	return $r
 }
 
-proc unknown l { system "$l" }
+proc unknown l { puts "unknown command \"$l\""; exit 1 }
 
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words' which is also from Forth.
