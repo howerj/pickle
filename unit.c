@@ -19,10 +19,20 @@ static int CommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int CommandPuts(pickle_t *i, int argc, char **argv, void *pd) {
-	FILE *out= pd;
-	if (argc != 2)
+	FILE *out = pd;
+	if (argc != 2 && argc != 3)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
-	return fprintf(out, "%s\n", argv[1]) < 0 ? PICKLE_ERROR : PICKLE_OK;
+	int newline = 1;
+	if (argc == 3) {
+		if (!strcmp(argv[1], "-nonewline"))
+			newline = 0;
+		else
+			return pickle_set_result(i, "Invalid option %s", argv[1]);
+	}
+	const int r = fputs(argc == 2 ? argv[1] : argv[2], out);
+	if (newline)
+		fputc('\n', out);
+	return r < 0 ? PICKLE_ERROR : PICKLE_OK;
 }
 
 static int CommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {

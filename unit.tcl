@@ -48,12 +48,6 @@ if {eq $program "-p" } {
 	bye
 }
 
-# ### Clean up   ### #
-
-rename usage ""
-unset program
-unset argc
-
 # ### Unit Tests ### #
 
 proc die {x} { puts $x; exit 1 }
@@ -91,6 +85,102 @@ proc defined {x} {
 	if {eq 0 $e} { return variable }
 	return $r
 }
+
+# ### Shell      ### #
+
+# Hold over from Forth; list defined commands
+proc words {} {
+	for {set i 0; set l 0; set m [info command]} {< $i $m} {incr i} {
+		set n [info command name $i]
+		set l [+ $l [string length $n]]
+		set c " "
+		if {> $l 80} { set c "\n"; set l 0 }
+		stdout -puts "$n$c"
+	}
+	stdout -puts "\n"
+}
+
+# Decompiler, of sorts. The name 'see' comes from Forth, like the function
+# 'words' which is also from Forth.
+proc see {w} {
+	if {eq [uplevel 1 "defined {$w}"] {2 variable}} {
+		puts "set $w [uplevel 1 "set $w"]"
+		return
+	}
+	set widx [info command $w]
+	if {< $widx 0} {
+		return "'$w' not defined" -1
+	}
+
+	set type [info command type $widx]
+	set args [info command args $widx]
+	set body [info command body $widx]
+	set name [info command name $widx]
+	puts "$type $name {$args} {$body}"
+}
+
+set HOME "HOME"
+set OS Unix
+if {eq [getenv OS] "Windows_NT" } {
+	set OS Windows
+	set HOME "HOMEPATH"
+}
+
+proc decode {r} {
+	incr r
+	lindex  {error ok return break continue} $r
+}
+
+set HOME [getenv $HOME]
+set initrc "$HOME/.picklerc"
+
+set sourced 0
+set status [catch {source $initrc} sourced]
+set status [string trim $status]
+# puts "st: $status"
+if {== 0 $sourced} { puts "$status" }
+unset status
+unset initrc
+
+proc io {} {
+	upvar #0 prompt p
+	upvar 1 line l
+	stdout -puts $p
+	set e -1
+	set l [catch {gets} e]
+	if {or [eq [decode $e] break] [eq [decode $e] error]} {
+		if {eq $l EOF} {
+			exit 0
+		}
+		exit 1
+	}
+}
+
+proc shell {} {
+	io
+
+	while {ne $line ""} {
+		set result [catch {eval $line} retcode]
+		set fail [red]
+		if {== $retcode 0} { set fail [green] }
+		stdout -puts "\[$fail$retcode[normal]\] $result"
+		io
+	}
+}
+
+if {eq $program "-s" } { 
+	shell 
+}
+
+# ### Clean up   ### #
+
+rename usage ""
+rename shell ""
+rename see   ""
+rename words ""
+rename io    ""
+unset program
+unset argc
 
 # BUG: If the unit test sets the value of 'x' then it can mess
 # up printing the error.

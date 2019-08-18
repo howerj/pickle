@@ -40,7 +40,10 @@
  * Also licensed under the same BSD license.
  *
  * TODO: Remove 'pickle_set_argv' and instead provide a concatenate 
- * function, which would escape things.
+ * function, which would escape things. This would also require a
+ * free and allocate being added to the library API as well...
+ * TODO: Treat negative indices as being relative to the end of the string
+ * where appropriate?
  * TODO: Fix string escaping */
 
 #include "pickle.h"
@@ -193,11 +196,12 @@ PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 } POSTPACK;
 
 typedef PREPACK struct {
-	const char *start, *end;
-	int max;
-	unsigned type   :2, 
-		 nocase :1;
-} POSTPACK pickle_regex_t;
+	const char *start,  /**< start of match, NULL if no match */
+	      *end;         /**< end of match, NULL if no match */
+	int max;            /**< */
+	unsigned type   :2, /**< select regex type; lazy, greedy or possessive */
+		 nocase :1; /**< ignore case when matching */
+} POSTPACK pickle_regex_t; /**< */
 
 typedef struct PREPACK { int argc; char **argv; } POSTPACK args_t;
 

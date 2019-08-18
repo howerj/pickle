@@ -465,6 +465,35 @@ list command returns the concatenation of the escaped elements.
 
 Trim arguments before concatenating them into a string.
 
+* reg opts... regex string
+
+'reg' implements a small regular expression engine that can be used to extract
+matches from text. It has a few options that can be passed to it, and a few
+virtues; lazy, greedy and possessive.
+
+ - nocase
+
+Ignore case when matching a string.
+
+ - start index
+
+Set the start of the string to match from, numbers less than zero are treated
+as zero, and numbers greater than the length of the string are treated as
+referring to the end of the string.
+
+ - lazy
+
+Match the shortest string possible.
+
+ - greedy (default)
+
+Match the longest string possible.
+
+ - possessive
+
+Match the longest string possible, with no backtracking. If backtracking is
+necessary the match fails.
+
 * unknown {list}
 
 This command is *not* defined at startup, but can be defined by the user to
@@ -1108,15 +1137,6 @@ extending the interpreter with task management like behavior without any changes
 to the API. It should be possible to implement most commands, although it might
 be awkward to do so. Cleanup is still a problem.
 
-## Extensions and Modules
-
-The repository [pickle-all][] contains extensions to this interpreter. It might
-be worth simplifying the [main.c][] application and removing a lot of
-functionality from the interpreter so it has just enough functions to run the
-unit tests ('getenv', 'exit', and 'puts' are all that are really needed).
-
-Operating system dependent code should be placed in the [pickle-all][] module.
-
 ## Style Guide
 
 Style/coding guide and notes, for the file [pickle.c][]:
@@ -1167,10 +1187,6 @@ Known limitations of the interpreter include:
       from this document.
 * [ ] Fix all TODO messages, there are minor changes that need to be
       made throughout the interpreter.
-* [ ] Move most of 'main.c' to an external module. Very little is
-      needed to run unit tests which is all that really need to
-      be in this project. See <https://github.com/howerj/pickle-all>
-* [ ] Move development to the [pickle-all][] project.
 
 [block.h]: block.h
 [main.c]: main.c
