@@ -7,8 +7,6 @@
 # framework itself. Instead, those things should be considered tested if
 # the test framework itself runs.
 #
-# TODO: Find a way to merge the 'shell.tcl' application
-#
 
 set program [lindex $argv 2]
 set argc [llength $argv]
@@ -683,6 +681,14 @@ test  {0 1} {reg {ba?} {ba}}
 test  {0 2} {reg {ba?c?} {bac}}
 test  {0 0} {reg -lazy {ba?} {ba}}
 test  {0 0} {reg -lazy {ba?c?} {ba}}
+test  {0 3} {reg -lazy {ba?c?d} {bacd}}
+test  {0 4} {reg -possessive {a*c} {aaaac}}
+test  {-1 -1} {reg -possessive {.*c} {aaaac}}
+test  {0 4} {reg -greedy {.*c} {aaaac}}
+# TODO Check more regex conditions
+# - errors: operators without preceding char "?", "*", "+"
+# - unescaped operators: eg "??" (should be "\??")
+# - differences between operator types
 
 assert [<= $passed $total]
 assert [>= $passed 0]

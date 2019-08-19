@@ -39,18 +39,14 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * TODO: Remove 'pickle_set_argv' and instead provide a concatenate 
- * function, which would escape things. This would also require a
- * free and allocate being added to the library API as well...
- * TODO: Treat negative indices as being relative to the end of the string
- * where appropriate?
+ * TODO: Improve arity error messages?
  * TODO: Fix string escaping */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
 #include <ctype.h>   /* toupper, tolower, isalnum, isalpha, ... */
 #include <stdint.h>  /* intptr_t */
-#include <limits.h>  /* CHAR_BIT */
+#include <limits.h>  /* CHAR_BIT, LONG_MAX, LONG_MIN */
 #include <stdarg.h>  /* va_list, va_start, va_end */
 #include <stdio.h>   /* vsnprintf */
 #include <stdlib.h>  /* !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
@@ -3102,7 +3098,7 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
  * Modified from:
  * https://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html 
  *
- * Supports: "^$.*+?" and escaping, and classes "\w\W\s\S\d\D"
+ * Supports: "^$.*+?", escaping, and classes "\w\W\s\S\d\D"
  * Nice to have: hex escape sequences, ability to work on binary data. */
 
 enum { /* watch out for those negatives */
@@ -3240,7 +3236,7 @@ static int regexStar(pickle_regex_t *x, const int depth, const int c, const char
 		} while (t-- > text);
 		return 0;
 	}
-	/* lazy */	
+	assert(x->type == LAZY);
 	do {    /* a '*' matches zero or more instances */
 		const int m = regexHere(x, depth + 1, regexp, text);
 		if (m)
@@ -3986,8 +3982,38 @@ int pickle_set_argv(pickle_t *i, int argc, char **argv) {
 	if (!args)
 		return post(i, PICKLE_ERROR);
 	const int r = pickle_set_var_string(i, "argv", args);
-	(void)picolFree(i, args);
+	if (picolFree(i, args) != PICKLE_OK)
+		return post(i, PICKLE_ERROR);
 	return post(i, r);
+}
+
+int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat) {
+	assert(argc >= 0);
+	implies(argc > 0, argv);
+	assert(cat);
+	pre(i);
+	char *c = concatenate(i, " ", argc, argv, 1, 0);
+	*cat = c;
+	return post(i, c ? PICKLE_OK : PICKLE_ERROR);
+}
+
+int pickle_allocate(pickle_t *i, void **v, const size_t size) {
+	assert(v);
+	pre(i);
+	void *vp = picolMalloc(i, size);
+	if (vp) {
+		zero(vp, size);
+		return post(i, PICKLE_OK);
+	}
+	return post(i, PICKLE_ERROR);
+}
+
+int pickle_free(pickle_t *i, void **v) {
+	assert(v);
+	pre(i);
+	void *vp = *v;
+	*v = NULL;
+	return post(i, picolFree(i, vp));
 }
 
 int pickle_new(pickle_t **i, const pickle_allocator_t *a) {

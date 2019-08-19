@@ -71,7 +71,6 @@ typedef struct {
 	size_t count;
 } pool_specification_t;
 
-
 size_t bitmap_units(size_t bits);
 size_t bitmap_bits(bitmap_t *b);
 bitmap_t *bitmap_new(size_t bits);
@@ -96,8 +95,6 @@ void *pool_malloc(pool_t *p, size_t length);
 int pool_free(pool_t *p, void *v);
 void *pool_realloc(pool_t *p, void *v, size_t length);
 void *pool_calloc(pool_t *p, size_t length);
-
-
 
 #define BLOCK_DECLARE(NAME, BLOCK_COUNT, BLOCK_SIZE)\
 	block_arena_t NAME = {\

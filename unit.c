@@ -1,14 +1,36 @@
-/* TODO: Replace 'main.c' with this file after adding arena allocator */
 #include "pickle.h"
+#include "block.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
-#define LINESZ    (512u)
-#define PROGSZ    (1024u * 64u)
+#define LINESZ    (1024u)
+#define PROGSZ    (1024u * 64u * 2u)
 #define UNUSED(X) ((void)(X))
 
-static int CommandGets(pickle_t *i, int argc, char **argv, void *pd) {
+static void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, length); }
+static int   custom_free(void *a, void *v)                   { return pool_free(a, v); }
+static void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v, length); }
+
+static const pool_specification_t specs[] = {
+	{ 8,   512 }, /* most allocations are quite small */
+	{ 16,  256 },
+	{ 32,  128 },
+	{ 64,   64 },
+	{ 128,  32 },
+	{ 256,  16 },
+	{ 512,   8 }, /* maximum string length is bounded by this */
+};
+
+static pickle_allocator_t block_allocator = {
+	.free    = custom_free,
+	.realloc = custom_realloc,
+	.malloc  = custom_malloc,
+	.arena   = NULL
+};
+
+static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *in = pd;
 	if (argc != 1)
 		return pickle_set_result_error_arity(i, 1, argc, argv);
@@ -18,7 +40,7 @@ static int CommandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	return pickle_set_result_string(i, buf);
 }
 
-static int CommandPuts(pickle_t *i, int argc, char **argv, void *pd) {
+static int commandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *out = pd;
 	if (argc != 2 && argc != 3)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -35,7 +57,7 @@ static int CommandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 	return r < 0 ? PICKLE_ERROR : PICKLE_OK;
 }
 
-static int CommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
+static int commandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -43,7 +65,7 @@ static int CommandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	return pickle_set_result_string(i, env ? env : "");
 }
 
-static int CommandExit(pickle_t *i, int argc, char **argv, void *pd) {
+static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2 && argc != 1)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -52,47 +74,97 @@ static int CommandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	return PICKLE_OK;
 }
 
+static int evalFile(pickle_t *i, FILE *f) {
+	static char program[PROGSZ] = { 0 }; /* !! */
+	program[fread(program, 1, PROGSZ, f)] = '\0';
+	const int err = pickle_eval(i, program);
+	if (err != PICKLE_OK) {
+		const char *r = NULL;
+		pickle_get_result_string(i, &r);
+		fprintf(stdout, "%s\n", r);
+		return PICKLE_ERROR;
+	}
+	return PICKLE_OK;
+}
+
+static void heapTracer(void *file, const char *fmt, ...) {
+	FILE *out = file;
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(out, fmt, ap);
+	va_end(ap);
+	fputc('\n', out);
+}
+
+static int commandHeap(pickle_t *i, int argc, char **argv, void *pd) {
+	pool_t *p = pd;
+	long info = PICKLE_ERROR;
+	const char *rq = NULL;
+
+	if (argc > 3)
+		return pickle_set_result_error_arity(i, 3, argc, argv);
+	if (argc == 1) {
+		info = !!p;
+		goto done;
+	}
+
+	if (!p)
+		return pickle_set_result_string(i, "unknown");
+	rq = argv[1];
+	if (argc == 2) {
+		if      (!strcmp(rq, "freed"))    { info = p->freed; }
+		else if (!strcmp(rq, "allocs"))   { info = p->allocs;  }
+		else if (!strcmp(rq, "reallocs")) { info = p->relocations;  }
+		else if (!strcmp(rq, "active"))   { info = p->active;  }
+		else if (!strcmp(rq, "max"))      { info = p->max;    }
+		else if (!strcmp(rq, "total"))    { info = p->total;  }
+		else if (!strcmp(rq, "blocks"))   { info = p->blocks; }
+		else if (!strcmp(rq, "arenas"))   { info = p->count; }
+		else if (!strcmp(rq, "tron"))     { p->tracer = heapTracer; p->tracer_arg = stdout; return PICKLE_OK; }
+		else if (!strcmp(rq, "troff"))    { p->tracer = NULL; p->tracer_arg = NULL; return PICKLE_OK; }
+		else { /* do nothing */ }
+	} else if (argc == 3) {
+		const int pool = atoi(argv[2]);
+		if ((pool >= 0) && (pool < (int)p->count)) {
+			block_arena_t *a = p->arenas[pool];
+			if      (!strcmp(rq, "arena-size"))   { info = a->freelist.bits; }
+			else if (!strcmp(rq, "arena-block"))  { info = a->blocksz; }
+			else if (!strcmp(rq, "arena-active")) { info = a->active; }
+			else if (!strcmp(rq, "arena-max"))    { info = a->max; }
+			else { /* do nothing */ }
+		}
+	}
+done:
+	return pickle_set_result_integer(i, info);
+}
+
 int main(int argc, char **argv) {
 	pickle_t *i = NULL;
 	if (pickle_tests() != PICKLE_OK) goto fail;
 	if (pickle_new(&i, NULL) != PICKLE_OK) goto fail;
 	if (pickle_set_argv(i, argc, argv) != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "gets",   CommandGets,   stdin)  != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "puts",   CommandPuts,   stdout) != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "getenv", CommandGetEnv, NULL)   != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "exit",   CommandExit,   NULL)   != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "exit",   commandExit,   NULL)   != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "heap",   commandHeap,   NULL)   != PICKLE_OK) goto fail;
 
-	if (argc > 1) {
-		static char program[PROGSZ] = { 0 }; /* !! */
-		for (int j = 1; j < argc; j++) {
-			FILE *f = fopen(argv[j], "rb");
-			if (!f) {
-				fprintf(stderr, "Invalid file %s\n", argv[j]);
-				goto fail;
-			}
-			program[fread(program, 1, PROGSZ, f)] = '\0';
-			const int err = pickle_eval(i, program);
-			fclose(f);
-			if (err != PICKLE_OK) {
-				const char *r = NULL;
-				pickle_get_result_string(i, &r);
-				fprintf(stdout, "%s\n", r);
-				goto fail;
-			}
+
+	int r = 0;
+	for (int j = 1; j < argc; j++) {
+		FILE *f = fopen(argv[j], "rb");
+		if (!f) {
+			fprintf(stderr, "Invalid file %s\n", argv[j]);
+			goto fail;
 		}
-	} else {
-		const char *prompt = "> ";
-		fputs(prompt, stdout);
-		fflush(stdout);
-		for (char buf[512] = { 0 }; fgets(buf, sizeof buf, stdin); memset(buf, 0, sizeof buf)) {
-			const char *r = NULL;
-			const int err = pickle_eval(i, buf);
-			pickle_get_result_string(i, &r);
-			fprintf(stdout, "[%d]: %s\n%s", err, r, prompt);
-			fflush(stdout);
-		}
+		const int r = evalFile(i, f);
+		fclose(f);
+		if (r != PICKLE_OK)
+			break;
 	}
-	return !!pickle_delete(i);
+	if (argc == 1)
+		r = evalFile(i, stdin);
+	return !!pickle_delete(i) || r != PICKLE_OK;
 fail:
 	pickle_delete(i);
 	return 1;

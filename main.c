@@ -201,7 +201,6 @@ static void memory_tracer(void *file, const char *fmt, ...) {
 }
 
 static int pickleCommandHeapUsage(pickle_t *i, int argc, char **argv, void *pd) {
-	/*assert(pd || !pd);*/ /* a neat way of saying 'may or may not be NULL */
 	pool_t *p = pd;
 	long info = PICKLE_ERROR;
 	const char *rq = NULL;
@@ -431,9 +430,8 @@ static int pickleCommandFRename(pickle_t *i, const int argc, char **argv, void *
 	return pickle_set_result_error_arity(i, 3, argc, argv);
 }
 
-static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, int prompt) {
+static int register_custom_commands(pickle_t *i, pool_t *p, int prompt) {
 	assert(i);
-	assert(args);
 	const pickle_register_command_t commands[] = {
 		{ "system",   pickleCommandSystem,    NULL },
 		{ "exit",     pickleCommandExit,      NULL },
@@ -453,8 +451,6 @@ static int register_custom_commands(pickle_t *i, argument_t *args, pool_t *p, in
 		{ "stderr",   pickleCommandFile,      stderr },
 		{ "errno",    pickleCommandErrno,     NULL },
 	};
-	if (pickle_set_var_integer(i, "argc", args->argc) != PICKLE_OK)
-		return PICKLE_ERROR;
 	if (pickle_set_var_string(i, "prompt", prompt ? "pickle> " : "") != PICKLE_OK)
 		return PICKLE_ERROR;
 	for (size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)
@@ -630,7 +626,6 @@ static void cleanup(void) {
 int main(int argc, char **argv) {
 	pickle_getopt_t opt = { .init = 0 };
 	int r = 0, prompt_on = 1, memory_debug = 0, ch;
-	argument_t args = { .argc = argc, .argv = argv };
 
 	static const pool_specification_t specs[] = {
 		{ 8,   512 }, /* most allocations are quite small */
@@ -673,7 +668,7 @@ int main(int argc, char **argv) {
 
 	if ((r = pickle_new(&interp, use_custom_allocator ? &block_allocator : NULL)) != PICKLE_OK)
 		goto end;
-	if ((r = register_custom_commands(interp, &args, block_allocator.arena, prompt_on)) < 0)
+	if ((r = register_custom_commands(interp, block_allocator.arena, prompt_on)) < 0)
 		goto end;
 
 	static const char *ns[] = {
