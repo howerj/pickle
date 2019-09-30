@@ -39,6 +39,8 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
+ * TODO: Extend syntax so shell operations, such as pipe, and I/O
+ * redirection can be handled?
  * TODO: Improve arity error messages?
  * TODO: Fix string escaping */
 
