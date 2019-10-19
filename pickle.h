@@ -32,6 +32,8 @@ typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *p
 
 enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
+PICKLE_API unsigned long pickle_version(void); /* library version in x.y.z format, z = LSB. MSB = library info/reserved */
+
 PICKLE_API int pickle_new(pickle_t **i, const pickle_allocator_t *a); /* if(a == NULL) default allocator used */
 PICKLE_API int pickle_delete(pickle_t *i);
 PICKLE_API int pickle_eval(pickle_t *i, const char *t);

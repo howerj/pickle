@@ -1171,23 +1171,6 @@ Known limitations of the interpreter include:
 * Recursion Depth - 128, set via a compile time option.
 * Maximum size of file - 2GiB
 
-## Project Goals
-
-* [x] Turn into library
-  * [x] Headers/Build System/Stuff/Cleanup
-  * [x] Remove static variables
-* [x] Add a custom allocator
-* [x] Add a unit test framework
-  * [x] In C
-  * [x] In TCL
-* [x] Remove internal limitations on string size
-* [x] Remove other internal limitations where possible (argument length)
-* [x] Create a framework for adding modules external to this project
-* [x] Move manual page into this document and generate manual page
-      from this document.
-* [ ] Fix all TODO messages, there are minor changes that need to be
-      made throughout the interpreter.
-
 [block.h]: block.h
 [main.c]: main.c
 [picol.c]: picol.c
@@ -1232,3 +1215,4 @@ Known limitations of the interpreter include:
 [upper]: http://www.cplusplus.com/reference/cctype/isupper/
 [xdigit]: http://www.cplusplus.com/reference/cctype/isxdigit/
 [control]: http://www.cplusplus.com/reference/cctype/iscntrl/
+[cdb]: https://github.com/howerj/cdb

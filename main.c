@@ -588,12 +588,18 @@ static int tests(void) {
 static void help(FILE *output, const char *arg0) {
 	assert(output);
 	assert(arg0);
+	const unsigned long v = pickle_version();
+	const unsigned q = (v >> 24) & 0xFFu;
+	const unsigned x = (v >> 16) & 0xFFu;
+	const unsigned y = (v >>  8) & 0xFFu;
+	const unsigned z = (v >>  0) & 0xFFu;
+
 	static const char *msg = "\
-Usage: %s file.tcl...\n\n\
+Usage:      %s file.tcl...\n\n\
 Pickle:     A tiny TCL like language derived/copied from 'picol'\n\
 License:    BSD (Antirez for original picol, Richard Howe for modifications)\n\
 Repository: https://github.com/howerj/pickle\n\
-\n\
+Version:    %u.%u.%u (%u)\n\n\
 Options:\n\
 \n\
 \t--,\tstop processing command line arguments\n\
@@ -606,9 +612,9 @@ Options:\n\
 If no arguments are given then input is taken from stdin. Otherwise\n\
 they are treated as scripts to execute. Maximum length of an input \n\
 line is is %d bytes. There are no configuration files or environment\n\
-variables need by the interpreter. Non zero return codes indicate\n\
+variables needed by the interpreter. Non zero return codes indicate\n\
 failure.\n";
-	fprintf(output, msg, arg0, LINE_SZ);
+	fprintf(output, msg, arg0, x, y, z, q, LINE_SZ);
 }
 
 static void cleanup(void) {

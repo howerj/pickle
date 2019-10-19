@@ -39,10 +39,7 @@
  * <https://github.com/howerj/pickle>
  * Also licensed under the same BSD license.
  *
- * TODO: Extend syntax so shell operations, such as pipe, and I/O
- * redirection can be handled?
- * TODO: Improve arity error messages?
- * TODO: Fix string escaping */
+ * NOTE: The string escaping could be improved upon. */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -116,6 +113,10 @@
 
 #ifndef STRICT_NUMERIC_CONVERSION
 #define STRICT_NUMERIC_CONVERSION (1)
+#endif
+
+#ifndef PICKLE_VERSION
+#define PICKLE_VERSION (0x000000ul) /* all zeros = built incorrectly */
 #endif
 
 enum { PT_ESC, PT_STR, PT_CMD, PT_VAR, PT_SEP, PT_EOL, PT_EOF };
@@ -2203,8 +2204,9 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 	index = MAX(0, MIN(index, a.argc));
 	if (op == INSERT) {
 		if (!(a.argv = picolArgsGrow(i, &a.argc, a.argv))) {
-			r = PICKLE_ERROR;
-			goto done;
+			if (escape)
+				(void)picolFree(i, insert);
+			return PICKLE_ERROR;
 		}
 		if (index < (a.argc - 1))
 			move(&a.argv[index + 1], &a.argv[index], sizeof (*a.argv) * (a.argc - index - 1));
@@ -2235,7 +2237,6 @@ done:
 		r = PICKLE_ERROR;
 	return r;
 }
-
 
 static inline int picolDoLInsert(pickle_t *i, char *list, char *position, const int argc, char **argv, int doEsc) {
 	assert(i);
@@ -3782,6 +3783,19 @@ static inline int post(pickle_t *i, const int r) { /* assert API post-conditions
 	pre(i);
 	assert(r >= PICKLE_ERROR && r <= PICKLE_CONTINUE);
 	return r;
+}
+
+unsigned long pickle_version(void) {
+	unsigned long info = 0;
+	info |= DEFINE_TESTS              << 0;
+	info |= DEFINE_MATHS              << 1;
+	info |= DEFINE_STRING             << 2;
+	info |= DEFINE_LIST               << 3;
+	info |= DEFINE_REGEX              << 4;
+	info |= DEFAULT_ALLOCATOR         << 5;
+	info |= USE_MAX_STRING            << 6;
+	info |= STRICT_NUMERIC_CONVERSION << 7;
+	return (info << 24) | PICKLE_VERSION;
 }
 
 int pickle_set_result_string(pickle_t *i, const char *s) {

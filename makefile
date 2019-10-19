@@ -15,14 +15,21 @@
 #	-Wnull-dereference -Wjump-misses-init \
 #	-Wshadow 
 
-CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -g -fwrapv ${DEFINES} ${EXTRA}
+VERSION = 0x010000ul
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -g -fPIC -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
 ARFLAGS = rcs
-RANLIB  = ranlib
 TARGET  = pickle
 TRACE   =
+DESTDIR = install
 
-.PHONY: all run test clean dist
+ifeq ($(OS),Windows_NT)
+DLL=dll
+else # Assume Unixen
+DLL=so
+endif
+
+.PHONY: all run test clean install dist
 
 all: ${TARGET}
 
@@ -43,12 +50,32 @@ unit: lib${TARGET}.a block.o unit.o
 
 lib${TARGET}.a: ${TARGET}.o
 	${AR} ${ARFLAGS} $@ $<
-	${RANLIB} $@
+
+lib${TARGET}.${DLL}: ${TARGET}.o ${TARGET}.h
+	${CC} ${CFLAGS} -shared ${TARGET}.o -o $@
 
 ${TARGET}: main.o block.o lib${TARGET}.a
 	${CC} ${CFLAGS} $^ -o $@
 
+# pickle.1: readme.md
+#	pandoc -s -f markdown -t man $< -o $@
+
+install: ${TARGET} lib${TARGET}.a lib${TARGET}.${DLL} pickle.1
+	install -p -D ${TARGET} ${DESTDIR}/bin/${TARGET}
+	install -p -m 644 -D lib${TARGET}.a ${DESTDIR}/lib/lib${TARGET}.a
+	install -p -D lib${TARGET}.${DLL} ${DESTDIR}/lib/lib${TARGET}.${DLL}
+	install -p -m 644 -D pickle.h ${DESTDIR}/include/pickle.h
+	install -p -m 644 -D pickle.1 ${DESTDIR}/man/pickle.1
+	mkdir -p ${DESTDIR}/src
+	install -p -m 644 -D pickle.c pickle.h unit.c block.c block.h main.c unit.tcl LICENSE readme.md makefile -t ${DESTDIR}/src
+
+dist: install
+	tar zcf ${TARGET}-${VERSION}.tgz ${DESTDIR}
+
+
+
 check:
+	scan-build make
 	cppcheck --enable=all *.c
 
 clean:
