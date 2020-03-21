@@ -942,7 +942,7 @@ static char *picolVsprintf(pickle_t *i, const char *fmt, va_list ap) {
 			goto fail;
 		if (r < (int)h.length) /* Casting to 'int' is not ideal, but we have no choice */
 			break;
-		if (picolStackOrHeapAlloc(i, &h, r) != PICKLE_OK)
+		if (picolStackOrHeapAlloc(i, &h, r + 1) != PICKLE_OK)
 			goto fail;
 	}
 	if (!picolOnHeap(i, &h)) {
