@@ -5,7 +5,7 @@
 | Author    | Salvator Sanfilippo (Original Interpreter) |
 | Author    | Richard James Howe (Modifications Only)    |
 | Copyright | 2007-2016 Salvatore Sanfilippo             |
-| Copyright | 2018-2019 Richard James Howe               |
+| Copyright | 2018-2020 Richard James Howe               |
 | License   | BSD                                        |
 | Email     | howe.r.j.89@gmail.com                      |
 | Website   | <https://github.com/howerj/pickle>         |
@@ -26,7 +26,8 @@ about 500 lines of C, this interpreter is for a small TCL like language. The
 blog post describing this interpreter can be found at
 <http://oldblog.antirez.com/post/picol.html>, along with the code itself at
 <http://antirez.com/picol/picol.c.txt>. It does a surprising amount for such a
-small amount of code.
+small amount of code. This project is a little bit bigger than the original at
+around ~6000 lines.
 
 ## License
 
@@ -200,7 +201,7 @@ command is used.
 
 * variadic identifier name {function body}
 
-In [TCL][] syntax can is used for variadic functions, this is one area in which
+In [TCL][] syntax is used for variadic functions, this is one area in which
 pickle differs, instead a special type of procedure can be created with the
 'variadic' command. When the variadic function is called the arguments passed
 to it are concatenated together to form a list which is assigned to the
@@ -275,8 +276,8 @@ The following mathematical operations are defined:
 
 '+', '-', '\*', '/', 'mod', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!=', 
 'min', 'max', 'pow', and 'log'. It should be obvious what each one does. 
-It should 
-be noted that because all variables are stored internally as strings, 
+
+It should be noted that because all variables are stored internally as strings, 
 mathematical operations are egregiously slow. Numbers are first converted to 
 strings, the operation performed, then converted back to strings. There are 
 also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'.
@@ -386,6 +387,10 @@ treated as zero and greater than the last element are appended to the end of
 the list.
 
 * lreplace list first last values...
+
+Replace ranges of elements within a list, the function has a number of special
+cases.
+
 * lsort opts... list
 
 This command sorts a list, it uses [insertion sort][] internally and lacks
@@ -996,7 +1001,7 @@ custom callback when the command is registered.
 The function returns one of the following status codes:
 
 	PICKLE_ERROR    = -1 (Throw an error until caught)
-	PICKLE_OK       =  0 (Signal success, continue on execution)
+	PICKLE_OK       =  0 (Signal success, continue execution)
 	PICKLE_RETURN   =  1 (Return out of a function)
 	PICKLE_BREAK    =  2 (Break out of a while loop)
 	PICKLE_CONTINUE =  3 (Immediately proceed to next iteration of while loop)
@@ -1134,7 +1139,7 @@ as 'pickleCommandFopen' does the registering when needed.
 
 It should be possible to implement the commands 'update', 'after' and 'vwait',
 extending the interpreter with task management like behavior without any changes
-to the API. It should be possible to implement most commands, although it might
+to the API. It is possible to implement most commands, although it might
 be awkward to do so. Cleanup is still a problem.
 
 ## Style Guide
@@ -1164,6 +1169,73 @@ as they do not modify their arguments. However adding this in just adds
 a lot of noise to the function definitions. Also see
 <http://c-faq.com/ansi/constmismatch.html>.
 
+## Notes
+
+* The Allocator
+
+It would have been better to define the allocator like so:
+
+	#ifndef ALLOCATOR_FN
+	#define ALLOCATOR_FN
+	typedef void *(*allocator_fn)(void *arena, void *ptr, size_t oldsz, size_t newsz);
+	#endif
+
+In the header, which is what was done for the <https://github.com/howerj/cdb>,
+this has the advantage that the 'pickle\_allocator\_t' structure does not have
+to be defined and it is easier to integrate the library into the rest of the
+system by defining only one function. This is the same allocator interface as
+used in the [Lua][] interpreter.
+
+If the library was changed to use this interface the major version number 
+would have to be bumped.
+
+Another minor annoyance is that 'pickle\_version' does not return an integer
+like all the other functions in the library header...this could be changed by
+return 'PICKLE\_ERROR' when the version has not been set by the build system.
+
+* vsnprintf
+
+If you need an implementation of [vsnprintf][] the [Musl C library][] has one.
+This is the most complicate C function in use from the standard library and the
+one most likely not to be available in an embedded platform (although the base
+software packages are getting better nowadays). It is not difficult to make
+your own version of [vsnprintf][] function usable by this library as you do not 
+need to support all of the functionality library function, for example,
+floating point numbers are not used within this library.
+
+* The list data structure
+
+The list data structure and functions are quite large, they are also quite
+inefficient. The functions are based upon the TCL list manipulation function, a
+more efficient solution would require a different set of functions, ones that
+operated quite differently from the standard TCL functions. One way of doing
+this would be use something similar to the file functions in this library.
+
+* Too big
+
+The project is currently pretty corpulent there are; too many functions in the
+header, the example program in [main.c][] is much bigger than it needs to be
+(it really only needs to be big enough to run the units tests in [unit.tcl][],
+see [unit.c][] for an alternative), and the [pickle.c][] file is pretty big 
+(although the biggest offenders can be turned off).
+
+* A module system and some modules
+
+This interpreter lacks a module system, there are a few small and simple
+modules that could be integrated with the library quite easily, see;
+Constant Data Base Library <https://github.com/howerj/cdb>, A HTTP 1.1
+client <https://github.com/howerj/httpc>, Tiny compression routines
+<https://github.com/howerj/shrink>, and a fixed point arithmetic library
+<https://github.com/howerj/q>. These would have to be external modules that
+could be integrated with this library.
+
+* Manual page generation and build system changes
+
+The manual page, [pickle.1][], could be generated from this [readme.md][] file,
+there is a lot of duplication between the two files. The build system and
+project layout and API should be changed so that they are more similar to 
+<https://github.com/howerj/cdb> and the lessons learned from that project.
+
 ## Interpreter Limitations
 
 Known limitations of the interpreter include:
@@ -1171,9 +1243,12 @@ Known limitations of the interpreter include:
 * Recursion Depth - 128, set via a compile time option.
 * Maximum size of file - 2GiB
 
+[readme.md]: readme.md
+[Lua]: https://www.lua.org/
+[Musl C library]: https://git.musl-libc.org/cgit/musl/tree/src/stdio
 [block.h]: block.h
 [main.c]: main.c
-[picol.c]: picol.c
+[pickle.1]: pickle.1
 [unit.tcl]: unit.tcl
 [picol]: http://oldblog.antirez.com/post/picol.html
 [TCL]: https://en.wikipedia.org/wiki/Tcl

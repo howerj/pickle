@@ -12,7 +12,8 @@ set program [lindex $argv 2]
 set argc [llength $argv]
 
 proc usage {} {
-	puts "Usage: [argv 0] -\[pht\]"
+	set name [uplevel #0 "lindex \$argv" 0]
+	puts "Usage: $name -\[pht\]"
 	puts ""
 	puts "\t-h\tPrint this help message and quit"
 	puts "\t-p\tPerformance test"
@@ -141,9 +142,7 @@ unset status
 unset initrc
 
 proc io {} {
-	upvar #0 prompt p
 	upvar 1 line l
-	stdout -puts $p
 	set e -1
 	set l [catch {gets} e]
 	if {or [eq [decode $e] break] [eq [decode $e] error]} {
@@ -155,13 +154,14 @@ proc io {} {
 }
 
 proc shell {} {
+	upvar #0 prompt prompt
+	stdout -puts "\[[green]0[normal]\] $prompt"
 	io
-
 	while {ne $line ""} {
 		set result [catch {eval $line} retcode]
 		set fail [red]
 		if {== $retcode 0} { set fail [green] }
-		stdout -puts "\[$fail$retcode[normal]\] $result"
+		stdout -puts "\[$fail$retcode[normal]\] $result\n$prompt "
 		io
 	}
 }
@@ -621,6 +621,9 @@ fails {lreplace ""}
 fails {lreplace "" 1}
 test {a foo c d e} {lreplace {a b c d e} 1 1 foo}
 test {a {x x} c d e} {lreplace {a b c d e} 1 1 {x x}}
+test {a {} c d e} {lreplace {a b c d e} 1 1 ""}
+test {a c d e} {lreplace {a b c d e} 1 1}
+test {a b c d e f} {lreplace {a b c d e} 9 1  f}
 test {a three more elements d e} {lreplace {a b c d e} 1 2 three more elements}
 test {x y z a b c} {lreplace {a b c} -1 -2 x y z}
 test {a b x y z c} {lreplace {a b c} 2 1 x y z}
@@ -685,10 +688,6 @@ test  {0 3} {reg -lazy {ba?c?d} {bacd}}
 test  {0 4} {reg -possessive {a*c} {aaaac}}
 test  {-1 -1} {reg -possessive {.*c} {aaaac}}
 test  {0 4} {reg -greedy {.*c} {aaaac}}
-# TODO Check more regex conditions
-# - errors: operators without preceding char "?", "*", "+"
-# - unescaped operators: eg "??" (should be "\??")
-# - differences between operator types
 
 assert [<= $passed $total]
 assert [>= $passed 0]

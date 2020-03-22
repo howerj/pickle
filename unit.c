@@ -9,26 +9,13 @@
 #define PROGSZ    (1024u * 64u * 2u)
 #define UNUSED(X) ((void)(X))
 
+#ifndef USE_POOL_ALLOC
+#define USE_POOL_ALLOC  (0)
+#endif
+
 static void *custom_malloc(void *a, size_t length)           { return pool_malloc(a, length); }
 static int   custom_free(void *a, void *v)                   { return pool_free(a, v); }
 static void *custom_realloc(void *a, void *v, size_t length) { return pool_realloc(a, v, length); }
-
-static const pool_specification_t specs[] = {
-	{ 8,   512 }, /* most allocations are quite small */
-	{ 16,  256 },
-	{ 32,  128 },
-	{ 64,   64 },
-	{ 128,  32 },
-	{ 256,  16 },
-	{ 512,   8 }, /* maximum string length is bounded by this */
-};
-
-static pickle_allocator_t block_allocator = {
-	.free    = custom_free,
-	.realloc = custom_realloc,
-	.malloc  = custom_malloc,
-	.arena   = NULL
-};
 
 static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *in = pd;
@@ -139,22 +126,48 @@ done:
 }
 
 int main(int argc, char **argv) {
-	pickle_t *i = NULL;
-	if (pickle_tests() != PICKLE_OK) goto fail;
-	if (pickle_new(&i, NULL) != PICKLE_OK) goto fail;
-	if (pickle_set_argv(i, argc, argv) != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "exit",   commandExit,   NULL)   != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "heap",   commandHeap,   NULL)   != PICKLE_OK) goto fail;
 
+	const pool_specification_t specs[] = {
+		{ 8,   512 }, /* most allocations are quite small */
+		{ 16,  256 },
+		{ 32,  128 },
+		{ 64,   64 },
+		{ 128,  32 },
+		{ 256,  16 },
+		{ 512,   8 }, /* maximum string length is bounded by this */
+	};
+
+	pickle_allocator_t block_allocator = {
+		.free    = custom_free,
+		.realloc = custom_realloc,
+		.malloc  = custom_malloc,
+		.arena   = NULL
+	};
+
+	pickle_allocator_t *a = USE_POOL_ALLOC ? &block_allocator : NULL;
+	if (USE_POOL_ALLOC) {
+		pool_t *p = pool_new(sizeof(specs) / sizeof(specs[0]), &specs[0]);
+		if (!(a->arena = p)) {
+			(void)fputs("memory pool allocation failure\n", stderr);
+			return EXIT_FAILURE;
+		}
+	}
+
+	pickle_t *i = NULL;
+	if (pickle_tests()    != PICKLE_OK) goto fail;
+	if (pickle_new(&i, a) != PICKLE_OK) goto fail;
+	if (pickle_set_argv(i, argc, argv) != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "gets",   commandGets,   stdin)    != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "puts",   commandPuts,   stdout)   != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "getenv", commandGetEnv, NULL)     != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "exit",   commandExit,   NULL)     != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "heap",   commandHeap,   a ? a->arena : NULL) != PICKLE_OK) goto fail;
 
 	int r = 0;
 	for (int j = 1; j < argc; j++) {
 		FILE *f = fopen(argv[j], "rb");
 		if (!f) {
-			fprintf(stderr, "Invalid file %s\n", argv[j]);
+			(void)fprintf(stderr, "Invalid file %s\n", argv[j]);
 			goto fail;
 		}
 		const int r = evalFile(i, f);

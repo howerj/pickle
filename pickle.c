@@ -138,7 +138,7 @@ typedef PREPACK struct {
 	int len;                   /**< remaining length */
 	int type;                  /**< token type, PT_... */
 	pickle_parser_opts_t o;    /**< parser options */
-	unsigned insidequote: 1;   /**< true if inside " " */
+	unsigned inside_quote: 1;   /**< true if inside " " */
 } POSTPACK pickle_parser_t ;       /**< Parsing structure */
 
 typedef PREPACK struct {
@@ -188,10 +188,10 @@ PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 	long length;                         /**< buckets in hash table */
 	int level;                           /**< level of nesting */
 	int line;                            /**< current line number */
-	unsigned initialized   :1;           /**< if true, interpreter is initialized and ready to use */
-	unsigned static_result :1;           /**< internal use only: if true, result should not be freed */
-	unsigned insideuplevel :1;           /**< true if executing inside an uplevel command */
-	unsigned insideunknown :1;           /**< true if executing inside the 'unknown' proc */
+	unsigned initialized    :1;          /**< if true, interpreter is initialized and ready to use */
+	unsigned static_result  :1;          /**< internal use only: if true, result should not be freed */
+	unsigned inside_uplevel :1;          /**< true if executing inside an uplevel command */
+	unsigned inside_unknown :1;          /**< true if executing inside the 'unknown' proc */
 } POSTPACK;
 
 typedef PREPACK struct {
@@ -703,7 +703,7 @@ static int picolParseString(pickle_parser_t *p) {
 	if (newword && *p->p == '{') {
 		return picolParseBrace(p);
 	} else if (newword && *p->p == '"') {
-		p->insidequote = 1;
+		p->inside_quote = 1;
 		if (advance(p) != PICKLE_OK)
 			return PICKLE_ERROR;
 	}
@@ -730,17 +730,17 @@ static int picolParseString(pickle_parser_t *p) {
 			p->type = PT_ESC;
 			return PICKLE_OK;
 		case '\n': case ' ': case '\t': case '\r': case ';':
-			if (!p->insidequote) {
+			if (!p->inside_quote) {
 				p->end  = p->p - 1;
 				p->type = PT_ESC;
 				return PICKLE_OK;
 			}
 			break;
 		case '"':
-			if (p->insidequote) {
+			if (p->inside_quote) {
 				p->end  = p->p - 1;
 				p->type = PT_ESC;
-				p->insidequote = 0;
+				p->inside_quote = 0;
 				return advance(p);
 			}
 			break;
@@ -766,11 +766,11 @@ static int picolGetToken(pickle_parser_t *p) {
 	for (;p->len;) {
 		switch (*p->p) {
 		case ' ': case '\t':
-			if (p->insidequote)
+			if (p->inside_quote)
 				return picolParseString(p);
 			return picolParseSep(p);
 		case '\r': case '\n': case ';':
-			if (p->insidequote)
+			if (p->inside_quote)
 				return picolParseString(p);
 			return picolParseEol(p);
 		case '[': {
@@ -936,7 +936,7 @@ static char *picolVsprintf(pickle_t *i, const char *fmt, va_list ap) {
 	for (;;) {
 		va_list mine;
 		va_copy(mine, ap);
-		int r = vsnprintf(h.p, h.length, fmt, mine);
+		const int r = vsnprintf(h.p, h.length, fmt, mine);
 		va_end(mine);
 		if (r < 0)
 			goto fail;
@@ -1286,17 +1286,17 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 		return PICKLE_ERROR;
 	pickle_command_t *c = picolGetCommand(i, argv[0]);
 	if (c == NULL) {
-		if (i->insideunknown || ((c = picolGetCommand(i, "unknown")) == NULL))
+		if (i->inside_unknown || ((c = picolGetCommand(i, "unknown")) == NULL))
 			return pickle_set_result_error(i, "Invalid command %s", argv[0]);
 		char *arg2 = concatenate(i, " ", argc, argv, 1, 0);
 		if (!arg2)
 			return PICKLE_ERROR;
 		char *nargv[] = { "unknown", arg2 };
-		i->insideunknown = 1;
+		i->inside_unknown = 1;
 		picolAssertCommandPreConditions(i, 2, nargv, c->privdata);
 		const int r = c->func(i, 2, nargv, c->privdata);
 		picolAssertCommandPostConditions(i, r);
-		i->insideunknown = 0;
+		i->inside_unknown = 0;
 		if (picolFree(i, arg2) != PICKLE_OK)
 			return PICKLE_ERROR;
 		return r;
@@ -2931,10 +2931,10 @@ static int picolCommandUpLevel(pickle_t *i, const int argc, char **argv, void *p
 			retcode = PICKLE_ERROR;
 			goto end;
 		}
-		const int insideuplevel = i->insideuplevel ;
-		i->insideuplevel = 1;
+		const int inside_uplevel = i->inside_uplevel ;
+		i->inside_uplevel = 1;
 		retcode = picolEval(i, e);
-		i->insideuplevel = insideuplevel;
+		i->inside_uplevel = inside_uplevel;
 		if (picolFree(i, e) != PICKLE_OK)
 			retcode = PICKLE_ERROR;
 	}
@@ -2946,7 +2946,7 @@ end:
 static inline int picolUnsetVar(pickle_t *i, const char *name) {
 	assert(i);
 	assert(name);
-	if (i->insideuplevel)
+	if (i->inside_uplevel)
 		return pickle_set_result_error(i, "Invalid unset");
 	pickle_call_frame_t *cf = i->callframe;
 	pickle_var_t *p = NULL, *deleteMe = picolGetVar(i, name, 0/*NB!*/);
@@ -4036,6 +4036,8 @@ int pickle_new(pickle_t **i, const pickle_allocator_t *a) {
 	assert(i);
 	*i = NULL;
 	const pickle_allocator_t *m = a;
+	/* NB. This default allocator should probably be removed, along with
+	 * the header "<stdlib.h>". */
 	if (DEFAULT_ALLOCATOR) {
 		static const pickle_allocator_t default_allocator = {
 			.malloc  = pmalloc,
