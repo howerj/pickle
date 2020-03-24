@@ -48,7 +48,6 @@
 #include <limits.h>  /* CHAR_BIT, LONG_MAX, LONG_MIN */
 #include <stdarg.h>  /* va_list, va_start, va_end */
 #include <stdio.h>   /* vsnprintf */
-#include <stdlib.h>  /* !defined(DEFAULT_ALLOCATOR): free, malloc, realloc */
 #include <string.h>  /* memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr */
 
 #define PICKLE_MAX_RECURSION      (128) /* Recursion limit */
@@ -97,10 +96,6 @@
 
 #ifndef DEFINE_REGEX
 #define DEFINE_REGEX      (1)
-#endif
-
-#ifndef DEFAULT_ALLOCATOR
-#define DEFAULT_ALLOCATOR (1)
 #endif
 
 #ifndef USE_MAX_STRING
@@ -180,7 +175,8 @@ PREPACK struct pickle_call_frame {        /**< A call frame, organized as a link
 
 PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 	char result_buf[SMALL_RESULT_BUF_SZ];/**< store small results here without allocating */
-	pickle_allocator_t allocator;        /**< custom allocator, if desired */
+	allocator_fn allocator;              /**< custom allocator, if desired */
+	void *arena;                         /**< arena for custom allocator, if needed */
 	const char *result;                  /**< result of an evaluation */
 	const char *ch;                      /**< the current text position; set if line != 0 */
 	struct pickle_call_frame *callframe; /**< call stack */
@@ -288,7 +284,7 @@ static inline void *picolMalloc(pickle_t *i, size_t size) {
 	assert(size > 0); /* we should not allocate any zero length objects here */
 	if (USE_MAX_STRING && size > PICKLE_MAX_STRING)
 		return NULL;
-	void *r = i->allocator.malloc(i->allocator.arena, size);
+	void *r = i->allocator(i->arena, NULL, 0, size);
 	if (!r && size)
 		(void)picolForceResult(i, string_oom, 1); /* does not allocate, may free */
 	return r;
@@ -298,7 +294,7 @@ static inline void *picolRealloc(pickle_t *i, void *p, size_t size) {
 	assert(i);
 	if (USE_MAX_STRING && size > PICKLE_MAX_STRING)
 		return NULL;
-	void *r = i->allocator.realloc(i->allocator.arena, p, size);
+	void *r = i->allocator(i->arena, p, 0, size);
 	if (!r && size)
 		(void)picolForceResult(i, string_oom, 1); /* does not allocate, may free */
 	return r;
@@ -306,15 +302,16 @@ static inline void *picolRealloc(pickle_t *i, void *p, size_t size) {
 
 static inline int picolFree(pickle_t *i, void *p) {
 	assert(i);
-	assert(i->allocator.free);
-	const int r = i->allocator.free(i->allocator.arena, p);
-	assert(r == 0); /* should just return it, but we do not check it throughout program */
-	if (r != 0) {
+	assert(i->allocator);
+	const void *r = i->allocator(i->arena, p, 0, 0);
+	assert(r == NULL); /* should just return it, but we do not check it throughout program */
+	if (r != NULL) {
 		static const char msg[] = "Invalid free";
 		BUILD_BUG_ON(sizeof(msg) > SMALL_RESULT_BUF_SZ);
-		pickle_set_result_string(i, msg);
+		(void)pickle_set_result_string(i, msg);
+		return PICKLE_ERROR;
 	}
-	return r;
+	return PICKLE_OK;
 }
 
 static inline int picolIsBaseValid(const int base) {
@@ -3081,8 +3078,6 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 	}
 	if (!compare(rq, "features")) {
 		rq = argv[2];
-		if (!compare(rq, "allocator"))
-			return picolSetResultNumber(i, DEFAULT_ALLOCATOR);
 		if (!compare(rq, "string"))
 			return picolSetResultNumber(i, DEFINE_STRING);
 		if (!compare(rq, "maths"))
@@ -3365,10 +3360,9 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "while",     picolCommandWhile,     NULL },
 		{ "apply",     picolCommandApply,     NULL },
 	};
-	if (DEFINE_REGEX) {
+	if (DEFINE_REGEX)
 		if (picolRegisterCommand(i, "reg", picolCommandRegex, NULL) != PICKLE_OK)
 			return PICKLE_ERROR;
-	}
 	if (DEFINE_STRING)
 		if (picolRegisterCommand(i, "string", picolCommandString, NULL) != PICKLE_OK)
 			return PICKLE_ERROR;
@@ -3458,17 +3452,18 @@ static int picolDeinitialize(pickle_t *i) {
 	return r;
 }
 
-static int picolInitialize(pickle_t *i, const pickle_allocator_t *a) {
+static int picolInitialize(pickle_t *i, allocator_fn fn, void *arena) {
 	static_assertions();
 	assert(i);
-	assert(a);
+	assert(fn);
 	/*'i' may contain junk, otherwise: assert(!(i->initialized));*/
 	const size_t hbytes = PICKLE_MAX_STRING;
 	const size_t helem  = hbytes / sizeof (*i->table);
 	zero(i, sizeof *i);
 	i->initialized   = 1;
-	i->allocator     = *a;
-	i->callframe     = i->allocator.malloc(i->allocator.arena, sizeof(*i->callframe));
+	i->allocator     = fn;
+	i->arena         = arena;
+	i->callframe     = i->allocator(i->arena, NULL, 0, sizeof(*i->callframe));
 	i->result        = string_empty;
 	i->static_result = 1;
 	i->table         = picolMalloc(i, hbytes); /* NB. We could make this configurable, for little gain. */
@@ -3488,28 +3483,13 @@ fail:
 	return PICKLE_ERROR;
 }
 
-static inline void *pmalloc(void *arena, const size_t size) {
-	UNUSED(arena); assert(arena == NULL);
-	return malloc(size);
-}
-
-static inline void *prealloc(void *arena, void *ptr, const size_t size) {
-	UNUSED(arena); assert(arena == NULL);
-	return realloc(ptr, size);
-}
-
-static inline int pfree(void *arena, void *ptr) {
-	UNUSED(arena); assert(arena == NULL);
-	free(ptr);
-	return PICKLE_OK;
-}
-
-static inline int test(const char *eval, const char *result, int retcode) {
+static inline int test(allocator_fn fn, void *arena, const char *eval, const char *result, int retcode) {
+	assert(fn);
 	assert(eval);
 	assert(result);
 	int r = 0, actual = 0;
 	pickle_t *p = NULL;
-	const int rc = pickle_new(&p, NULL);
+	const int rc = pickle_new(&p, fn, arena);
 	if (rc != PICKLE_OK || !p)
 		return -1;
 	if ((actual = picolEval(p, eval)) != retcode) { r = -2; goto end; }
@@ -3520,7 +3500,9 @@ end:
 	return r;
 }
 
-static inline int picolTestSmallString(void) {
+static inline int picolTestSmallString(allocator_fn fn, void *arena) {
+	UNUSED(fn);
+	UNUSED(arena);
 	int r = 0;
 	if (!picolIsSmallString(""))  { r = -1; }
 	if (!picolIsSmallString("0")) { r = -2; }
@@ -3528,7 +3510,9 @@ static inline int picolTestSmallString(void) {
 	return r;
 }
 
-static inline int picolTestUnescape(void) {
+static inline int picolTestUnescape(allocator_fn fn, void *arena) {
+	UNUSED(fn);
+	UNUSED(arena);
 	int r = 0;
 	char m[256];
 	static const struct unescape_results {
@@ -3583,10 +3567,11 @@ static inline int concatenateTest(pickle_t *i, char *result, char *join, int arg
 	return r;
 }
 
-static inline int picolTestConcat(void) {
+static inline int picolTestConcat(allocator_fn fn, void *arena) {
+	assert(fn);
 	int r = 0;
 	pickle_t *p = NULL;
-	if (pickle_new(&p, NULL) != PICKLE_OK || !p)
+	if (pickle_new(&p, fn, arena) != PICKLE_OK || !p)
 		return -100;
 	r += concatenateTest(p, "ac",    "",  2, (char*[2]){"a", "c"});
 	r += concatenateTest(p, "a,c",   ",", 2, (char*[2]){"a", "c"});
@@ -3599,7 +3584,7 @@ static inline int picolTestConcat(void) {
 	return r;
 }
 
-static inline int picolTestEval(void) {
+static inline int picolTestEval(allocator_fn fn, void *arena) {
 	static const struct test_t {
 		int retcode;
 		char *eval, *result;
@@ -3612,12 +3597,13 @@ static inline int picolTestEval(void) {
 
 	int r = 0;
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++)
-		if (test(ts[i].eval, ts[i].result, ts[i].retcode) < 0)
+		if (test(fn, arena, ts[i].eval, ts[i].result, ts[i].retcode) < 0)
 			r = -(int)(i+1);
 	return r;
 }
 
-static inline int picolTestLineNumber(void) {
+static inline int picolTestLineNumber(allocator_fn fn, void *arena) {
+	assert(fn);
 	static const struct test_t {
 		int line;
 		char *eval;
@@ -3632,7 +3618,7 @@ static inline int picolTestLineNumber(void) {
 	int r = 0;
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
 		pickle_t *p = NULL;
-		if (pickle_new(&p, NULL) != PICKLE_OK || !p) {
+		if (pickle_new(&p, fn, arena) != PICKLE_OK || !p) {
 			r = r ? r : -1001;
 			break;
 		}
@@ -3648,7 +3634,8 @@ static inline int picolTestLineNumber(void) {
 	return r;
 }
 
-static inline int picolTestConvertNumber(void) {
+static inline int picolTestConvertNumber(allocator_fn fn, void *arena) {
+	assert(fn);
 	int r = 0;
 	number_t val = 0;
 	pickle_t *p = NULL;
@@ -3670,7 +3657,7 @@ static inline int picolTestConvertNumber(void) {
 		{   0, PICKLE_ERROR, "4x"    },
 	};
 
-	if (pickle_new(&p, NULL) != PICKLE_OK || !p)
+	if (pickle_new(&p, fn, arena) != PICKLE_OK || !p)
 		return -1;
 
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
@@ -3687,11 +3674,12 @@ static inline int picolTestConvertNumber(void) {
 	return r;
 }
 
-static inline int picolTestGetSetVar(void) {
+static inline int picolTestGetSetVar(allocator_fn fn, void *arena) {
+	assert(fn);
 	long val = 0;
 	int r = 0;
 	pickle_t *p = NULL;
-	if (pickle_new(&p, NULL) != PICKLE_OK || !p)
+	if (pickle_new(&p, fn, arena) != PICKLE_OK || !p)
 		return -1;
 	if (pickle_eval(p, "set a 54; set b 3; set c -4x") != PICKLE_OK)
 		r = -2;
@@ -3708,7 +3696,9 @@ static inline int picolTestGetSetVar(void) {
 	return r;
 }
 
-static inline int picolTestParser(void) {
+static inline int picolTestParser(allocator_fn fn, void *arena) {
+	UNUSED(fn);
+	UNUSED(arena);
 	int r = 0;
 	pickle_parser_t p = { .p = NULL };
 
@@ -3737,7 +3727,9 @@ static inline int picolTestParser(void) {
 	return r;
 }
 
-static int picolTestRegex(void) {
+static int picolTestRegex(allocator_fn fn, void *arena) {
+	UNUSED(fn);
+	UNUSED(arena);
 	int r = 0;
 	r += !(1 == picolRegex("a", "bba"));
 	r += !(1 == picolRegex(".", "x"));
@@ -3785,17 +3777,18 @@ static inline int post(pickle_t *i, const int r) { /* assert API post-conditions
 	return r;
 }
 
-unsigned long pickle_version(void) {
+int pickle_version(unsigned long *version) {
+	assert(version);
 	unsigned long info = 0;
 	info |= DEFINE_TESTS              << 0;
 	info |= DEFINE_MATHS              << 1;
 	info |= DEFINE_STRING             << 2;
 	info |= DEFINE_LIST               << 3;
 	info |= DEFINE_REGEX              << 4;
-	info |= DEFAULT_ALLOCATOR         << 5;
-	info |= USE_MAX_STRING            << 6;
-	info |= STRICT_NUMERIC_CONVERSION << 7;
-	return (info << 24) | PICKLE_VERSION;
+	info |= USE_MAX_STRING            << 5;
+	info |= STRICT_NUMERIC_CONVERSION << 6;
+	*version = (info << 24) | PICKLE_VERSION;
+	return PICKLE_VERSION ? PICKLE_OK : PICKLE_ERROR;
 }
 
 int pickle_set_result_string(pickle_t *i, const char *s) {
@@ -4032,28 +4025,15 @@ int pickle_free(pickle_t *i, void **v) {
 	return post(i, picolFree(i, vp));
 }
 
-int pickle_new(pickle_t **i, const pickle_allocator_t *a) {
+int pickle_new(pickle_t **i, allocator_fn a, void *arena) {
 	assert(i);
+	assert(a);
 	*i = NULL;
-	const pickle_allocator_t *m = a;
-	/* NB. This default allocator should probably be removed, along with
-	 * the header "<stdlib.h>". */
-	if (DEFAULT_ALLOCATOR) {
-		static const pickle_allocator_t default_allocator = {
-			.malloc  = pmalloc,
-			.realloc = prealloc,
-			.free    = pfree,
-			.arena   = NULL,
-		};
-		m = a ? a : &default_allocator;
-	}
-	if (!m)
-		return PICKLE_ERROR;
 	/*implies(CONFIG_DEFAULT_ALLOCATOR == 0, m != NULL);*/
-	*i = m->malloc(m->arena, sizeof(**i));
+	*i = a(arena, NULL, 0, sizeof(**i));
 	if (!*i)
 		return PICKLE_ERROR;
-	const int r = picolInitialize(*i, m);
+	const int r = picolInitialize(*i, a, arena);
 	return r == PICKLE_OK ? post(*i, r) : PICKLE_ERROR;
 }
 
@@ -4061,16 +4041,18 @@ int pickle_delete(pickle_t *i) {
 	if (!i)
 		return PICKLE_ERROR;
 	/*assert(i->initialized);*/
-	const pickle_allocator_t a = i->allocator;
+	const allocator_fn a = i->allocator;
+	void *arena = i->arena;
 	const int r = picolDeinitialize(i);
-	a.free(a.arena, i);
+	a(arena, i, 0, 0);
 	return r != PICKLE_OK ? r : PICKLE_OK;
 }
 
-int pickle_tests(void) {
+int pickle_tests(allocator_fn fn, void *arena) {
+	assert(fn);
 	if (!DEFINE_TESTS)
 		return PICKLE_OK;
-	typedef int (*test_func)(void);
+	typedef int (*test_func)(allocator_fn fn, void *arena);
 	static const test_func ts[] = {
 		picolTestSmallString,
 		picolTestUnescape,
@@ -4084,7 +4066,7 @@ int pickle_tests(void) {
 	};
 	int r = 0;
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++)
-		if (ts[i]() != 0)
+		if (ts[i](fn, arena) != 0)
 			r = -1;
 	return r != 0 ? PICKLE_ERROR : PICKLE_OK;
 }

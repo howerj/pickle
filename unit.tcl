@@ -10,6 +10,8 @@
 
 set program [lindex $argv 2]
 set argc [llength $argv]
+set prompt "pickle>"
+
 
 proc usage {} {
 	set name [uplevel #0 "lindex \$argv" 0]
@@ -94,9 +96,9 @@ proc words {} {
 		set l [+ $l [string length $n]]
 		set c " "
 		if {> $l 80} { set c "\n"; set l 0 }
-		stdout -puts "$n$c"
+		puts -nonewline "$n$c"
 	}
-	stdout -puts "\n"
+	puts ""
 }
 
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
@@ -146,6 +148,7 @@ proc io {} {
 	set e -1
 	set l [catch {gets} e]
 	if {or [eq [decode $e] break] [eq [decode $e] error]} {
+		puts "l=$l"
 		if {eq $l EOF} {
 			exit 0
 		}
@@ -155,13 +158,13 @@ proc io {} {
 
 proc shell {} {
 	upvar #0 prompt prompt
-	stdout -puts "\[[green]0[normal]\] $prompt"
+	puts -nonewline "\[[green]0[normal]\] $prompt"
 	io
 	while {ne $line ""} {
 		set result [catch {eval $line} retcode]
 		set fail [red]
 		if {== $retcode 0} { set fail [green] }
-		stdout -puts "\[$fail$retcode[normal]\] $result\n$prompt "
+		puts -nonewline "\[$fail$retcode[normal]\] $result\n$prompt "
 		io
 	}
 }
@@ -226,7 +229,6 @@ puts "\tstring:     [info limits string]"
 puts "\tminimum:    [info limits minimum]"
 puts "\tmaximum:    [info limits maximum]"
 puts "Features:"
-puts "\tallocator:  [info features allocator]"
 puts "\tstring:     [info features string]"
 puts "\tmaths:      [info features maths]"
 puts "\tdebugging:  [info features debugging]"
@@ -701,42 +703,4 @@ if {!= $failed 0} {
 
 puts "$emphasize   pass[normal]/[blue]total $emphasize$passed[normal]/[blue]$total[normal]"
 puts "\[[blue]DONE[normal]\]"
-
-if {== "[heap]" 0 } {
-	puts "Custom allocator not used"
-	# Causes memory leak to appear in Valgrind, not a real leak however.
-	# We should not really exit here as it prevents cleanup
-	exit $failed
-}
-
-puts "MEMORY STATISTICS"
-
-set heaps [heap arenas]
-set m 0
-set i 0
-
-while {< $i $heaps} {
-	set blk   [heap arena-block  $i]
-	set sz    [heap arena-size   $i]
-	set used  [heap arena-active $i]
-	set max   [heap arena-max    $i]
-	set m [+ $m [* $blk $sz]]
-	puts "ARENA $i:   $blk $sz $used $max"
-	incr i
-}
-
-puts "TOTAL:      [heap total]"
-puts "BLOCK:      [heap blocks]"
-puts "MAX:        [heap max]"
-puts "ACTIVE:     [heap active]"
-puts "FREED:      [heap freed]"
-puts "ALLOC:      [heap allocs]"
-puts ""
-puts "MEMORY:     $m"
-puts "EFFICIENCY: [/ [* [heap total] 100] [heap blocks]]%"
-puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
-
-unset heaps; unset i; unset m; unset blk; unset sz; unset used;
-
-# Prints wrong line number on Windows, related (depends on this line!)
 
