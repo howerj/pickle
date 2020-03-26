@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x010001ul
+VERSION = 0x020000ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -Os -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -15,11 +15,10 @@ DESTDIR = install
 all: ${TARGET}
 
 run: ${TARGET}
-	${TRACE} ./${TARGET} ${FILE}
+	${TRACE} ./${TARGET} shell
 
-test: ${TARGET} unit.tcl
-	./${TARGET} -t
-	./${TARGET} -a unit.tcl
+test: ${TARGET} shell
+	./${TARGET} shell -t 
 
 main.o: main.c ${TARGET}.h
 

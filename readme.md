@@ -710,10 +710,34 @@ And it is used often in looping constructs.
 
 ### Extension Commands
 
+These commands are present in the [main.c][] file and have been added to the
+interpreter by extending it. They deal with I/O.
+
 * gets
-* puts
-* getenv
-* exit
+
+Read in a new-line delimited string, returning the string on success, on End Of
+File it returns 'EOF' with a return code of 'break'.
+
+* puts *OR* puts string *OR* puts -nonewline string
+
+Write a line to *stdout*, the option '-nonewline' may be specified, which
+means no newline with be appended to the string.
+
+If no string is given, then a single new line is printed out.
+
+* getenv string
+
+Retrieve an environment variable by the name 'string', returning it as a
+string.
+
+* exit *OR* exit number
+
+Exit the program with a status of 0, or with the provided status number.
+
+* source file-name
+
+Read and then evaluate a file off of disk. This may fail because the file could
+not be read or something when wrong during the evaluation.
 
 ## Compile Time Options
 
@@ -830,37 +854,36 @@ line and then evaluates it:
 
 	#include "pickle.h"
 	#include <stdio.h>
-	#include <string.h>
 	#include <stdlib.h>
 
 	static void *allocator(void *arena, void *ptr, size_t oldsz, size_t newsz) {
-		if (newsz == 0) {
-			free(ptr);
-			return NULL;
-		}
-		if (newsz > oldsz)
-			return realloc(ptr, newsz);
+		if (newsz ==     0) { free(ptr); return NULL; }
+		if (newsz  > oldsz) { return realloc(ptr, newsz); }
 		return ptr;
 	}
-	
+
+	static int prompt(FILE *f, int err, const char *value) {
+		if (fprintf(f, "[%d]: %s\n> ", err, value) < 0)
+			return -1;
+		return fflush(f) < 0 ? -1 : 0;	
+	}
+
 	int main(void) {
 		pickle_t *p = NULL;
 		if (pickle_new(&p, allocator, NULL) < 0)
-			return -1;
-		const char *prompt = "> ";
-		fputs(prompt, stdout);
-		fflush(stdout);
-		for (char buf[256] = { 0 }; fgets(buf, sizeof buf, stdin); memset(buf, 0, sizeof buf)) {
+			return 1;
+		if (prompt(stdout, 0, "") < 0)
+			return 1;
+		for (char buf[512] = { 0 }; fgets(buf, sizeof buf, stdin);) {
 			const char *r = NULL;
 			const int er = pickle_eval(p, buf);
-			pickle_get_result_string(p, &r);
-			fprintf(stdout, "[%d]: %s\\n%s", er, r, prompt);
-			fflush(stdout);
+			if (pickle_get_result_string(p, &r) != PICKLE_OK)
+				return 1;
+			if (prompt(stdout, 0, r) < 0)
+				return 1;
 		}
 		return pickle_delete(p);
 	}
-
-Also present is a custom prompt.
 
 It should be obvious that the interface presented is not efficient for many
 uses, treating everything as a string has a cost. It is however simple and
@@ -1028,6 +1051,7 @@ Known limitations of the interpreter include:
 [block.h]: block.h
 [main.c]: main.c
 [pickle.1]: pickle.1
+[pickle.c]: pickle.c
 [unit.tcl]: unit.tcl
 [picol]: http://oldblog.antirez.com/post/picol.html
 [TCL]: https://en.wikipedia.org/wiki/Tcl

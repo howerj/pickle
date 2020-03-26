@@ -128,7 +128,6 @@ typedef PREPACK struct {
 	const char *p;             /**< current text position */
 	const char *start;         /**< token start */
 	const char *end;           /**< token end */
-	int *line;                 /**< pointer to line number */
 	const char **ch;           /**< pointer to global test position */
 	int len;                   /**< remaining length */
 	int type;                  /**< token type, PT_... */
@@ -183,7 +182,6 @@ PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 	struct pickle_command **table;       /**< hash table */
 	long length;                         /**< buckets in hash table */
 	int level;                           /**< level of nesting */
-	int line;                            /**< current line number */
 	unsigned initialized    :1;          /**< if true, interpreter is initialized and ready to use */
 	unsigned static_result  :1;          /**< internal use only: if true, result should not be freed */
 	unsigned inside_uplevel :1;          /**< true if executing inside an uplevel command */
@@ -560,11 +558,6 @@ static int advance(pickle_parser_t *p) {
 		return PICKLE_ERROR;
 	if (p->len && !(*p->p))
 		return PICKLE_ERROR;
-	if (p->line && *p->line/*NULL disables line count*/ && *p->ch < p->p) {
-		*p->ch = p->p;
-		if (*p->p == '\n')
-			(*p->line)++;
-	}
 	p->p++;
 	p->len--;
 	if (p->len && !(*p->p))
@@ -572,7 +565,7 @@ static int advance(pickle_parser_t *p) {
 	return PICKLE_OK;
 }
 
-static inline void picolParserInitialize(pickle_parser_t *p, pickle_parser_opts_t *o, const char *text, int *line, const char **ch) {
+static inline void picolParserInitialize(pickle_parser_t *p, pickle_parser_opts_t *o, const char *text, const char **ch) {
 	/* NB. assert(o || !o); */
 	assert(p);
 	assert(text);
@@ -581,7 +574,6 @@ static inline void picolParserInitialize(pickle_parser_t *p, pickle_parser_opts_
 	p->p    = text;
 	p->len  = strlen(text); /* unbounded! */
 	p->type = PT_EOL;
-	p->line = line;
 	p->ch   = ch;
 	p->o    = o ? *o : p->o;
 }
@@ -953,23 +945,6 @@ fail:
 	return NULL;
 }
 
-static char *picolAStrCat(pickle_t *i, const char *a, const char *b) {
-	assert(i);
-	assert(a);
-	assert(b);
-	const size_t al = picolStrlen(a), bl = picolStrlen(b);
-	const size_t nl = al + bl + 1;
-	if (nl < al || nl < bl) /* overflow */
-		return NULL;
-	char *r = picolMalloc(i, nl);
-	if (!r)
-		return NULL;
-	move(r, a, al);
-	move(r + al, b, bl);
-	r[al + bl] = '\0';
-	return r;
-}
-
 static int picolSetResultNumber(pickle_t *i, const number_t result) {
 	assert(i);
 	char buffy/*<3*/[PRINT_NUMBER_BUF_SZ] = { 0 };
@@ -1228,7 +1203,7 @@ static args_t picolArgs(pickle_t *i, pickle_parser_opts_t *o, const char *s) {
 	assert(o);
 	args_t r = { .argc = 0, .argv = NULL };
 	pickle_parser_t p = { .p = NULL };
-	picolParserInitialize(&p, o, s, NULL, NULL);
+	picolParserInitialize(&p, o, s, NULL);
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
 			goto err;
@@ -1314,7 +1289,7 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 	char **argv = NULL;
 	if (pickle_set_result_empty(i) != PICKLE_OK)
 		return PICKLE_ERROR;
-	picolParserInitialize(&p, o, eval, &i->line, &i->ch);
+	picolParserInitialize(&p, o, eval, &i->ch);
 	int prevtype = p.type;
 	for (;;) {
 		if (picolGetToken(&p) != PICKLE_OK)
@@ -3052,8 +3027,6 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 	const char *rq = argv[1];
 	if (!compare(rq, "command"))
 		return picolCommandCommand(i, argc - 1, argv + 1, pd);
-	if (!compare(rq, "line"))
-		return picolSetResultNumber(i, i->line);
 	if (!compare(rq, "level"))
 		return picolSetResultNumber(i, i->level);
 	if (argc < 3)
@@ -3602,38 +3575,6 @@ static inline int picolTestEval(allocator_fn fn, void *arena) {
 	return r;
 }
 
-static inline int picolTestLineNumber(allocator_fn fn, void *arena) {
-	assert(fn);
-	static const struct test_t {
-		int line;
-		char *eval;
-	} ts[] = {
-		{ 1, "+  2 2", },
-		{ 2, "+  2 2\n", },
-		{ 3, "\n\n\n", },
-		{ 4, "* 4 4\nset a 3\n\n", },
-		{ 3, "* 4 4\r\nset a 3\r\n", },
-	};
-
-	int r = 0;
-	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
-		pickle_t *p = NULL;
-		if (pickle_new(&p, fn, arena) != PICKLE_OK || !p) {
-			r = r ? r : -1001;
-			break;
-		}
-		if (pickle_eval(p, ts[i].eval) != PICKLE_OK)
-			r = r ? r : -2001;
-
-		if (p->line != ts[i].line)
-			r = r ? r : -(int)(i+1);
-
-		if (pickle_delete(p) != PICKLE_OK)
-			r = r ? r : -4001;
-	}
-	return r;
-}
-
 static inline int picolTestConvertNumber(allocator_fn fn, void *arena) {
 	assert(fn);
 	int r = 0;
@@ -3715,8 +3656,7 @@ static inline int picolTestParser(allocator_fn fn, void *arena) {
 
 	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
 		const char *ch = NULL;
-		int line = 1;
-		picolParserInitialize(&p, NULL, ts[i].text, &line, &ch);
+		picolParserInitialize(&p, NULL, ts[i].text, &ch);
 		do {
 			if (picolGetToken(&p) == PICKLE_ERROR)
 				break;
@@ -3899,17 +3839,6 @@ int pickle_set_result_error(pickle_t *i, const char *fmt, ...) {
 	va_start(ap, fmt);
 	char *r = picolVsprintf(i, fmt, ap);
 	va_end(ap);
-	if (r && i->line) {
-		char buf[SMALL_RESULT_BUF_SZ + 5/*"line "*/ + 1/*':'*/ + 1/*' '*/] = "line ";
-		if (picolNumberToString(buf + 5, i->line, 10) == PICKLE_OK) {
-			const size_t bl = picolStrlen(buf);
-			buf[bl + 0] = ':';
-			buf[bl + 1] = ' ';
-			char *rn = picolAStrCat(i, buf, r);
-			picolFree(i, r);
-			r = rn;
-		}
-	}
 	(void)(r ? picolForceResult(i, r, 0) : pickle_set_result_string(i, "Invalid vsnprintf"));
 	return post(i, PICKLE_ERROR);
 }
@@ -3942,7 +3871,6 @@ int pickle_set_var_integer(pickle_t *i, const char *name, const long r) {
 int pickle_eval(pickle_t *i, const char *t) {
 	pre(i);
 	assert(t);
-	i->line = 1;
 	i->ch   = t;
 	return picolEval(i, t); /* may return any int */
 }
@@ -4028,8 +3956,6 @@ int pickle_free(pickle_t *i, void **v) {
 int pickle_new(pickle_t **i, allocator_fn a, void *arena) {
 	assert(i);
 	assert(a);
-	*i = NULL;
-	/*implies(CONFIG_DEFAULT_ALLOCATOR == 0, m != NULL);*/
 	*i = a(arena, NULL, 0, sizeof(**i));
 	if (!*i)
 		return PICKLE_ERROR;
@@ -4060,7 +3986,6 @@ int pickle_tests(allocator_fn fn, void *arena) {
 		picolTestConcat,
 		picolTestEval,
 		picolTestGetSetVar,
-		picolTestLineNumber,
 		picolTestParser,
 		picolTestRegex,
 	};
