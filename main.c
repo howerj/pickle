@@ -7,7 +7,6 @@
 
 #define UNUSED(X) ((void)(X))
 
-/* NB. Could store Heap status information in 'arena' and query with command */
 static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t newsz) {
 	UNUSED(arena);
 	if (newsz == 0) { free(ptr); return NULL; }
@@ -76,22 +75,22 @@ static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static char *slurp(FILE *input) {
-	if (fseek(input, 0, SEEK_END) < 0)
-		return NULL;
-	const long pos = ftell(input);
-	if (pos < 0)
-		return NULL;
-	if (fseek(input, 0, SEEK_SET) < 0)
-		return NULL;
-	char *r = malloc(pos + 1);
-	if (r == NULL)
-		return NULL;
-	if (pos != (long)fread(r, 1, pos, input)) {
-		free(r);
-		return NULL;
+	char *m = NULL;
+	size_t sz = 0, inc = 0;
+	for (;;) {
+		char *n = realloc(m, sz + 4096 + 1);
+		if (!n) {
+			free(m);
+			return NULL;
+		}
+		m = n;
+		inc = fread(&m[sz], 1, 4096, input);
+		sz += inc;
+		if (inc != 4096)
+			break;
 	}
-	r[pos] = '\0'; /* Ensure NUL termination */
-	return r;
+	m[sz] = '\0'; /* ensure NUL termination */
+	return m;
 }
 
 static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {

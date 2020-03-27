@@ -191,10 +191,10 @@ PREPACK struct pickle_interpreter { /**< The Pickle Interpreter! */
 typedef PREPACK struct {
 	const char *start,  /**< start of match, NULL if no match */
 	      *end;         /**< end of match, NULL if no match */
-	int max;            /**< */
+	int max;            /**< maximum recursion depth (0 = unlimited) */
 	unsigned type   :2, /**< select regex type; lazy, greedy or possessive */
 		 nocase :1; /**< ignore case when matching */
-} POSTPACK pickle_regex_t; /**< */
+} POSTPACK pickle_regex_t; /**< used to specify a regex and return start/end of match */
 
 typedef struct PREPACK { int argc; char **argv; } POSTPACK args_t;
 
@@ -1109,20 +1109,19 @@ static const char *lastUnmatching(const char *class, const char *s) {
 	return &s[j];
 }
 
-static void trimright(const char *class, char *s) { /* Modifies argument */
+static char *trimright(const char *class, char *s) { /* Modifies argument */
 	assert(class);
 	assert(s);
 	const size_t j = lastUnmatching(class, s) - s;
 	if (s[j])
 		s[j + !locateChar(class, s[j])] = '\0';
+	return s;
 }
 
 static char *trim(const char *class, char *s) { /* Modifies argument */
 	assert(class);
 	assert(s);
-	char *r = (char*)trimleft(class, s);
-	trimright(class, r);
-	return r;
+	return trimright(class, (char*)trimleft(class, s));
 }
 
 static char *concatenate(pickle_t *i, const char *join, const int argc, char **argv, const int doEscape, const int trim) {
@@ -1551,6 +1550,26 @@ static inline int picolCommandTranslate(pickle_t *i, const int argc, char **argv
 	return r;
 }
 
+enum { TRIM, TRIM_RIGHT, TRIM_LEFT };
+
+static inline int trimOps(pickle_t *i, pickle_stack_or_heap_t *h, int op, const char *arg, const char *class) {
+	assert(i);
+	assert(h);
+	assert(arg);
+	assert(class);
+	assert(op == TRIM_LEFT || op == TRIM_RIGHT || op == TRIM);
+	if (op == TRIM_LEFT)
+		return pickle_set_result_string(i, trimleft(class, arg));
+	const size_t l = picolStrlen(arg);
+	if (picolStackOrHeapAlloc(i, h, l + 1) != PICKLE_OK)
+		return PICKLE_ERROR;
+	move(h->p, arg, l + 1);
+	const int r = pickle_set_result_string(i, op == TRIM ? trim(class, h->p) : trimright(class, h->p));
+	if (picolStackOrHeapFree(i, h) != PICKLE_OK)
+		return PICKLE_ERROR;
+	return r;
+}
+
 static inline int picolCommandString(pickle_t *i, const int argc, char **argv, void *pd) { /* Big! */
 	UNUSED(pd);
 	assert(!pd);
@@ -1561,50 +1580,20 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 	if (argc == 3) {
 		const char *arg1 = argv[2];
 		if (!compare(rq, "trimleft"))
-			return pickle_set_result_string(i, trimleft(string_white_space, arg1));
-		if (!compare(rq, "trimright")) {
-			const size_t l = picolStrlen(arg1);
-			if (picolStackOrHeapAlloc(i, &h, l + 1) != PICKLE_OK)
-				return -1;
-			move(h.p, arg1, l + 1);
-			trimright(string_white_space, h.p);
-			const int r = pickle_set_result_string(i, h.p);
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
-		if (!compare(rq, "trim"))      {
-			const size_t l = picolStrlen(arg1);
-			if (picolStackOrHeapAlloc(i, &h, l + 1) != PICKLE_OK)
-				return -1;
-			move(h.p, arg1, l + 1);
-			const int r = pickle_set_result_string(i, trim(string_white_space, h.p));
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
+			return trimOps(i, &h, TRIM_LEFT, arg1, string_white_space);
+		if (!compare(rq, "trimright"))
+			return trimOps(i, &h, TRIM_RIGHT, arg1, string_white_space);
+		if (!compare(rq, "trim")) 
+			return trimOps(i, &h, TRIM, arg1, string_white_space);
 		if (!compare(rq, "length"))
 			return picolSetResultNumber(i, picolStrlen(arg1));
-		if (!compare(rq, "toupper")) {
+		if (!compare(rq, "toupper") || !compare(rq, "tolower")) {
+			const int lower = rq[2] == 'l';
 			if (picolStackOrHeapAlloc(i, &h, picolStrlen(arg1) + 1) != PICKLE_OK)
 				return PICKLE_ERROR;
 			size_t j = 0;
 			for (j = 0; arg1[j]; j++)
-				h.p[j] = toupper(arg1[j]);
-			h.p[j] = 0;
-			if (picolOnHeap(i, &h))
-				return picolForceResult(i, h.p, 0);
-			const int r = pickle_set_result_string(i, h.p);
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
-		if (!compare(rq, "tolower")) {
-			if (picolStackOrHeapAlloc(i, &h, picolStrlen(arg1) + 1) != PICKLE_OK)
-				return PICKLE_ERROR;
-			size_t j = 0;
-			for (j = 0; arg1[j]; j++)
-				h.p[j] = tolower(arg1[j]);
+				h.p[j] = lower ? tolower(arg1[j]) : toupper(arg1[j]);
 			h.p[j] = 0;
 			if (picolOnHeap(i, &h))
 				return picolForceResult(i, h.p, 0);
@@ -1614,11 +1603,8 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			return r;
 		}
 		if (!compare(rq, "reverse")) {
-			/* NB. We could restructure so strlen and alloc are done upfront.
-			 * The trade off is; less code, potentially more
-			 * allocations. */
 			const size_t l = picolStrlen(arg1);
-			if (picolStackOrHeapAlloc(i, &h, picolStrlen(arg1) + 1) != PICKLE_OK)
+			if (picolStackOrHeapAlloc(i, &h, l + 1) != PICKLE_OK)
 				return PICKLE_ERROR;
 			move(h.p, arg1, l + 1);
 			const int r = pickle_set_result_string(i, reverse(h.p, l));
@@ -1655,28 +1641,11 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 	} else if (argc == 4) {
 		const char *arg1 = argv[2], *arg2 = argv[3];
 		if (!compare(rq, "trimleft"))
-			return pickle_set_result_string(i, trimleft(arg2, arg1));
-		if (!compare(rq, "trimright")) {
-			const size_t l = picolStrlen(arg1);
-			if (picolStackOrHeapAlloc(i, &h, l + 1) != PICKLE_OK)
-				return PICKLE_ERROR;
-			move(h.p, arg1, l + 1);
-			trimright(arg2, h.p);
-			const int r = pickle_set_result_string(i, h.p);
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
-		if (!compare(rq, "trim"))   {
-			const size_t l = picolStrlen(arg1);
-			if (picolStackOrHeapAlloc(i, &h, l + 1) != PICKLE_OK)
-				return PICKLE_ERROR;
-			move(h.p, arg1, l + 1);
-			const int r = pickle_set_result_string(i, trim(arg2, h.p));
-			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
-				return PICKLE_ERROR;
-			return r;
-		}
+			return trimOps(i, &h, TRIM_LEFT, arg1, arg2);
+		if (!compare(rq, "trimright"))
+			return trimOps(i, &h, TRIM_RIGHT, arg1, arg2);
+		if (!compare(rq, "trim")) 
+			return trimOps(i, &h, TRIM, arg1, arg2);
 		if (!compare(rq, "match"))  {
 			const int r = match(arg1, arg2, PICKLE_MAX_RECURSION - i->level);
 			if (r < 0)
@@ -2201,10 +2170,9 @@ done:
 	}
 	a.argv[index] = prev;
 
-	if (escape) {
+	if (escape)
 		if (picolFree(i, insert) != PICKLE_OK)
 			r = PICKLE_ERROR;
-	}
 	if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
 		r = PICKLE_ERROR;
 	return r;
@@ -2429,7 +2397,7 @@ static inline int picolCommandLSearch(pickle_t *i, const int argc, char **argv, 
 			break;
 		}
 		case oEXACT:
-			if (not ^ !compare(pattern, a.argv[j])) {
+			if (not ^ (!compare(pattern, a.argv[j]))) {
 				index = j;
 				goto done;
 			}
@@ -2962,8 +2930,8 @@ static int picolCommandCommand(pickle_t *i, const int argc, char **argv, void *p
 		return picolSetResultNumber(i, r);
 	}
 	if (argc == 2) {
-		long r = -1, j = 0;
-		for (long k = 0; k < i->length; k++) {
+		long r = -1;
+		for (long k = 0, j = 0; k < i->length; k++) {
 			pickle_command_t *c = i->table[k];
 			for (; c; c = c->next) {
 				if (!compare(argv[1], c->name)) {
@@ -3520,9 +3488,8 @@ static inline int picolTestUnescape(allocator_fn fn, void *arena) {
 			r = -1;
 			continue;
 		}
-		if (u < 0) {
+		if (u < 0)
 			continue;
-		}
 		if (compare(m, ts[i].res)) {
 			r = -2;
 			continue;
@@ -3645,16 +3612,15 @@ static inline int picolTestParser(allocator_fn fn, void *arena) {
 
 	static const struct test_t {
 		char *text;
-		int line;
 	} ts[] = {
-		{ "$a", 2 },
-		{ "\"a b c\"", 2 },
-		{ "a  b c {a b c}", 2 },
-		{ "[+ 2 2]", 2 },
-		{ "[+ 2 2]; $a; {v}", 2 },
+		{ "$a", },
+		{ "\"a b c\"", },
+		{ "a  b c {a b c}", },
+		{ "[+ 2 2]", },
+		{ "[+ 2 2]; $a; {v}", },
 	};
 
-	for (size_t i = 0; i < sizeof(ts)/sizeof(ts[0]); i++) {
+	for (size_t i = 0; i < sizeof(ts) / sizeof(ts[0]); i++) {
 		const char *ch = NULL;
 		picolParserInitialize(&p, NULL, ts[i].text, &ch);
 		do {
@@ -3701,8 +3667,7 @@ static int picolTestRegex(allocator_fn fn, void *arena) {
 }
 
 static inline void pre(pickle_t *i) { /* assert API pre-conditions */
-	/* We could assert all the data structures, such as the hash 
-	 * table and the call stack, also have valid data */
+	UNUSED(i); /* warning suppression when NDEBUG defined */
 	assert(i);
 	assert(i->initialized);
 	assert(i->result);
@@ -3940,6 +3905,7 @@ int pickle_allocate(pickle_t *i, void **v, const size_t size) {
 	void *vp = picolMalloc(i, size);
 	if (vp) {
 		zero(vp, size);
+		*v = vp;
 		return post(i, PICKLE_OK);
 	}
 	return post(i, PICKLE_ERROR);
