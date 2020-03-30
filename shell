@@ -16,37 +16,13 @@ proc usage {} {
 	puts "Usage: [uplevel #0 {lindex $argv} 1] -\[hpst\]"
 	puts ""
 	puts "\t-h\tPrint this help message and quit"
-	puts "\t-p\tPerformance test"
 	puts "\t-s\tRun a shell (default)"
 	puts "\t-t\tRun the system tests"
 	puts ""
 	exit 0
 }
 
-# if {> $argc 2} { usage }
 if {eq $program "-h" } { usage }
-
-# Crude Performance Test
-#
-# Using 'incr loop -1' greatly speeds things up, but
-# exercises less within the interpreter.
-#
-if {eq $program "-p" } {
-	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
-
-	proc waste {x} {
-		set loop $x;
-		while {!= 0 $loop} {
-			decr loop
-		}
-	}
-
-	# Takes about a second on my machine
-	set c [clock];
-	waste 200000;
-	puts "elapsed: [- [clock] $c]";
-	bye
-}
 
 # ### Unit Tests ### #
 

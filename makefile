@@ -29,7 +29,7 @@ lib${TARGET}.a: ${TARGET}.o
 
 ${TARGET}: main.o lib${TARGET}.a
 	${CC} ${CFLAGS} $^ -o $@
-	strip ${TARGET}
+	-strip ${TARGET}
 
 ${TARGET}.1: readme.md
 	pandoc -s -f markdown -t man $< -o $@
