@@ -1,25 +1,23 @@
-# pickle: A tiny TCL like interpreter
+% pickle(1) | A Small TCL like interpreter
 
-| Project   | Pickle: A tiny TCL like interpreter        |
-| --------- | ------------------------------------------ |
-| Author    | Salvator Sanfilippo (Original Interpreter) |
-| Author    | Richard James Howe (Modifications Only)    |
-| Copyright | 2007-2016 Salvatore Sanfilippo             |
-| Copyright | 2018-2020 Richard James Howe               |
-| License   | BSD                                        |
-| Email     | howe.r.j.89@gmail.com                      |
-| Website   | <https://github.com/howerj/pickle>         |
+# NAME
 
+PICKLE - An interface to the Constant Database Library
 
-	   ▄███████▄  ▄█   ▄████████    ▄█   ▄█▄  ▄█          ▄████████
-	  ███    ███ ███  ███    ███   ███ ▄███▀ ███         ███    ███
-	  ███    ███ ███▌ ███    █▀    ███▐██▀   ███         ███    █▀
-	  ███    ███ ███▌ ███         ▄█████▀    ███        ▄███▄▄▄
-	▀█████████▀  ███▌ ███        ▀▀█████▄    ███       ▀▀███▀▀▀
-	  ███        ███  ███    █▄    ███▐██▄   ███         ███    █▄
-	  ███        ███  ███    ███   ███ ▀███▄ ███▌    ▄   ███    ███
-	 ▄████▀      █▀   ████████▀    ███   ▀█▀ █████▄▄██   ██████████
-				       ▀         ▀
+# SYNOPSES
+
+pickle files...
+
+pickle
+
+# DESCRIPTION
+
+	Author:     Richard James Howe / Salvatore Sanfilippo
+	License:    BSD
+	Repository: <https://github.com/howerj/pickle>
+	Email:      howe.r.j.89@gmail.com
+	Copyright:  2007-2016 Salvatore Sanfilippo
+	Copyright:  2018-2020 Richard James Howe
 
 This is a copy, and modification, of a small interpreter written by Antirez in
 about 500 lines of C, this interpreter is for a small TCL like language. The
@@ -29,13 +27,13 @@ blog post describing this interpreter can be found at
 small amount of code. This project is a little bit bigger than the original at
 around ~6000 lines.
 
-## License
+## LICENSE
 
 The files [pickle.c][] and [pickle.h][] are licensed under the [BSD License][],
 to keep things consistent [block.c][] and [block.h][] (which contains a memory
 pool allocator) is also licensed under the 2 clause [BSD License][].
 
-## Building
+## BUILDING
 
 To build you will need a [C][] compiler and [Make][].
 
@@ -60,10 +58,11 @@ Language and implementation advantages:
 
 * Small and compact, easy to integrate into a wide variety of platforms and
 programs. (4000 [LoC][] is the limit for the core library in [pickle.c][]).
-* Fairly good at string handling
-* Can be ported to a variety of platforms
-* Customizable
-* Suitable as a command language and shell
+* Fairly good at string handling.
+* Can be ported to a variety of platforms. There are few system dependencies
+and the design of the program allows it to be ported to an embedded platform.
+* Customizable.
+* Suitable as a command language and shell.
 
 Disadvantages:
 
@@ -74,9 +73,6 @@ itself and will almost certainly require that you define your own new commands
 in [C][].
 * The language interpreter is not well tested and is likely to be insecure. If
 you find a bug, please report it.
-* Despite being a language designed to manipulate strings it lacks many
-expected string operations, they have to be added by the user. The 'string'
-command adds most of the functionality.
 * Lacks Unicode/UTF-8 support.
 
 Potential Improvements:
@@ -332,7 +328,7 @@ Implements a for loop.
 
 * rename function-name new-name
 
-Rename a function to a new-name, this will fail if the function does not exist
+Rename a function to 'new-name', this will fail if the function does not exist
 or a function by the same name exists for the name we are trying to rename to.
 A special case exists when the new-name is an empty string, the function gets
 deleted.
@@ -714,209 +710,34 @@ And it is used often in looping constructs.
 
 ### Extension Commands
 
-[main.c][] extends the interpreter with some commands that make the language
-usable for demonstration purposes by including routines for Input and Output,
-Time, Retrieving Environment Variables, and executing commands with the Systems
-Shell.
-
-The following commands are defined:
-
-* puts string
-
-Write a string, followed by a newline, to the standard output stream,
-[stdout][]. If an EOF is encountered, a return code of '1' occurs and the
-string 'EOF' is returned.
-
-* error string
-
-Write an error message to the standard error stream, followed by a newline and
-returns '1' for the return code.
+These commands are present in the [main.c][] file and have been added to the
+interpreter by extending it. They deal with I/O.
 
 * gets
 
-Get a string from the standard input stream, [stdin][]. This returns a string
-including a newline.
+Read in a new-line delimited string, returning the string on success, on End Of
+File it returns 'EOF' with a return code of 'break'.
 
-* system string?
+* puts *OR* puts string *OR* puts -nonewline string
 
-Execute a command with the systems command interpreter, whatever that is. An
-any decent Unixen this will be 'sh'. On any indecent Windows platform this will
-be 'cmd.exe'. On MS-DOS this will be 'COMMAND.COM' (lol).
+Write a line to *stdout*, the option '-nonewline' may be specified, which
+means no newline with be appended to the string.
 
-* exit number?
-
-Exit from the interpreter, the number argument is optional and is coerced into
-a number to be used as the exit code. This calls the C function 'exit', so
-commands registered with 'atexit' will be called.
-
-* quit number?
-
-*quit* is a synonym for *exit*. It performs exactly the same function and is
-only there because it is common to type either *quit* or *exit* in order to
-leave an interpreter (I find it absurd that if you type 'exit' or 'quit'
-into [python][] it knows exactly what you intended to do then does not do it.
-Instead it taunts you with the correct answer).
+If no string is given, then a single new line is printed out.
 
 * getenv string
 
-Retrieve the contents of the environment variable named in string. This will
-return the empty string on failure to locate the variable.
+Retrieve an environment variable by the name 'string', returning it as a
+string.
 
-* random number?
+* exit *OR* exit number
 
-Use whatever random number generator is available on your system to return a
-random number. It should not be relied upon to produce good quality random
-numbers. An optional number argument can be used to seed the pseudo random number
-generator.
+Exit the program with a status of 0, or with the provided status number.
 
-* clock format?
+* source file-name
 
-This command calls the [C][] function [strftime][] on GMT to create a new
-string containing time information, or not, depending on what you have put in
-the format string. The full details of the format string will not be specified
-here, but here are a few examples:
-
-	clock "Date/Time: %c"
-
-Returns the String:
-
-	"Date/Time: Sat Oct  6 11:32:59 2018"
-
-When no argument is given the time since start of program execution is given.
-On some systems this is the CPU time and not the total time that the program
-has been executed.
-
-* raise number
-
-Raise a signal, what this will do depends on your system, but it will most
-likely kill the process. If it does not, it returns an integer indicating the
-result of calling "raise()".
-
-* signal number action *OR* signal
-
-This is used to both set a signal handler and to query whether a signal has
-been raised. If no arguments are given then the signal fired, or zero if
-no signals have been detected, is returned. A subsequent call with zero
-arguments will return zero (if a signal has not be fired since). Signal events
-are not queued and can be lost.
-
-If two arguments are given, the first is treated as a signal number and
-the second is the action to perform.  There are three possible actions;
-"ignore", "default" and "catch". A caught signal will set a variable
-which can be queried by calling signal with no arguments, as already described.
-An "ignored" signal will be ignored and a signal with "default" behavior will
-use the systems defaults. On successful installation of the handler, a "1" is
-returned, and on failure "0".
-
-
-* source file.tcl
-
-Execute a file off disk, 'file.tcl' is the file to execute. This executes the
-file in the current interpreter context and is *not* a safe operation.
-
-* info item
-
-Retrieve information about the system. Information items include:
-
- - level, call stack level
- - line, current line number
- - heap, information about the heap, if available, see 'heap' command.
-
-But may include other information.
-
-* heap item number *OR* heap item *OR* heap
-
-The heap command is used to enquire about the status of the heap. Using the
-command does change the thing it is measuring, however physics has the same
-problem and physicists are doing pretty well. The command only works when the
-custom allocator is used, as it interrogates it for the statistics it has
-captured.
-
- - "freed": Number of calls to 'free'
- - "allocs": Number of calls to 'allocate'
- - "reallocs": Number of calls to 'realloc'
- - "active": Current active byte count
- - "max": Maximum number of bytes in use
- - "total": Total bytes request
- - "blocks": Total bytes given
- - "arenas": Number of arenas
-
-These options require an argument; a number which species which allocation
-arena to query for information.
-
- - "arena-size": Number of blocks
- - "arena-block": Size of a block
- - "arena-used": Number of blocks currently in use
-
-* getch
-
-Read a single character from standard in, returning the result as a number (you
-can use "string char" to convert this to a character). -1 is returned on EOF.
-
-* putch number
-
-Write a character, represented numerically, to standard output. The original
-character is returned if there is no error in doing this.
-
-* fopen file-name mode
-
-This 'fopen' opens 'file-name' in 'mode', like the C library command 'fopen'.
-This 'fopen' command does not return a file handle however, it instead
-registers a function which contains a file handle. The function itself has
-subcommands which can operate on that hidden file handle.
-
-To use this command:
-
-	set fh [fopen file.txt rb]   # Open a new file
-	$fh -seek 123 start          # Seek to a position in the file relative
-	                             # to 'start' or 'current' or 'end'
-	$fh                          # Get file position
-	$fh -close                   # Close file, remove command
-	$fh -error                   # Get error status of file
-	$fh -eof                     # Get End Of File status of file
-	$fh -getc                    # Write a character to a file
-	$fh -gets                    # Get a line from a file
-	$fh -rewind                  # Rewind the file stream
-	$fh -putc c                  # Write a single character to file
-	$fh -puts "string"           # Write a string to a file
-
-As soon as '-close' is used on the returned function, it is removed and cannot
-be used again. Subsequent uses cause errors. A similar system could be used
-to implement a more efficient list data structure, whereby a small closure
-is generated that can manipulate the list, instead of the current list
-functions.
-
-* frename src dst
-
-This renames a file on disk, from 'src' to 'dst'. A special case exists if
-'dst' is the empty string (which is usually an invalid file name), if 'dst' is
-an empty file then the file is *deleted*.
-
-* stdin
-
-A file handle, as if returned by 'fopen', that reads from the standard input
-steam. This file has been opened for reading.
-
-* stdout
-
-A file handle, as if returned by 'fopen', that reads from the standard output
-steam. This file has been opened for writing.
-
-* stdout
-
-A file handle, as if returned by 'fopen', that reads from the standard error
-output steam. This file has been opened for writing.
-
-* errno *OR* errno -string *OR* errno -string number *OR* errno -set number
-
-This command can be used to manipulated the 'errno' variable, which may get
-clobbered by the internals of the interpreter.
-
-Calling just 'errno' returns the current error number as a number. With the
-optional '-string' command it returns the string corresponding to the current
-error number. To set the current error number use 'errno -set number'. To get
-the error string corresponding to an arbitrary error number, use 'errno -string
-number'.
+Read and then evaluate a file off of disk. This may fail because the file could
+not be read or something when wrong during the evaluation.
 
 ## Compile Time Options
 
@@ -1033,26 +854,36 @@ line and then evaluates it:
 
 	#include "pickle.h"
 	#include <stdio.h>
-	#include <string.h>
-	
+	#include <stdlib.h>
+
+	static void *allocator(void *arena, void *ptr, size_t oldsz, size_t newsz) {
+		if (newsz ==     0) { free(ptr); return NULL; }
+		if (newsz  > oldsz) { return realloc(ptr, newsz); }
+		return ptr;
+	}
+
+	static int prompt(FILE *f, int err, const char *value) {
+		if (fprintf(f, "[%d]: %s\n> ", err, value) < 0)
+			return -1;
+		return fflush(f) < 0 ? -1 : 0;	
+	}
+
 	int main(void) {
 		pickle_t *p = NULL;
-		if (pickle_new(&p, NULL) < 0)
-			return -1;
-		const char *prompt = "> ";
-		fputs(prompt, stdout);
-		fflush(stdout);
-		for (char buf[80] = { 0 }; fgets(buf, sizeof buf, stdin); memset(buf, 0, sizeof buf)) {
+		if (pickle_new(&p, allocator, NULL) < 0)
+			return 1;
+		if (prompt(stdout, 0, "") < 0)
+			return 1;
+		for (char buf[512] = { 0 }; fgets(buf, sizeof buf, stdin);) {
 			const char *r = NULL;
 			const int er = pickle_eval(p, buf);
-			pickle_get_result_string(p, &r);
-			fprintf(stdout, "[%d]: %s\\n%s", er, r, prompt);
-			fflush(stdout);
+			if (pickle_get_result_string(p, &r) != PICKLE_OK)
+				return 1;
+			if (prompt(stdout, 0, r) < 0)
+				return 1;
 		}
 		return pickle_delete(p);
 	}
-
-Also present is a custom prompt.
 
 It should be obvious that the interface presented is not efficient for many
 uses, treating everything as a string has a cost. It is however simple and
@@ -1171,28 +1002,6 @@ a lot of noise to the function definitions. Also see
 
 ## Notes
 
-* The Allocator
-
-It would have been better to define the allocator like so:
-
-	#ifndef ALLOCATOR_FN
-	#define ALLOCATOR_FN
-	typedef void *(*allocator_fn)(void *arena, void *ptr, size_t oldsz, size_t newsz);
-	#endif
-
-In the header, which is what was done for the <https://github.com/howerj/cdb>,
-this has the advantage that the 'pickle\_allocator\_t' structure does not have
-to be defined and it is easier to integrate the library into the rest of the
-system by defining only one function. This is the same allocator interface as
-used in the [Lua][] interpreter.
-
-If the library was changed to use this interface the major version number 
-would have to be bumped.
-
-Another minor annoyance is that 'pickle\_version' does not return an integer
-like all the other functions in the library header...this could be changed by
-return 'PICKLE\_ERROR' when the version has not been set by the build system.
-
 * vsnprintf
 
 If you need an implementation of [vsnprintf][] the [Musl C library][] has one.
@@ -1229,13 +1038,6 @@ client <https://github.com/howerj/httpc>, Tiny compression routines
 <https://github.com/howerj/q>. These would have to be external modules that
 could be integrated with this library.
 
-* Manual page generation and build system changes
-
-The manual page, [pickle.1][], could be generated from this [readme.md][] file,
-there is a lot of duplication between the two files. The build system and
-project layout and API should be changed so that they are more similar to 
-<https://github.com/howerj/cdb> and the lessons learned from that project.
-
 ## Interpreter Limitations
 
 Known limitations of the interpreter include:
@@ -1249,6 +1051,7 @@ Known limitations of the interpreter include:
 [block.h]: block.h
 [main.c]: main.c
 [pickle.1]: pickle.1
+[pickle.c]: pickle.c
 [unit.tcl]: unit.tcl
 [picol]: http://oldblog.antirez.com/post/picol.html
 [TCL]: https://en.wikipedia.org/wiki/Tcl

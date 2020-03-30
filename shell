@@ -1,4 +1,5 @@
 #!./pickle
+# vim: syntax=tcl
 #
 # This file contains unit tests for the Pickle Interpreter. The things tested
 # in this file are mainly the commands and sub-commands that perform simple
@@ -12,40 +13,16 @@ set program [lindex $argv 2]
 set argc [llength $argv]
 
 proc usage {} {
-	set name [uplevel #0 "lindex \$argv" 0]
-	puts "Usage: $name -\[pht\]"
+	puts "Usage: [uplevel #0 {lindex $argv} 1] -\[hpst\]"
 	puts ""
 	puts "\t-h\tPrint this help message and quit"
-	puts "\t-p\tPerformance test"
-	puts "\t-s\tRun a shell"
+	puts "\t-s\tRun a shell (default)"
+	puts "\t-t\tRun the system tests"
 	puts ""
-	bye
+	exit 0
 }
 
-# if {> $argc 2} { usage }
 if {eq $program "-h" } { usage }
-
-# Crude Performance Test
-#
-# Using 'incr loop -1' greatly speeds things up, but
-# exercises less.
-#
-if {eq $program "-p" } {
-	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
-
-	proc waste {x} {
-		set loop $x;
-		while {!= 0 $loop} {
-			decr loop
-		}
-	}
-
-	# Takes about a second on my machine
-	set c [clock];
-	waste 200000;
-	puts "elapsed: [- [clock] $c]";
-	bye
-}
 
 # ### Unit Tests ### #
 
@@ -94,9 +71,9 @@ proc words {} {
 		set l [+ $l [string length $n]]
 		set c " "
 		if {> $l 80} { set c "\n"; set l 0 }
-		stdout -puts "$n$c"
+		puts -nonewline "$n$c"
 	}
-	stdout -puts "\n"
+	puts ""
 }
 
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
@@ -136,38 +113,64 @@ set initrc "$HOME/.picklerc"
 set sourced 0
 set status [catch {source $initrc} sourced]
 set status [string trim $status]
-# puts "st: $status"
 if {== 0 $sourced} { puts "$status" }
 unset status
 unset initrc
 
+set seed 1;
+
+proc random {} {
+	upvar #0 seed x;
+	if {== $x 0} {
+		incr x;
+	}
+	set x [xor $x [lshift $x 13]];
+	set x [xor $x [rshift $x 17]];
+	set x [xor $x [lshift $x  5]];
+}
+
+set i 0;
+while {< [incr i] 5} { random; }
+unset i;
+
+# upvar 1 line l
+# set l x
+
 proc io {} {
-	upvar 1 line l
 	set e -1
 	set l [catch {gets} e]
 	if {or [eq [decode $e] break] [eq [decode $e] error]} {
-		if {eq $l EOF} {
-			exit 0
+		if {eq $l "EOF"} {
+			return "EOF" 2
 		}
-		exit 1
+		return "ERROR" 2
 	}
+	return $l
 }
 
+proc true {}  { return 1 }
+proc false {} { return 0 }
+
 proc shell {} {
-	upvar #0 prompt prompt
-	stdout -puts "\[[green]0[normal]\] $prompt"
-	io
-	while {ne $line ""} {
+	set prompt "pickle> "
+	set count 0
+	while {incr count} {
+		puts -nonewline $prompt
+		set line [io]
 		set result [catch {eval $line} retcode]
 		set fail [red]
 		if {== $retcode 0} { set fail [green] }
-		stdout -puts "\[$fail$retcode[normal]\] $result\n$prompt "
-		io
+		puts "\[$fail$retcode[normal]\] $result"
 	}
 }
 
-if {eq $program "-s" } { 
-	shell 
+if {or [eq $program "-s"] [eq $program ""]} { 
+	shell
+	break
+}
+
+if {ne $program "-t"} {
+	usage
 }
 
 # ### Clean up   ### #
@@ -226,7 +229,6 @@ puts "\tstring:     [info limits string]"
 puts "\tminimum:    [info limits minimum]"
 puts "\tmaximum:    [info limits maximum]"
 puts "Features:"
-puts "\tallocator:  [info features allocator]"
 puts "\tstring:     [info features string]"
 puts "\tmaths:      [info features maths]"
 puts "\tdebugging:  [info features debugging]"
@@ -699,44 +701,12 @@ if {!= $failed 0} {
 	set emphasize [red]
 }
 
+puts
 puts "$emphasize   pass[normal]/[blue]total $emphasize$passed[normal]/[blue]$total[normal]"
+puts
 puts "\[[blue]DONE[normal]\]"
-
-if {== "[heap]" 0 } {
-	puts "Custom allocator not used"
-	# Causes memory leak to appear in Valgrind, not a real leak however.
-	# We should not really exit here as it prevents cleanup
-	exit $failed
+if {!= 0 $failed} {
+	return "Test Failure" -1
 }
-
-puts "MEMORY STATISTICS"
-
-set heaps [heap arenas]
-set m 0
-set i 0
-
-while {< $i $heaps} {
-	set blk   [heap arena-block  $i]
-	set sz    [heap arena-size   $i]
-	set used  [heap arena-active $i]
-	set max   [heap arena-max    $i]
-	set m [+ $m [* $blk $sz]]
-	puts "ARENA $i:   $blk $sz $used $max"
-	incr i
-}
-
-puts "TOTAL:      [heap total]"
-puts "BLOCK:      [heap blocks]"
-puts "MAX:        [heap max]"
-puts "ACTIVE:     [heap active]"
-puts "FREED:      [heap freed]"
-puts "ALLOC:      [heap allocs]"
-puts ""
-puts "MEMORY:     $m"
-puts "EFFICIENCY: [/ [* [heap total] 100] [heap blocks]]%"
-puts "WASTED:     [- 100 [/ [* [heap max] 100] $m]]%"
-
-unset heaps; unset i; unset m; unset blk; unset sz; unset used;
-
-# Prints wrong line number on Windows, related (depends on this line!)
+break
 

@@ -2,55 +2,41 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x010001ul
+VERSION = 0x020000ul
 TARGET  = pickle
-CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -g -fPIC -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic -Os -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
 ARFLAGS = rcs
 TRACE   =
 DESTDIR = install
-
-ifeq ($(OS),Windows_NT)
-DLL=dll
-else # Assume Unixen
-DLL=so
-endif
 
 .PHONY: all run test clean install dist
 
 all: ${TARGET}
 
 run: ${TARGET}
-	${TRACE} ./${TARGET} ${FILE}
+	${TRACE} ./${TARGET} shell
 
-test: ${TARGET} unit.tcl
-	./${TARGET} -t
-	./${TARGET} -a unit.tcl
+test: ${TARGET} shell
+	./${TARGET} shell -t 
 
-main.o: main.c ${TARGET}.h block.h
+main.o: main.c ${TARGET}.h
 
 ${TARGET}.o: ${TARGET}.c ${TARGET}.h
-
-block.o: block.c block.h
-
-unit: lib${TARGET}.a block.o unit.o
 
 lib${TARGET}.a: ${TARGET}.o
 	${AR} ${ARFLAGS} $@ $<
 
-lib${TARGET}.${DLL}: ${TARGET}.o ${TARGET}.h
-	${CC} ${CFLAGS} -shared ${TARGET}.o -o $@
-
-${TARGET}: main.o block.o lib${TARGET}.a
+${TARGET}: main.o lib${TARGET}.a
 	${CC} ${CFLAGS} $^ -o $@
+	-strip ${TARGET}
 
-# ${TARGET}.1: readme.md
-#	pandoc -s -f markdown -t man $< -o $@
+${TARGET}.1: readme.md
+	pandoc -s -f markdown -t man $< -o $@
 
-install: ${TARGET} lib${TARGET}.a lib${TARGET}.${DLL} ${TARGET}.1 .git
+install: ${TARGET} lib${TARGET}.a ${TARGET}.1 .git
 	install -p -D ${TARGET} ${DESTDIR}/bin/${TARGET}
 	install -p -m 644 -D lib${TARGET}.a ${DESTDIR}/lib/lib${TARGET}.a
-	install -p -D lib${TARGET}.${DLL} ${DESTDIR}/lib/lib${TARGET}.${DLL}
 	install -p -m 644 -D ${TARGET}.h ${DESTDIR}/include/${TARGET}.h
 	-install -p -m 644 -D ${TARGET}.1 ${DESTDIR}/man/${TARGET}.1
 	mkdir -p ${DESTDIR}/src
