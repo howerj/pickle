@@ -50,8 +50,6 @@
 #include <stdio.h>   /* vsnprintf */
 #include <string.h>  /* memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr */
 
-#define PICKLE_MAX_RECURSION      (128) /* Recursion limit */
-
 #define SMALL_RESULT_BUF_SZ       (96)
 #define PRINT_NUMBER_BUF_SZ       (64 /* base 2 */ + 1 /* '-'/'+' */ + 1 /* NUL */)
 #define VERSION                   (1989)
@@ -96,6 +94,10 @@
 
 #ifndef DEFINE_REGEX
 #define DEFINE_REGEX      (1)
+#endif
+
+#ifndef PICKLE_MAX_RECURSION
+#define PICKLE_MAX_RECURSION      (128) /* Recursion limit */
 #endif
 
 #ifndef USE_MAX_STRING
