@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x020000ul
+VERSION = 0x020001ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -Os -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -47,8 +47,8 @@ dist: install
 	tar zcf ${TARGET}-${VERSION}.tgz ${DESTDIR}
 
 check:
-	scan-build make
-	cppcheck --enable=all *.c
+	-scan-build make
+	-cppcheck --enable=all *.c
 
 clean:
 	git clean -dffx

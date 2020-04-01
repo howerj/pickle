@@ -76,7 +76,7 @@ static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 
 static char *slurp(FILE *input) {
 	char *m = NULL;
-	size_t sz = 0, inc = 0;
+	size_t sz = 0;
 	for (;;) {
 		char *n = realloc(m, sz + 4096 + 1);
 		if (!n) {
@@ -84,7 +84,7 @@ static char *slurp(FILE *input) {
 			return NULL;
 		}
 		m = n;
-		inc = fread(&m[sz], 1, 4096, input);
+		const size_t inc = fread(&m[sz], 1, 4096, input);
 		sz += inc;
 		if (inc != 4096)
 			break;

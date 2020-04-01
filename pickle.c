@@ -1380,6 +1380,7 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 			t = NULL;
 			argc++;
 		} else { /* Interpolation */
+			assert(argv);
 			const int oldlen = picolStrlen(argv[argc - 1]), ilen = picolStrlen(t);
 			char *arg = picolRealloc(i, argv[argc - 1], oldlen + ilen + 1);
 			if (!arg) {
