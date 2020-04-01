@@ -114,7 +114,7 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 }
 
 static int evalFile(pickle_t *i, char *file) {
-	const int r = file ? 
+	const int r = file ?
 		commandSource(i, 2, (char*[2]){ "source", file }, NULL):
 		commandSource(i, 1, (char*[1]){ "source",      }, NULL);
 	if (r != PICKLE_OK) {

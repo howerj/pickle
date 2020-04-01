@@ -254,7 +254,7 @@ then evaluate the string, returning the result of the evaluation.
 
 * apply {{arg-list} {body}} args
 
-Applies an argument list to a function body, substituting the provided 
+Applies an argument list to a function body, substituting the provided
 arguments into the variables.
 
 Examples:
@@ -270,16 +270,16 @@ It essential allows for anonymous functions to be made.
 
 The following mathematical operations are defined:
 
-'+', '-', '\*', '/', 'mod', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!=', 
-'min', 'max', 'pow', and 'log'. It should be obvious what each one does. 
+'+', '-', '\*', '/', 'mod', '&lt;', '&lt;=', '&gt;', '&gt;=', '==', '!=',
+'min', 'max', 'pow', and 'log'. It should be obvious what each one does.
 
-It should be noted that because all variables are stored internally as strings, 
-mathematical operations are egregiously slow. Numbers are first converted to 
-strings, the operation performed, then converted back to strings. There are 
+It should be noted that because all variables are stored internally as strings,
+mathematical operations are egregiously slow. Numbers are first converted to
+strings, the operation performed, then converted back to strings. There are
 also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'.
 
 There are also the following unary mathematical operators defined: 'not'
-(logical negation), 'invert' (bitwise inversion), 'abs' (absolute value), 
+(logical negation), 'invert' (bitwise inversion), 'abs' (absolute value),
 'bool' (turn number into a boolean 0 or 1), 'negate' (negate a number).
 
 Numbers conversion is strict, an invalid number will not be silently converted
@@ -433,7 +433,7 @@ The pattern is a number to search for.
 
   - '-glob' (default)
 
-This subcommand uses the same [regex][] syntax (and engine) as the 
+This subcommand uses the same [regex][] syntax (and engine) as the
 'string match' subcommand, it is quite limited, and it is the default search
 option.
 
@@ -449,7 +449,7 @@ Start at the specified index instead of at zero.
 
 Split a string into a list, the value to split on is not a regular expression,
 but a string literal. There is a special case where the value to split on is
-the empty string, in this case it splits a string into a list of its 
+the empty string, in this case it splits a string into a list of its
 constituent characters.
 
 * lappend variable values...
@@ -757,7 +757,7 @@ There are other compile time options within [pickle.c][] that control;
 maximum string length and whether to use one, whether to provide the default
 allocator or not, whether certain functions are to be made available to the
 interpreter or not (such as the command 'string', the mathematical operators
-and the list functions), and whether strict numeric conversion is used. 
+and the list functions), and whether strict numeric conversion is used.
 These options are semi-internal, they are subject to change and removal, you
 should use the source to determine what they are and be aware that they may
 change across releases.
@@ -865,7 +865,7 @@ line and then evaluates it:
 	static int prompt(FILE *f, int err, const char *value) {
 		if (fprintf(f, "[%d]: %s\n> ", err, value) < 0)
 			return -1;
-		return fflush(f) < 0 ? -1 : 0;	
+		return fflush(f) < 0 ? -1 : 0;
 	}
 
 	int main(void) {
@@ -1008,7 +1008,7 @@ If you need an implementation of [vsnprintf][] the [Musl C library][] has one.
 This is the most complicate C function in use from the standard library and the
 one most likely not to be available in an embedded platform (although the base
 software packages are getting better nowadays). It is not difficult to make
-your own version of [vsnprintf][] function usable by this library as you do not 
+your own version of [vsnprintf][] function usable by this library as you do not
 need to support all of the functionality library function, for example,
 floating point numbers are not used within this library.
 
@@ -1025,7 +1025,7 @@ this would be use something similar to the file functions in this library.
 The project is currently pretty corpulent there are; too many functions in the
 header, the example program in [main.c][] is much bigger than it needs to be
 (it really only needs to be big enough to run the units tests in [unit.tcl][],
-see [unit.c][] for an alternative), and the [pickle.c][] file is pretty big 
+see [unit.c][] for an alternative), and the [pickle.c][] file is pretty big
 (although the biggest offenders can be turned off).
 
 * A module system and some modules

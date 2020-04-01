@@ -164,7 +164,7 @@ proc shell {} {
 	}
 }
 
-if {or [eq $program "-s"] [eq $program ""]} { 
+if {or [eq $program "-s"] [eq $program ""]} {
 	shell
 	break
 }

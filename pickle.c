@@ -1368,7 +1368,7 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 			argc = 0;
 			continue;
 		}
-	
+
 		if (prevtype == PT_SEP || prevtype == PT_EOL) { /* New token, append to the previous or as new arg? */
 			char **old = argv;
 			if (!(argv = picolRealloc(i, argv, sizeof(char*)*(argc + 1)))) {
@@ -1481,7 +1481,7 @@ static inline int tr_init(tr_t *t, int translate, int compliment, const char *se
 	for (unsigned char from = 0; (from = *set1); set1++) {
 		if (translate) {
 			const unsigned char to = *set2;
-			t->set[to]   |= 0x100; 
+			t->set[to]   |= 0x100;
 			t->set[from] = (t->set[from] & 0x100) | to;
 			if (to && set2[1])
 				set2++;
@@ -1585,7 +1585,7 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			return trimOps(i, &h, TRIM_LEFT, arg1, string_white_space);
 		if (!compare(rq, "trimright"))
 			return trimOps(i, &h, TRIM_RIGHT, arg1, string_white_space);
-		if (!compare(rq, "trim")) 
+		if (!compare(rq, "trim"))
 			return trimOps(i, &h, TRIM, arg1, string_white_space);
 		if (!compare(rq, "length"))
 			return picolSetResultNumber(i, picolStrlen(arg1));
@@ -1646,7 +1646,7 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			return trimOps(i, &h, TRIM_LEFT, arg1, arg2);
 		if (!compare(rq, "trimright"))
 			return trimOps(i, &h, TRIM_RIGHT, arg1, arg2);
-		if (!compare(rq, "trim")) 
+		if (!compare(rq, "trim"))
 			return trimOps(i, &h, TRIM, arg1, arg2);
 		if (!compare(rq, "match"))  {
 			const int r = match(arg1, arg2, PICKLE_MAX_RECURSION - i->level);
@@ -2218,7 +2218,7 @@ static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, voi
 
 enum { INTEGER, STRING };
 
-static inline int order(pickle_t *i, int op, int rev, const char *a, const char *b) { 
+static inline int order(pickle_t *i, int op, int rev, const char *a, const char *b) {
 	assert(i);
 	assert(a);
 	assert(b);
@@ -2313,7 +2313,7 @@ static inline int picolCommandLReplace(pickle_t *i, const int argc, char **argv,
 	if (picolStringToNumber(i, argv[3], &last) != PICKLE_OK)
 		return PICKLE_ERROR;
 	if (last < first || first < 0) {
-		char *args = concatenate(i, " ", argc - 4, argv + 4, 1, 0); 
+		char *args = concatenate(i, " ", argc - 4, argv + 4, 1, 0);
 		if (!args)
 			return PICKLE_ERROR;
 		const int r1 = picolDoLInsert(i, argv[1], argv[2], 1, (char *[1]) { args }, 0);
@@ -2363,10 +2363,10 @@ static inline int picolCommandLSearch(pickle_t *i, const int argc, char **argv, 
 	int op = oGLOB, last = argc - 2, index = -1, not = 0, inl = 0;
 	char *list = argv[argc - 2], *pattern = argv[argc - 1];
 	for (int j = 1; j < last; j++) {
-		     if (!compare(argv[j], "-integer")) { op = oINTEGER; } 
-		else if (!compare(argv[j], "-exact"))   { op = oEXACT; } 
-		else if (!compare(argv[j], "-inline"))  { inl = 1; } 
-		else if (!compare(argv[j], "-not"))     { not = 1; } 
+		     if (!compare(argv[j], "-integer")) { op = oINTEGER; }
+		else if (!compare(argv[j], "-exact"))   { op = oEXACT; }
+		else if (!compare(argv[j], "-inline"))  { inl = 1; }
+		else if (!compare(argv[j], "-not"))     { not = 1; }
 		else if (!compare(argv[j], "-glob"))    { op = oGLOB; }
 		else if (!compare(argv[j], "-start")) {
 			if (!((j + 1) < last))
@@ -2650,11 +2650,8 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 			*p = '\0';
 		if (++arity > (argc - 1))
 			goto arityerr;
-		if (pickle_set_var_string(i, start, argv[arity]) != PICKLE_OK) {
-			(void)picolFree(i, tofree);
-			(void)picolDropCallFrame(i);
-			return PICKLE_ERROR;
-		}
+		if (pickle_set_var_string(i, start, argv[arity]) != PICKLE_OK)
+			goto error;
 		p++;
 	}
 	if (picolFree(i, tofree) != PICKLE_OK)
@@ -2671,8 +2668,8 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 arityerr:
 	(void)pickle_set_result_error(i, "Invalid argument count for %s", argv[0]);
 error:
-	picolFree(i, tofree);
-	picolDropCallFrame(i);
+	(void)picolFree(i, tofree);
+	(void)picolDropCallFrame(i);
 	return PICKLE_ERROR;
 }
 
@@ -2700,12 +2697,9 @@ static int picolCommandProc(pickle_t *i, const int argc, char **argv, void *pd) 
 	assert(!pd);
 	if (argc != 4)
 		return pickle_set_result_error_arity(i, 4, argc, argv);
-	pickle_command_t *np = picolGetCommand(i, argv[1]);
-	if (np) {
-		if (picolUnsetCommand(i, argv[1]) != PICKLE_OK) {
+	if (picolGetCommand(i, argv[1]))
+		if (picolUnsetCommand(i, argv[1]) != PICKLE_OK)
 			return PICKLE_ERROR;
-		}
-	}
 	return picolCommandAddProc(i, argv[1], argv[2], argv[3], 0);
 }
 
@@ -3043,14 +3037,14 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 
 /* Regular Expression Engine
  * Modified from:
- * https://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html 
+ * https://www.cs.princeton.edu/courses/archive/spr09/cos333/beautiful.html
  *
  * Supports: "^$.*+?", escaping, and classes "\w\W\s\S\d\D"
  * Nice to have: hex escape sequences, ability to work on binary data. */
 
 enum { /* watch out for those negatives */
 	START =  '^', ESC    =  '\\', EOI  = '\0',
-	END   = -'$', ANY    = -'.', MANY = -'*', ATLEAST = -'+', MAYBE  = -'?', 
+	END   = -'$', ANY    = -'.', MANY = -'*', ATLEAST = -'+', MAYBE  = -'?',
 	ALPHA = -'w', NALPHA = -'W',
 	DIGIT = -'d', NDIGIT = -'D',
 	SPACE = -'s', NSPACE = -'S',
@@ -3061,7 +3055,7 @@ enum { LAZY, GREEDY, POSSESSIVE };
 /* escape a character, or return an operator */
 static int regexEscape(const unsigned ch, const int esc) {
 	switch (ch) {
-	case -END: case -ANY: case -MANY: case -ATLEAST: case -MAYBE: 
+	case -END: case -ANY: case -MANY: case -ATLEAST: case -MAYBE:
 		return esc ? ch : -ch;
 	case 'w': return esc ? ALPHA  : 'w';
 	case 'W': return esc ? NALPHA : 'W';
@@ -3227,7 +3221,7 @@ static inline int picolCommandRegex(pickle_t *i, const int argc, char **argv, vo
 	if (argc < 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
 	number_t index = 0;
-	unsigned type = GREEDY, nocase = 0;	
+	unsigned type = GREEDY, nocase = 0;
 	const int last = argc - 2;
 	for (int j = 1; j < last; j++) {
 		if (!compare(argv[j], "-nocase")) {
