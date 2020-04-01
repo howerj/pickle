@@ -2698,6 +2698,12 @@ static int picolCommandProc(pickle_t *i, const int argc, char **argv, void *pd) 
 	assert(!pd);
 	if (argc != 4)
 		return pickle_set_result_error_arity(i, 4, argc, argv);
+	pickle_command_t *np = picolGetCommand(i, argv[1]);
+	if (np) {
+		if (picolUnsetCommand(i, argv[1]) != PICKLE_OK) {
+			return PICKLE_ERROR;
+		}
+	}
 	return picolCommandAddProc(i, argv[1], argv[2], argv[3], 0);
 }
 

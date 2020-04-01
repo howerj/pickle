@@ -588,7 +588,7 @@ fails {proc}
 fails {proc x}
 fails {proc x n}
 state {proc def {x} {}}
-fails {proc def {x} {}}
+test {} {proc def {x} {}}
 state {rename def ""}
 fails {variadic}
 state {variadic v1 n { return $n 0 }}
