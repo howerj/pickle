@@ -1938,9 +1938,16 @@ static int picolCommandSet(pickle_t *i, const int argc, char **argv, void *pd) {
 
 static int picolCommandCatch(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	if (argc != 3)
+	if (argc != 2 && argc != 3)
 		return pickle_set_result_error_arity(i, 3, argc, argv);
-	return picolSetVarInteger(i, argv[2], picolEval(i, argv[1]));
+	const int r = picolEval(i, argv[1]);
+	const char *s = NULL;
+	if (pickle_get_result_string(i, &s) != PICKLE_OK)
+		return PICKLE_ERROR;
+	if (argc == 3)
+		if (pickle_set_var_string(i, argv[2], s) != PICKLE_OK)
+			return PICKLE_ERROR;
+	return pickle_set_result_integer(i, r);
 }
 
 static int picolCommandIf(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2623,7 +2630,7 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 		return pickle_set_result_error(i, "Invalid recursion %d", PICKLE_MAX_RECURSION);
 	char **x = pd, *alist = x[0], *body = x[1], *tofree = NULL;
 	char *p = picolStrdup(i, alist);
-	int arity = 0, errcode = PICKLE_OK;
+	int arity = 0;
 	pickle_call_frame_t *cf = picolMalloc(i, sizeof(*cf));
 	if (!cf || !p) {
 		(void)picolFree(i, p);
@@ -2651,6 +2658,7 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 			*p = '\0';
 		if (++arity > (argc - 1))
 			goto arityerr;
+		/* TODO: Special case 'args' as last argument for variadic functions and remove 'variadic' */
 		if (pickle_set_var_string(i, start, argv[arity]) != PICKLE_OK)
 			goto error;
 		p++;
@@ -2660,7 +2668,7 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 	tofree = NULL;
 	if (arity != (argc - 1))
 		goto arityerr;
-	errcode = picolEval(i, body);
+	int errcode = picolEval(i, body);
 	if (errcode == PICKLE_RETURN)
 		errcode = PICKLE_OK;
 	if (picolDropCallFrame(i) != PICKLE_OK)
@@ -3750,9 +3758,10 @@ int pickle_set_var_string(pickle_t *i, const char *name, const char *val) {
 	pre(i);
 	assert(name);
 	assert(val);
+	int r = PICKLE_OK;
 	pickle_var_t *v = picolGetVar(i, name, 1);
 	if (v) {
-		picolFreeVarVal(i, v);
+		r = picolFreeVarVal(i, v);
 		if (picolSetVarString(i, v, val) != PICKLE_OK)
 			return post(i, PICKLE_ERROR);
 	} else {
@@ -3770,7 +3779,7 @@ int pickle_set_var_string(pickle_t *i, const char *name, const char *val) {
 		v->next = i->callframe->vars;
 		i->callframe->vars = v;
 	}
-	return post(i, PICKLE_OK);
+	return post(i, r);
 }
 
 int pickle_get_var_string(pickle_t *i, const char *name, const char **val) {
@@ -3851,8 +3860,9 @@ int pickle_set_result_error_arity(pickle_t *i, const int expected, const int arg
 	char *as = concatenate(i, " ", argc, argv, 1, 0);
 	if (!as)
 		return post(i, PICKLE_ERROR);
-	const int r = pickle_set_result_error(i, "Invalid argument count for %s (expected %d)\nGot: %s", argv[0], expected - 1, as);
-	picolFree(i, as);
+	const int r = pickle_set_result_error(i, "Invalid argument count for %s (expected %d) got: %s", argv[0], expected - 1, as);
+	if (picolFree(i, as) != PICKLE_OK)
+		return post(i, PICKLE_ERROR);
 	return post(i, r);
 }
 

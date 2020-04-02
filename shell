@@ -50,16 +50,11 @@ proc green  {} { color "\x1b\[32;1m" }
 proc blue   {} { color "\x1b\[34;1m" }
 
 proc defined {x} {
-	set i 0
-	set m [info command]
-	set r undefined
-	while {< $i $m} {
+	for {set i 0; set m [info command]} {< $i $m} {incr i} {
 		if {eq $x [info command name $i]} { return command }
-		incr i
 	}
-	catch {uplevel 1 "set $x"} e
-	if {eq 0 $e} { return variable }
-	return $r
+	if {eq 0 [catch {uplevel 1 "set $x"}]} { return variable }
+	return undefined
 }
 
 # ### Shell      ### #
@@ -108,14 +103,14 @@ proc decode {r} {
 }
 
 set HOME [getenv $HOME]
-set initrc "$HOME/.picklerc"
+#set initrc "$HOME/.picklerc"
 
-set sourced 0
-set status [catch {source $initrc} sourced]
-set status [string trim $status]
-if {== 0 $sourced} { puts "$status" }
-unset status
-unset initrc
+#set sourced 0
+#set status [catch {source $initrc} sourced]
+#set status [string trim $status]
+#if {== 0 $sourced} { puts "$status" }
+#unset status
+#unset initrc
 
 set seed 1;
 
@@ -137,8 +132,7 @@ unset i;
 # set l x
 
 proc io {} {
-	set e -1
-	set l [catch {gets} e]
+	set e [catch {gets} l]
 	if {or [eq [decode $e] break] [eq [decode $e] error]} {
 		if {eq $l "EOF"} {
 			return "EOF" 2
@@ -157,7 +151,7 @@ proc shell {} {
 	while {incr count} {
 		puts -nonewline $prompt
 		set line [io]
-		set result [catch {eval $line} retcode]
+		set retcode [catch {eval $line} result]
 		set fail [red]
 		if {== $retcode 0} { set fail [green] }
 		puts "\[$fail$retcode[normal]\] $result"
@@ -186,8 +180,7 @@ unset argc
 # BUG: If the unit test sets the value of 'x' then it can mess
 # up printing the error.
 proc test {result x} {
-	set retcode 0
-	set r [catch $x retcode]
+	set retcode [catch $x r]
 	upvar #0 total t
 	incr t
 
@@ -202,8 +195,7 @@ proc test {result x} {
 
 # Test failure cases
 proc fails {x} {
-	set retcode 0
-	set r [catch $x retcode]
+	set retcode [catch $x r]
 	upvar #0 total t
 	incr t
 	if {== $retcode -1} {
