@@ -503,10 +503,9 @@ static int picolForceResult(pickle_t *i, const char *result, const int is_static
 }
 
 static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *pd);
-static int picolCommandCallVariadic(pickle_t *i, const int argc, char **argv, void *pd);
 
 static int picolIsDefinedProc(pickle_command_func_t func) {
-	return func == picolCommandCallProc || func == picolCommandCallVariadic;
+	return func == picolCommandCallProc;
 }
 
 /* <https://stackoverflow.com/questions/4384359/> */
@@ -2594,43 +2593,13 @@ static int picolDropAllCallFrames(pickle_t *i) {
 	return r;
 }
 
-static int picolCommandCallVariadic(pickle_t *i, const int argc, char **argv, void *pd) {
-	assert(pd);
-	int errcode = PICKLE_OK;
-	char **x = pd;
-	if (i->level > (int)PICKLE_MAX_RECURSION)
-		return pickle_set_result_error(i, "Invalid recursion %d", PICKLE_MAX_RECURSION);
-	pickle_call_frame_t *cf = picolMalloc(i, sizeof(*cf));
-	if (!cf)
-		return PICKLE_ERROR;
-	cf->vars     = NULL;
-	cf->parent   = i->callframe;
-	i->callframe = cf;
-	i->level++;
-	char *val = concatenate(i, " ", argc - 1, argv + 1, 1, 0);
-	if (!val)
-		goto error;
-	if (pickle_set_var_string(i, x[0], val) != PICKLE_OK)
-		goto error;
-	errcode = picolEval(i, x[1]);
-	if (picolDropCallFrame(i) != PICKLE_OK)
-		errcode = PICKLE_ERROR;
-	if (picolFree(i, val) != PICKLE_OK)
-		errcode = PICKLE_ERROR;
-	return errcode;
-error:
-	(void)picolDropCallFrame(i);
-	(void)picolFree(i, val);
-	return PICKLE_ERROR;
-}
-
 static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *pd) {
 	assert(pd);
 	if (i->level > (int)PICKLE_MAX_RECURSION)
 		return pickle_set_result_error(i, "Invalid recursion %d", PICKLE_MAX_RECURSION);
 	char **x = pd, *alist = x[0], *body = x[1], *tofree = NULL;
 	char *p = picolStrdup(i, alist);
-	int arity = 0;
+	int arity = 0, variadic = 0;
 	pickle_call_frame_t *cf = picolMalloc(i, sizeof(*cf));
 	if (!cf || !p) {
 		(void)picolFree(i, p);
@@ -2656,17 +2625,35 @@ static int picolCommandCallProc(pickle_t *i, const int argc, char **argv, void *
 			done = 1;
 		else
 			*p = '\0';
-		if (++arity > (argc - 1))
+		if (++arity > (argc - 1)) {
+			if (!compare(start, "args")) {
+				if (pickle_set_var_string(i, start, "") != PICKLE_OK)
+					goto error;
+				variadic = 1;
+				break;
+			}
 			goto arityerr;
-		/* TODO: Special case 'args' as last argument for variadic functions and remove 'variadic' */
-		if (pickle_set_var_string(i, start, argv[arity]) != PICKLE_OK)
-			goto error;
+		}
+		if (done && !compare(start, "args")) {  /* special case: args as last argument */
+			variadic = 1;
+			char *cat = NULL;
+			if (pickle_concatenate(i, argc - arity, &argv[arity], &cat) != PICKLE_OK)
+				goto error;
+			int r = pickle_set_var_string(i, start, cat);
+			if (picolFree(i, cat) != PICKLE_OK)
+				r = PICKLE_ERROR;
+			if (r != PICKLE_OK)
+				goto error;
+		} else {
+			if (pickle_set_var_string(i, start, argv[arity]) != PICKLE_OK)
+				goto error;
+		}
 		p++;
 	}
 	if (picolFree(i, tofree) != PICKLE_OK)
 		goto error;
 	tofree = NULL;
-	if (arity != (argc - 1))
+	if (!variadic && arity != (argc - 1))
 		goto arityerr;
 	int errcode = picolEval(i, body);
 	if (errcode == PICKLE_RETURN)
@@ -2682,7 +2669,7 @@ error:
 	return PICKLE_ERROR;
 }
 
-static int picolCommandAddProc(pickle_t *i, const char *name, const char *args, const char *body, int variadic) {
+static int picolCommandAddProc(pickle_t *i, const char *name, const char *args, const char *body) {
 	assert(i);
 	assert(name);
 	assert(args);
@@ -2698,7 +2685,7 @@ static int picolCommandAddProc(pickle_t *i, const char *name, const char *args, 
 		(void)picolFree(i, procdata);
 		return PICKLE_ERROR;
 	}
-	return pickle_register_command(i, name, variadic ? picolCommandCallVariadic : picolCommandCallProc, procdata);
+	return pickle_register_command(i, name, picolCommandCallProc, procdata);
 }
 
 static int picolCommandProc(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2709,15 +2696,7 @@ static int picolCommandProc(pickle_t *i, const int argc, char **argv, void *pd) 
 	if (picolGetCommand(i, argv[1]))
 		if (picolUnsetCommand(i, argv[1]) != PICKLE_OK)
 			return PICKLE_ERROR;
-	return picolCommandAddProc(i, argv[1], argv[2], argv[3], 0);
-}
-
-static int picolCommandVariadic(pickle_t *i, const int argc, char **argv, void *pd) {
-	UNUSED(pd);
-	assert(!pd);
-	if (argc != 4)
-		return pickle_set_result_error_arity(i, 4, argc, argv);
-	return picolCommandAddProc(i, argv[1], argv[2], argv[3], 1);
+	return picolCommandAddProc(i, argv[1], argv[2], argv[3]);
 }
 
 static int picolCommandRename(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2981,10 +2960,8 @@ located:
 	if (!compare(rq, "type")) {
 		if (c->func == picolCommandCallProc)
 			return pickle_set_result(i, "proc");
-		if (c->func == picolCommandCallVariadic)
-			return pickle_set_result(i, "variadic");
 		return pickle_set_result(i, "built-in");
-	}else if (!compare(rq, "args")) {
+	} else if (!compare(rq, "args")) {
 		if (!defined)
 			return pickle_set_result(i, "%p", c->privdata);
 		char **procdata = c->privdata;
@@ -3301,7 +3278,6 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "conjoin",   picolCommandConjoin,   NULL },
 		{ "list",      picolCommandList,      NULL },
 		{ "proc",      picolCommandProc,      NULL },
-		{ "variadic",  picolCommandVariadic,  NULL },
 		{ "rename",    picolCommandRename,    NULL },
 		{ "return",    picolCommandReturn,    NULL },
 		{ "set",       picolCommandSet,       NULL },
@@ -3880,7 +3856,7 @@ int pickle_rename_command(pickle_t *i, const char *src, const char *dst) {
 	int r = PICKLE_ERROR;
 	if (picolIsDefinedProc(np->func)) {
 		char **procdata = (char**)np->privdata;
-		r = picolCommandAddProc(i, dst, procdata[0], procdata[1], np->func == picolCommandCallVariadic);
+		r = picolCommandAddProc(i, dst, procdata[0], procdata[1]);
 	} else {
 		r = pickle_register_command(i, dst, np->func, np->privdata);
 	}

@@ -582,12 +582,18 @@ fails {proc x n}
 state {proc def {x} {}}
 test {} {proc def {x} {}}
 state {rename def ""}
-fails {variadic}
-state {variadic v1 n { return $n 0 }}
+state {proc v1 {args} { return $args 0 }}
 test {a b {c d}} {v1 a b {c d}}
 test {a} {v1 a}
 test {} {v1}
+state {proc v2 {x y args} { set r "$x $y $args"; return $r 0 }}
+test  {a b {c d} {e f}} {v2 a b {c d} {e f}}
+test  {a b {c d}} {v2 a b {c d}}
+fails {v2 a}
+test  {a b } {v2 a b}
+fails {v2}
 state {rename v1 ""}
+state {rename v2 ""}
 fails {rename}
 fails {rename XXX}
 fails {rename XXX YYY}

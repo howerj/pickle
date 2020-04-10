@@ -195,30 +195,10 @@ with the arguments in 'argument list', and code to be executed in the 'function
 body'. If the final command is not a 'return' then the result of the last
 command is used.
 
-* variadic identifier name {function body}
-
-In [TCL][] syntax is used for variadic functions, this is one area in which
-pickle differs, instead a special type of procedure can be created with the
-'variadic' command. When the variadic function is called the arguments passed
-to it are concatenated together to form a list which is assigned to the
-argument 'name' given.
-
-For example:
-
-	variadic example l { puts $l }
-	example
-	example a
-	example a b
-	example a b {c d}
-
-Prints:
-
-	""
-	"a"
-	"a b"
-	"a b {c d}"
-
-Respectively.
+There is a special case whereby the last argument in the argument list is
+called 'args', if this is the case then the renaming arguments are concatenated
+together and passed in to the function body. This allows variadic functions to
+be created.
 
 * return string? number?
 
