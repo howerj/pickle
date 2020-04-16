@@ -94,16 +94,15 @@ static char *slurp(FILE *input) {
 }
 
 static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
-	UNUSED(pd);
 	if (argc != 1 && argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
 	errno = 0;
-	FILE *file = argc == 1 ? stdin : fopen(argv[1], "rb");
+	FILE *file = argc == 1 ? pd : fopen(argv[1], "rb");
 	if (!file)
 		return pickle_set_result_error(i, "Could not open file '%s' for reading: %s", argv[1], strerror(errno));
 
 	char *program = slurp(file);
-	if (file != stdin)
+	if (file != pd)
 		fclose(file);
 	if (!program)
 		return pickle_set_result_error(i, "Out Of Memory");
@@ -116,7 +115,7 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 static int evalFile(pickle_t *i, char *file) {
 	const int r = file ?
 		commandSource(i, 2, (char*[2]){ "source", file }, NULL):
-		commandSource(i, 1, (char*[1]){ "source",      }, NULL);
+		commandSource(i, 1, (char*[1]){ "source",      }, stdin);
 	if (r != PICKLE_OK) {
 		const char *f = NULL;
 		if (pickle_get_result_string(i, &f) != PICKLE_OK)
