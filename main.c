@@ -14,33 +14,58 @@ static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t 
 	return ptr;
 }
 
+static char *slurp(pickle_t *i, FILE *input, size_t *length, char *class) {
+	char *m = NULL;
+	const size_t bsz = class ? 4096 : 80;
+	size_t sz = 0;
+	if (length)
+		*length = 0;
+	for (;;) {
+		if (pickle_reallocate(i, (void**)&m, sz + bsz + 1) != PICKLE_OK)
+			return NULL;
+		if (class) {
+			size_t j = 0;
+			int ch = 0, done = 0;
+			for (; ((ch = fgetc(input)) != EOF) && j < bsz; ) {
+				m[sz + j++] = ch;
+				if (strchr(class, ch)) {
+					done = 1;
+					break;
+				}
+			}
+			sz += j;
+			if (done || ch == EOF)
+				break;
+		} else {
+			size_t inc = fread(&m[sz], 1, bsz, input);
+			sz += inc;
+			if (inc != bsz)
+				break;
+		}
+	}
+	m[sz] = '\0'; /* ensure NUL termination */
+	if (length)
+		*length = sz;
+	return m;
+}
+
 static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
-	FILE *in = pd;
 	if (argc != 1)
 		return pickle_set_result_error_arity(i, 1, argc, argv);
-	char *m = NULL;
-	for (size_t sz = 1, osz = 1;;) {
-		char buf[128] = { 0 }; /* must be at least 2 bytes big */
-		if (!fgets(buf, sizeof buf, in)) {
-			free(m);
-			if (pickle_set_result(i, "EOF") != PICKLE_OK)
-				return PICKLE_ERROR;
-			return PICKLE_BREAK;
-		}
-		osz = sz;
-		sz += sizeof (buf) - 1ul;
-		char *n = realloc(m, sz);
-		if (!n) {
-			free(m);
-			return pickle_set_result_error(i, "Out Of Memory");
-		}
-		m = n;
-		memcpy(&m[osz - 1], buf, sizeof buf);
-		if (memchr(buf, '\n', sizeof buf))
-			break;
+	size_t length = 0;
+	char *line = slurp(i, (FILE*)pd, &length, "\n");
+	if (!line)
+		return pickle_set_result_error(i, "Out Of Memory");
+	if (!length) {
+		if (pickle_free(i, (void**)&line) != PICKLE_OK)
+			return PICKLE_ERROR;
+		if (pickle_set_result(i, "EOF") != PICKLE_OK)
+			return PICKLE_ERROR;
+		return PICKLE_BREAK;
 	}
-	const int r = pickle_set_result(i, m);
-	free(m);
+	const int r = pickle_set_result(i, line);
+	if (pickle_free(i, (void**)&line) != PICKLE_OK)
+		return PICKLE_ERROR;
 	return r;
 }
 
@@ -74,25 +99,6 @@ static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	return PICKLE_OK;
 }
 
-static char *slurp(FILE *input) {
-	char *m = NULL;
-	size_t sz = 0;
-	for (;;) {
-		char *n = realloc(m, sz + 4096 + 1);
-		if (!n) {
-			free(m);
-			return NULL;
-		}
-		m = n;
-		const size_t inc = fread(&m[sz], 1, 4096, input);
-		sz += inc;
-		if (inc != 4096)
-			break;
-	}
-	m[sz] = '\0'; /* ensure NUL termination */
-	return m;
-}
-
 static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 1 && argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -101,14 +107,15 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 	if (!file)
 		return pickle_set_result_error(i, "Could not open file '%s' for reading: %s", argv[1], strerror(errno));
 
-	char *program = slurp(file);
+	char *program = slurp(i, file, NULL, NULL);
 	if (file != pd)
 		fclose(file);
 	if (!program)
 		return pickle_set_result_error(i, "Out Of Memory");
 
 	const int r = pickle_eval(i, program);
-	free(program);
+	if (pickle_free(i, (void**)&program) != PICKLE_OK)
+		return PICKLE_ERROR;
 	return r;
 }
 
@@ -126,11 +133,23 @@ static int evalFile(pickle_t *i, char *file) {
 	return r;
 }
 
+static int setArgv(pickle_t *i, int argc, char **argv) {
+	char *args = NULL;
+	int r = PICKLE_ERROR;
+	if ((pickle_concatenate(i, argc, argv, &args) != PICKLE_OK) || args == NULL)
+		goto done;
+	r = pickle_set_var_string(i, "argv", args);
+done:
+	if (pickle_free(i, (void**)&args) != PICKLE_OK)
+		return PICKLE_ERROR;
+	return r;
+}
+
 int main(int argc, char **argv) {
 	pickle_t *i = NULL;
 	if (pickle_tests(allocator, NULL)   != PICKLE_OK) goto fail;
 	if (pickle_new(&i, allocator, NULL) != PICKLE_OK) goto fail;
-	if (pickle_set_argv(i, argc, argv)  != PICKLE_OK) goto fail;
+	if (setArgv(i, argc, argv)  != PICKLE_OK) goto fail;
 	if (pickle_register_command(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
 	if (pickle_register_command(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
 	if (pickle_register_command(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;

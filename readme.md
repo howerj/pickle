@@ -2,7 +2,7 @@
 
 # NAME
 
-PICKLE - An interface to the Constant Database Library
+PICKLE - A Small and Embeddable TCL like interpreter and library
 
 # SYNOPSES
 
@@ -1018,6 +1018,15 @@ client <https://github.com/howerj/httpc>, Tiny compression routines
 <https://github.com/howerj/q>. These would have to be external modules that
 could be integrated with this library.
 
+* Things that are missing that will not be added.
+
+ - The [coroutine][] words are missing, which will require interpreter
+ support to implement efficiently. If you need coroutines (which are very
+ useful) then access to the internals is needed.
+ - Event handling in [vwait][] and [update][] and the like could be added
+ later on.
+
+
 ## Interpreter Limitations
 
 Known limitations of the interpreter include:
@@ -1025,6 +1034,9 @@ Known limitations of the interpreter include:
 * Recursion Depth - 128, set via a compile time option.
 * Maximum size of file - 2GiB
 
+[vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
+[update]: https://www.tcl.tk/man/tcl8.4/TclCmd/update.htm
+[coroutine]: <https://www.tcl.tk/man/tcl8.7/TclCmd/coroutine.htm>
 [readme.md]: readme.md
 [Lua]: https://www.lua.org/
 [Musl C library]: https://git.musl-libc.org/cgit/musl/tree/src/stdio

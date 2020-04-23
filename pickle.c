@@ -195,7 +195,7 @@ typedef PREPACK struct {
 	int max;            /**< maximum recursion depth (0 = unlimited) */
 	unsigned type   :2, /**< select regex type; lazy, greedy or possessive */
 		 nocase :1; /**< ignore case when matching */
-} POSTPACK pickle_regex_t; /**< used to specify a regex and return start/end of match */
+} POSTPACK pickle_regex_t;  /**< used to specify a regex and return start/end of match */
 
 typedef struct PREPACK { int argc; char **argv; } POSTPACK args_t;
 
@@ -430,14 +430,10 @@ static int picolStackOrHeapAlloc(pickle_t *i, pickle_stack_or_heap_t *s, size_t 
 		s->length = needed;
 		return PICKLE_OK;
 	}
-	void *new = picolRealloc(i, s->p, needed);
-	if (!new) {
-		(void)picolFree(i, s->p);
-		s->p = NULL;
+	if (pickle_reallocate(i, (void**)&s->p, needed) != PICKLE_OK) {
 		s->length = 0;
 		return PICKLE_ERROR;
 	}
-	s->p = new;
 	s->length = needed;
 	return PICKLE_OK;
 }
@@ -3813,7 +3809,7 @@ int pickle_set_var_integer(pickle_t *i, const char *name, const long r) {
 	return post(i, picolSetVarInteger(i, name, r));
 }
 
-int pickle_eval(pickle_t *i, const char *t) {
+int pickle_eval(pickle_t *i, const char *t) { /* TODO: change to 'int argc, char **argv'? */
 	pre(i);
 	assert(t);
 	i->ch   = t;
@@ -3857,19 +3853,6 @@ int pickle_rename_command(pickle_t *i, const char *src, const char *dst) {
 	return post(i, picolUnsetCommand(i, src));
 }
 
-int pickle_set_argv(pickle_t *i, int argc, char **argv) {
-	pre(i);
-	assert(argc >= 0);
-	implies(argc >= 0, argv);
-	char *args = concatenate(i, " ", argc, argv, 1, 0);
-	if (!args)
-		return post(i, PICKLE_ERROR);
-	const int r = pickle_set_var_string(i, "argv", args);
-	if (picolFree(i, args) != PICKLE_OK)
-		return post(i, PICKLE_ERROR);
-	return post(i, r);
-}
-
 int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat) {
 	assert(argc >= 0);
 	implies(argc > 0, argv);
@@ -3890,6 +3873,20 @@ int pickle_allocate(pickle_t *i, void **v, const size_t size) {
 		return post(i, PICKLE_OK);
 	}
 	return post(i, PICKLE_ERROR);
+}
+
+int pickle_reallocate(pickle_t *i, void **v, const size_t size) {
+	assert(v);
+	pre(i);
+	void *vp = *v;
+	void *np = picolRealloc(i, vp, size);
+	if (!np) {
+		*v = NULL;
+		(void)pickle_free(i, vp);
+		return post(i, PICKLE_ERROR);
+	}
+	*v = np;
+	return post(i, PICKLE_OK);
 }
 
 int pickle_free(pickle_t *i, void **v) {

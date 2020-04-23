@@ -103,6 +103,7 @@ proc decode {r} {
 }
 
 set HOME [getenv $HOME]
+# TODO: Add this back in
 #set initrc "$HOME/.picklerc"
 
 #set sourced 0
@@ -128,9 +129,6 @@ set i 0;
 while {< [incr i] 5} { random; }
 unset i;
 
-# upvar 1 line l
-# set l x
-
 proc io {} {
 	set e [catch {gets} l]
 	if {or [eq [decode $e] break] [eq [decode $e] error]} {
@@ -142,9 +140,7 @@ proc io {} {
 	return $l
 }
 
-proc true {}  { return 1 }
-proc false {} { return 0 }
-
+# NOTE: The eval should probably be 'uplevel #0'
 proc shell {} {
 	set prompt "pickle> "
 	set count 0
