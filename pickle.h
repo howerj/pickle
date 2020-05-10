@@ -42,10 +42,8 @@ PICKLE_API int pickle_reallocate(pickle_t *i, void **v, const size_t size); /* f
 PICKLE_API int pickle_free(pickle_t *i, void **v);
 PICKLE_API int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat); /* returned in 'cat', caller frees */
 
-/* TODO: Simplify all this: only pickle_set_result() is needed, especially if
- * it takes an integer argument for its return code? */
-PICKLE_API int pickle_set_result_empty(pickle_t *i);
 PICKLE_API int pickle_set_result(pickle_t *i, const char *fmt, ...);
+PICKLE_API int pickle_set_result_empty(pickle_t *i);
 PICKLE_API int pickle_set_result_string(pickle_t *i, const char *s);
 PICKLE_API int pickle_set_result_integer(pickle_t *i, long result);
 PICKLE_API int pickle_get_result_string(pickle_t *i, const char **s);

@@ -18,11 +18,55 @@ proc usage {} {
 	puts "\t-h\tPrint this help message and quit"
 	puts "\t-s\tRun a shell (default)"
 	puts "\t-t\tRun the system tests"
+	puts "\t-p\tRun a crude performance test"
 	puts ""
 	exit 0
 }
 
 if {eq $program "-h" } { usage }
+
+# Crude Performance Test
+#
+# Using 'incr loop -1' greatly speeds things up, but
+# exercises less.
+#
+if {eq $program "-p" } {
+	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
+
+	proc waste1 {x} {
+		set loop $x;
+		while {!= 0 $loop} {
+			decr loop
+		}
+	}
+
+	proc waste2 {x} {
+		set loop $x;
+		while {!= 0 $loop} {
+			incr loop -1
+		}
+	}
+
+	proc performance {func} {
+		puts "testing: $func"
+		set c [clock]
+		set t [info cmdcount]
+		# Takes about a second on my machine;
+		$func 200000;
+		puts "cmds: [- [info cmdcount] $t]"
+		puts "time: [- [clock] $c]"
+		puts
+	}
+
+	performance waste1
+	performance waste2
+
+	rename decr ""
+	rename waste1 ""
+	rename waste2 ""
+	rename performance ""
+	break
+}
 
 # ### Unit Tests ### #
 
@@ -38,80 +82,52 @@ proc assert {x} {
 }
 
 # Set environment variable COLOR to 'on' to turn on color
-set colorize [getenv COLOR]
-proc color {x} {
-	upvar #0 colorize c;
-	if {eq $c on} { return $x } else { return "" }
+proc color {c} {
+	if {ne [getenv COLOR] on} { return "" }
+	if {eq $c "reset"} { return "\x1b\[0m" }
+	set i [lsearch {black red green yellow blue magenta cyan white} $c]
+	return "\x1b\[3$i;1m"
 }
 
-proc normal {} { color "\x1b\[0m" }
-proc red    {} { color "\x1b\[31;1m" }
-proc green  {} { color "\x1b\[32;1m" }
-proc blue   {} { color "\x1b\[34;1m" }
+proc normal {} { color reset }
+proc red    {} { color red }
+proc green  {} { color green }
+proc blue   {} { color blue }
+
+proc error {msg} {
+	puts $msg
+	return "" -1
+}
 
 proc defined {x} {
-	for {set i 0; set m [info command]} {< $i $m} {incr i} {
-		if {eq $x [info command name $i]} { return command }
-	}
+	set c [info commands $x]
+	if {ne "" $c} { return command }
 	if {eq 0 [catch {uplevel 1 "set $x"}]} { return variable }
 	return undefined
 }
 
 # ### Shell      ### #
 
-# Hold over from Forth; list defined commands
-proc words {} {
-	for {set i 0; set l 0; set m [info command]} {< $i $m} {incr i} {
-		set n [info command name $i]
-		set l [+ $l [string length $n]]
-		set c " "
-		if {> $l 80} { set c "\n"; set l 0 }
-		puts -nonewline "$n$c"
-	}
-	puts ""
-}
-
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words' which is also from Forth.
+proc words {} { info commands }
 proc see {w} {
-	if {eq [uplevel 1 "defined {$w}"] {2 variable}} {
-		puts "set $w [uplevel 1 "set $w"]"
-		return
+	if {eq "" [info commands $w]} {
+		return "'$w' is not defined" -1
 	}
-	set widx [info command $w]
-	if {< $widx 0} {
-		return "'$w' not defined" -1
+	set type proc
+	if {eq "" [info procs $w]} {
+		set type built-in
 	}
-
-	set type [info command type $widx]
-	set args [info command args $widx]
-	set body [info command body $widx]
-	set name [info command name $widx]
-	puts "$type $name {$args} {$body}"
-}
-
-set HOME "HOME"
-set OS Unix
-if {eq [getenv OS] "Windows_NT" } {
-	set OS Windows
-	set HOME "HOMEPATH"
+	set args [info args $w]
+	set body [info body $w]
+	puts "$type $w {$args} {$body}"
 }
 
 proc decode {r} {
 	incr r
-	lindex  {error ok return break continue} $r
+	lindex {error ok return break continue} $r
 }
-
-set HOME [getenv $HOME]
-# TODO: Add this back in
-#set initrc "$HOME/.picklerc"
-
-#set sourced 0
-#set status [catch {source $initrc} sourced]
-#set status [string trim $status]
-#if {== 0 $sourced} { puts "$status" }
-#unset status
-#unset initrc
 
 set seed 1;
 
@@ -140,8 +156,33 @@ proc io {} {
 	return $l
 }
 
+# proc @ {var} {
+#	for {set i 1; set level [+ 1 [info level]]} {< $i $level} {incr i} {
+#		set x [subst "uplevel $i {set $var}"]
+#		if {== [catch $x l] 0} {
+#			return $l
+#		}
+#	}
+#	return "Invalid variable $var" -1
+#}
+
+set HOME "HOME"
+set OS Unix
+if {eq [getenv OS] "Windows_NT" } {
+	set OS Windows
+	set HOME "HOMEPATH"
+}
+
+proc rc {} {
+	upvar #0 HOME HOME
+	set path [getenv $HOME]
+	set initrc "$path/.picklerc"
+	catch {source $initrc}
+}
+
 # NOTE: The eval should probably be 'uplevel #0'
 proc shell {} {
+	rc
 	set prompt "pickle> "
 	set count 0
 	while {incr count} {
@@ -170,8 +211,8 @@ rename shell ""
 rename see   ""
 rename words ""
 rename io    ""
-unset program
-unset argc
+rename rc    ""
+unset program argc
 
 # BUG: If the unit test sets the value of 'x' then it can mess
 # up printing the error.
@@ -209,6 +250,7 @@ proc state {x} {
 }
 
 puts "SYSTEM OPTIONS"
+puts "Version:      [join [info version] .]"
 puts "Pointer Size: [info sizeof pointer]"
 puts "Number  Size: [info sizeof number]"
 puts "Limits: "
@@ -223,8 +265,8 @@ puts "\tdebugging:  [info features debugging]"
 puts "\tstrict:     [info features strict]"
 puts "\tstr-length: [info features string-length]"
 
-
-puts "\[Pickle Tests\]"
+puts "\n\[Pickle Tests\]\n"
+puts "Date: [clock {%Y/%m/%d %H:%M:%S}]\n"
 
 test hello {if {bool 1} { concat "hello" }}
 test 1 {bool 4}
@@ -241,7 +283,6 @@ if {== 0 [info features strict]} {
 }
 
 fails {set}
-fails {unset}
 fails {if}
 # NB. Different from TCL, which is an error
 test {1} {if { } { return 1 0 } else { return 2 0 }}
@@ -313,11 +354,16 @@ fails {square a}
 state {rename square sq}
 state {proc fib {x} { if {<= $x 1} { return 1; } else { + [fib [- $x 1]] [fib [- $x 2]]; } }}
 test 89 {fib 10}
-test 0 {> 0 [info command fib]}
+test fib {info commands fib}
 state {rename fib ""}
-test -1 {info command fib}
+test "" {info commands fib}
 test 16 {sq 4}
 state {rename sq ""}
+test 1 {info complete ""}
+test 0 {info complete "\""}
+test 1 {info complete "\"\""}
+test 1 {info complete "{}"}
+fails {info}
 fails {string}
 test 3 {string length 123}
 test 4 {string length 1234}
@@ -604,14 +650,12 @@ test {1 2 3} {lsort -integer {1 2 3}}
 test {3 2 1} {lsort -integer -decreasing {1 2 3}}
 fails {lsort}
 fails {lsort -integer {1 2 a}}
-
 # Test upvar links
 state {proc n2 {} { upvar 1 h u; set u [+ $u 1]; }}
 state {proc n1 {} { upvar 1 u h; set h [+ $h 1]; n2 }}
 test {done} {set u 5; puts "u = $u"; puts "[n1]"; test 1 "== $u 7"; unset u; return "done" 0; }
 state {rename n1 ""}
 state {rename n2 ""}
-
 fails {lreplace}
 fails {lreplace ""}
 fails {lreplace "" 1}
@@ -695,9 +739,9 @@ if {!= $failed 0} {
 	set emphasize [red]
 }
 
-puts
-puts "$emphasize   pass[normal]/[blue]total $emphasize$passed[normal]/[blue]$total[normal]"
-puts
+
+puts "\nCommands: [info cmdcount]\n"
+puts "$emphasize   pass[normal]/[blue]total $emphasize$passed[normal]/[blue]$total[normal]\n"
 puts "\[[blue]DONE[normal]\]"
 if {!= 0 $failed} {
 	return "Test Failure" -1

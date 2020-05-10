@@ -1,9 +1,10 @@
 #include "pickle.h"
 #include <errno.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 #define UNUSED(X) ((void)(X))
 
@@ -99,6 +100,22 @@ static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	return PICKLE_OK;
 }
 
+static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
+	UNUSED(pd);
+	if (argc == 1) {
+		const long t = (((double)(clock()) / (double)CLOCKS_PER_SEC) * 1000.0);
+		return pickle_set_result_integer(i, t);
+	}
+	if (argc != 2)
+		return pickle_set_result_error_arity(i, 2, argc, argv);
+	char buf[512] = { 0 };
+	time_t rawtime;
+	time(&rawtime);
+	struct tm *timeinfo = gmtime(&rawtime);
+	strftime(buf, sizeof buf, argv[1], timeinfo);
+	return pickle_set_result_string(i, buf);
+}
+
 static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 1 && argc != 2)
 		return pickle_set_result_error_arity(i, 2, argc, argv);
@@ -155,6 +172,7 @@ int main(int argc, char **argv) {
 	if (pickle_register_command(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;
 	if (pickle_register_command(i, "exit",   commandExit,   NULL)   != PICKLE_OK) goto fail;
 	if (pickle_register_command(i, "source", commandSource, NULL)   != PICKLE_OK) goto fail;
+	if (pickle_register_command(i, "clock",  commandClock,  NULL)   != PICKLE_OK) goto fail;
 	int r = 0;
 	for (int j = 1; j < argc; j++) {
 		r = evalFile(i, argv[j]);
