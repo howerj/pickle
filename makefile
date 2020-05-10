@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x020201ul
+VERSION = 0x030100ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -Os -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -33,6 +33,11 @@ ${TARGET}: main.o lib${TARGET}.a
 
 ${TARGET}.1: readme.md
 	pandoc -s -f markdown -t man $< -o $@
+
+small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv
+small: main.c ${TARGET}.c ${TARGET}.h
+	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
+	-strip $@
 
 install: ${TARGET} lib${TARGET}.a ${TARGET}.1 .git
 	install -p -D ${TARGET} ${DESTDIR}/bin/${TARGET}

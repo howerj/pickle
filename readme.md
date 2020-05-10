@@ -2,7 +2,7 @@
 
 # NAME
 
-PICKLE - An interface to the Constant Database Library
+PICKLE - A Small and Embeddable TCL like interpreter and library
 
 # SYNOPSES
 
@@ -714,6 +714,17 @@ string.
 
 Exit the program with a status of 0, or with the provided status number.
 
+* clock *OR* clock format
+
+Not quite like the [TCL][] version of clock, this command does two things. If
+not given any arguments it will return the CPU time used so far in
+milliseconds. If given a format, it is passed to the C function [strftime][]
+and returned. This function can be used for doing performance tests, or just
+simple date creation.
+
+There are internal limits on this string length (probably around 512 bytes
+excluding the NUL terminator).
+
 * source file-name
 
 Read and then evaluate a file off of disk. This may fail because the file could
@@ -982,6 +993,45 @@ a lot of noise to the function definitions. Also see
 
 ## Notes
 
+* Internal memory usage
+
+One of the goals of the interpreter is low(ish) memory usage, there are a few
+design decisions that go against this, along with the language itself, however
+an effort has been made to make sure memory usage is kept low. 
+
+Some of the (internal) decisions made:
+
+- The use of 'compact\_string\_t' where possible. This can be used to store a
+  string within a union of a small character array or a pointer, this requires
+  a bit be available elsewhere to store which is used.
+- Compact, small, structures for structures that are used a lot; call frames (2
+  pointers), variables (3 pointers and a bit-field), and commands (4 pointers).
+- Linked-lists are used, which increase overall memory usage but mean large
+  chunks of memory do not have to be allocated and reallocate for things like
+  tables of functions and variables.
+- The parser operates on a full program string and tokens to the string a
+  indices into the string, which means a large [AST][] does not
+  have to be assembled.
+- Memory is allocated on the stack where possible, with the function 
+  'picolStackOrHeapAlloc' helping with this, it moves allocations to the
+  heap if they become too large for the stack. This could conceivably be used
+  for more allocations we do, for example when creating argument lists, but is 
+  currently just used for some unbounded string operations. (Of note, it might
+  be worth creating memory pools for small arguments lists as they are
+  generated fairly often).
+
+Some of the design decisions made that prevent and hamper memory usage:
+
+- Defined procedures are strings and Lack of Byte Code Compilation
+
+It would be possible to include some simple complication on the procedures that
+are stored, turning certain keywords into bytes codes that fall outside of the
+[UTF-8][] and [ASCII][] character ranges, as well as removing runs of white 
+space and comments entirely. This would be possible to implement without
+changing the interface and would both speed things up and reduce memory usage,
+however it would increase the complexity of the implementation (perhaps by
+about 500 LoC if that can be thought of as a proxy for complexity).
+
 * vsnprintf
 
 If you need an implementation of [vsnprintf][] the [Musl C library][] has one.
@@ -1003,10 +1053,19 @@ this would be use something similar to the file functions in this library.
 * Too big
 
 The project is currently pretty corpulent there are; too many functions in the
-header, the example program in [main.c][] is much bigger than it needs to be
-(it really only needs to be big enough to run the units tests in [unit.tcl][],
-see [unit.c][] for an alternative), and the [pickle.c][] file is pretty big
-(although the biggest offenders can be turned off).
+header, the [pickle.c][] file is pretty big (although the biggest offenders 
+can be turned off), but there are also things in the C API/header that are 
+there for convenience and could be replace with calls to just
+'pickle\_set\_result'. This function could also be changed to accept an integer
+parameter to return containing a pickle error code, making the function easier
+to use on an error condition.
+
+The C API could be simplified as well for the set/get functions:
+
+- Change pickle\_set\_result to 'pickle\_set\_result(pickle\_t \*i, int ret, const char \*fmt, ...)'
+- Remove 'pickle\_set\_result\_\*'and 'pickle\_set\_result\_error\*'.
+- Add a scanf version of 'pickle\_get\_result'
+- The same could be done for the variable set/get, also unset should be added 
 
 * A module system and some modules
 
@@ -1018,6 +1077,26 @@ client <https://github.com/howerj/httpc>, Tiny compression routines
 <https://github.com/howerj/q>. These would have to be external modules that
 could be integrated with this library.
 
+The current project that attempts to remedy this is available at:
+
+<https://github.com/howerj/mod-pickle>
+
+A proper module system would also allow Shared Objects / Dynamically Linked
+Libraries to be loaded at run time into the interpreter. This complicates the
+library, but a Lisp Interpreter where I have done this, see
+<https://github.com/howerj/liblisp>.
+
+* Things that are missing that will not be added.
+
+ - The [coroutine][] words are missing, which will require interpreter
+ support to implement efficiently. If you need coroutines (which are very
+ useful) then access to the internals is needed.
+ - Event handling in [vwait][] and [update][] and the like could be added
+ later on.
+ - The control structures 'foreach' and 'switch' - whilst very useful - will
+ most likely not be added. There is no reason that they cannot be added as
+ extensions however.
+
 ## Interpreter Limitations
 
 Known limitations of the interpreter include:
@@ -1025,6 +1104,9 @@ Known limitations of the interpreter include:
 * Recursion Depth - 128, set via a compile time option.
 * Maximum size of file - 2GiB
 
+[vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
+[update]: https://www.tcl.tk/man/tcl8.4/TclCmd/update.htm
+[coroutine]: <https://www.tcl.tk/man/tcl8.7/TclCmd/coroutine.htm>
 [readme.md]: readme.md
 [Lua]: https://www.lua.org/
 [Musl C library]: https://git.musl-libc.org/cgit/musl/tree/src/stdio
@@ -1074,3 +1156,6 @@ Known limitations of the interpreter include:
 [xdigit]: http://www.cplusplus.com/reference/cctype/isxdigit/
 [control]: http://www.cplusplus.com/reference/cctype/iscntrl/
 [cdb]: https://github.com/howerj/cdb
+[AST]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
+[UTF-8]: https://en.wikipedia.org/wiki/UTF-8
+[strftime]: https://www.cplusplus.com/reference/ctime/strftime/

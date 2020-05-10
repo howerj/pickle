@@ -30,20 +30,20 @@ typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *p
 
 enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
-PICKLE_API int pickle_new(pickle_t **i, allocator_fn a, void *arena); /* if(a == NULL) default allocator used */
+PICKLE_API int pickle_new(pickle_t **i, allocator_fn a, void *arena);
 PICKLE_API int pickle_delete(pickle_t *i);
 PICKLE_API int pickle_eval(pickle_t *i, const char *t);
 PICKLE_API int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
 PICKLE_API int pickle_rename_command(pickle_t *i, const char *src, const char *dst); /* if 'dst' is "" then command is deleted */
-PICKLE_API int pickle_set_argv(pickle_t *i, int argc, char **argv);
 PICKLE_API int pickle_version(unsigned long *version); /* version in x.y.z format, z = LSB. MSB = library info */
 
-PICKLE_API int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat); /* returned in 'cat', caller frees */
 PICKLE_API int pickle_allocate(pickle_t *i, void **v, size_t size); /* zeroes allocated memory */
+PICKLE_API int pickle_reallocate(pickle_t *i, void **v, const size_t size); /* frees v on failure */
 PICKLE_API int pickle_free(pickle_t *i, void **v);
+PICKLE_API int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat); /* returned in 'cat', caller frees */
 
-PICKLE_API int pickle_set_result_empty(pickle_t *i);
 PICKLE_API int pickle_set_result(pickle_t *i, const char *fmt, ...);
+PICKLE_API int pickle_set_result_empty(pickle_t *i);
 PICKLE_API int pickle_set_result_string(pickle_t *i, const char *s);
 PICKLE_API int pickle_set_result_integer(pickle_t *i, long result);
 PICKLE_API int pickle_get_result_string(pickle_t *i, const char **s);
