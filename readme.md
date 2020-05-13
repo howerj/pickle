@@ -256,7 +256,8 @@ The following mathematical operations are defined:
 It should be noted that because all variables are stored internally as strings,
 mathematical operations are egregiously slow. Numbers are first converted to
 strings, the operation performed, then converted back to strings. There are
-also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'.
+also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'. These
+mathematical operations can accept a list integers.
 
 There are also the following unary mathematical operators defined: 'not'
 (logical negation), 'invert' (bitwise inversion), 'abs' (absolute value),
@@ -1020,7 +1021,8 @@ Some of the (internal) decisions made:
   be worth creating memory pools for small arguments lists as they are
   generated fairly often).
 
-Some of the design decisions made that prevent and hamper memory usage:
+Some of the design decisions made that prevent and hamper memory usage and
+things that could be done:
 
 - Defined procedures are strings and Lack of Byte Code Compilation
 
@@ -1031,6 +1033,14 @@ space and comments entirely. This would be possible to implement without
 changing the interface and would both speed things up and reduce memory usage,
 however it would increase the complexity of the implementation (perhaps by
 about 500 LoC if that can be thought of as a proxy for complexity).
+
+- Within [pickle.c][] there is a table of functions that are register on
+  startup, registering means taking each entry in this array and entering it
+  into a hash-table that contains all of the other defined procedures and
+  built-in functions, there is obviously some redundancy here. It might be
+  worth treating the built-in core functions specially with a binary search
+  tree just for them instead of adding them into the hash table (this would
+  complicate the 'rename' command as well).
 
 * vsnprintf
 
@@ -1096,6 +1106,17 @@ library, but a Lisp Interpreter where I have done this, see
  - The control structures 'foreach' and 'switch' - whilst very useful - will
  most likely not be added. There is no reason that they cannot be added as
  extensions however.
+ - Lack of Floating point support, which should not really be expected either
+ given the primary usage for this interpreter, as a command language in
+ embedded devices.
+ - (optional) Help strings and online help; a system for online help using 
+ help strings that could be compiled out could be added to the core 
+ interpreter, and a mechanism provided so external commands could be registered
+ with help. Help strings or a 'help' command could be added externally if
+ needs be, how the help is organized matters a lot, it is best if there is only
+ one source of truth for each command and that the help is defined as close as
+ possible to the source code that implements the function (eg. a help string
+ next to the C definition of the function).
 
 ## Interpreter Limitations
 
@@ -1103,6 +1124,7 @@ Known limitations of the interpreter include:
 
 * Recursion Depth - 128, set via a compile time option.
 * Maximum size of file - 2GiB
+* 'clock' command has a limited string available for formatting (512 bytes).
 
 [vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
 [update]: https://www.tcl.tk/man/tcl8.4/TclCmd/update.htm

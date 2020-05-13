@@ -8,11 +8,14 @@
 # framework itself. Instead, those things should be considered tested if
 # the test framework itself runs.
 #
+# The file also contains a simple performance test and a fairly usable
+# shell.
+#
 
 set program [lindex $argv 2]
 set argc [llength $argv]
 
-proc usage {} {
+proc usage {r} {
 	puts "Usage: [uplevel #0 {lindex $argv} 1] -\[hpst\]"
 	puts ""
 	puts "\t-h\tPrint this help message and quit"
@@ -20,10 +23,10 @@ proc usage {} {
 	puts "\t-t\tRun the system tests"
 	puts "\t-p\tRun a crude performance test"
 	puts ""
-	exit 0
+	exit $r
 }
 
-if {eq $program "-h" } { usage }
+if {eq $program "-h" } { usage 0 }
 
 # Crude Performance Test
 #
@@ -53,8 +56,8 @@ if {eq $program "-p" } {
 		set t [info cmdcount]
 		# Takes about a second on my machine;
 		$func 200000;
-		puts "cmds: [- [info cmdcount] $t]"
-		puts "time: [- [clock] $c]"
+		puts "cmds:    [- [info cmdcount] $t]"
+		puts "time:    [- [clock] $c]"
 		puts
 	}
 
@@ -70,18 +73,11 @@ if {eq $program "-p" } {
 
 # ### Unit Tests ### #
 
-proc die {x} { puts $x; exit 1 }
-
 set passed 0
 set total  0
 
-proc assert {x} {
-	if {== $x "0"} {
-		die "assert failed"
-	}
-}
+proc assert {x} { if {== $x "0"} { puts "assert failed"; exit 1 } }
 
-# Set environment variable COLOR to 'on' to turn on color
 proc color {c} {
 	if {ne [getenv COLOR] on} { return "" }
 	if {eq $c "reset"} { return "\x1b\[0m" }
@@ -133,9 +129,7 @@ set seed 1;
 
 proc random {} {
 	upvar #0 seed x;
-	if {== $x 0} {
-		incr x;
-	}
+	if {== $x 0} { incr x; }
 	set x [xor $x [lshift $x 13]];
 	set x [xor $x [rshift $x 17]];
 	set x [xor $x [lshift $x  5]];
@@ -155,16 +149,6 @@ proc io {} {
 	}
 	return $l
 }
-
-# proc @ {var} {
-#	for {set i 1; set level [+ 1 [info level]]} {< $i $level} {incr i} {
-#		set x [subst "uplevel $i {set $var}"]
-#		if {== [catch $x l] 0} {
-#			return $l
-#		}
-#	}
-#	return "Invalid variable $var" -1
-#}
 
 set HOME "HOME"
 set OS Unix
@@ -201,7 +185,7 @@ if {or [eq $program "-s"] [eq $program ""]} {
 }
 
 if {ne $program "-t"} {
-	usage
+	usage 1
 }
 
 # ### Clean up   ### #
@@ -221,11 +205,10 @@ proc test {result x} {
 	upvar #0 total t
 	incr t
 
+	set f "[red]FAIL[normal]:  (expected \"$result\") "
 	if {and [eq $r $result] [eq 0 $retcode]} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
-	} else {
-		set f "[red]FAIL[normal]:  (expected \"$result\") "
 	}
 	puts "$f{$x} = \"$r\""
 }
@@ -235,18 +218,17 @@ proc fails {x} {
 	set retcode [catch $x r]
 	upvar #0 total t
 	incr t
+	set f "[red]FAIL[normal]:  "
 	if {== $retcode -1} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
-	} else {
-		set f "[red]FAIL[normal]:  "
 	}
 	puts [string tr r "\n\r" " " "$f{$x} with error \"$r\""]
 }
 
 proc state {x} {
-		puts "[blue]state[normal]: $x"
-		eval $x
+	puts "[blue]state[normal]: $x"
+	eval $x
 }
 
 puts "SYSTEM OPTIONS"

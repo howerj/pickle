@@ -2,20 +2,21 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x030100ul
+VERSION = 0x040000ul
 TARGET  = pickle
-CFLAGS  = -std=c99 -Wall -Wextra -pedantic -Os -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
 ARFLAGS = rcs
 TRACE   =
 DESTDIR = install
 
-.PHONY: all run test clean install dist
+.PHONY: all run test clean install dist profile
 
 all: ${TARGET}
 
-run: ${TARGET}
+run: ${TARGET} shell
 	${TRACE} ./${TARGET} shell
+
 
 test: ${TARGET} shell
 	./${TARGET} shell -t 
@@ -33,11 +34,6 @@ ${TARGET}: main.o lib${TARGET}.a
 
 ${TARGET}.1: readme.md
 	pandoc -s -f markdown -t man $< -o $@
-
-small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv
-small: main.c ${TARGET}.c ${TARGET}.h
-	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
-	-strip $@
 
 install: ${TARGET} lib${TARGET}.a ${TARGET}.1 .git
 	install -p -D ${TARGET} ${DESTDIR}/bin/${TARGET}
@@ -58,3 +54,31 @@ check:
 clean:
 	git clean -dffx
 
+small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv
+small: main.c ${TARGET}.c ${TARGET}.h
+	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
+	-strip $@
+
+micro: CFLAGS=-DNDEBUG -DDEFINE_TESTS=0 -DDEFINE_MATHS=0 -DDEFINE_STRING=0 -DDEFINE_REGEX=0 -DDEFINE_LIST=0
+micro: CFLAGS+=-std=c99 -Os -m32 ${DEFINES} -Wall -Wextra -fwrapv
+micro: main.c ${TARGET}.c ${TARGET}.h
+	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
+	-strip $@
+
+fast: CFLAGS=-std=c99 -O3 -DNDEBUG -static -Wall -Wextra
+fast: main.c ${TARGET}.c ${TARGET}.h
+	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
+	-strip $@
+
+#profile: CFLAGS=-std=c99 -g -pg -Wall -Wextra --coverage
+#profile: main.c ${TARGET}.c ${TARGET}.h shell
+#	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
+#	./$@ shell -t
+#	gcov ${TARGET}.c
+#	gcov main.c
+
+profile: CFLAGS=-std=c99 -g -Wall -Wextra
+profile: main.c ${TARGET}.c ${TARGET}.h shell
+	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
+	valgrind --tool=callgrind ./$@ shell -t
+	#kcachegrind

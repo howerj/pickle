@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
 		r = evalFile(i, NULL);
 	return !!pickle_delete(i) || r < 0;
 fail:
-	pickle_delete(i);
+	(void)pickle_delete(i);
 	return 1;
 }
 

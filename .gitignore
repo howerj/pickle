@@ -6,12 +6,10 @@
 *.log
 *.o
 *.tgz
-afl/
-afl/*
-block
+callgrind.*
+fast
 install/*
-match
+micro
 pickle
-picol
+profile
 small
-unit
