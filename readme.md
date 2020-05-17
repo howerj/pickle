@@ -287,13 +287,13 @@ commands. Commands are either user defined or built in commands.
  - body: get a functions body (returns '{built-in pointer pointer}' for built in commands)
  - name: get a functions name
 
-* join {list} String
+* join {list} string
 
 Given a [TCL][] list, 'join' will flatten that list and return a string by
 inserting a String in-between its elements. For example "join {a b c} ," yields
 "a,b,c".
 
-* conjoin String Arguments\*
+* conjoin string arguments\*
 
 'conjoin' works the same as 'join' except instead of a list it joins its
 arguments, for example:
@@ -393,6 +393,10 @@ The list is a series of numbers that should be sorted numerically.
 * lreverse list
 
 Reverse the elements in a list.
+
+* lrange list lower upper
+
+Extract a range from a list.
 
 * lsearch opts... list pattern
 
@@ -689,6 +693,26 @@ efficient then defining 'incr' in TCL, like so:
 
 And it is used often in looping constructs.
 
+* subst opts... string
+
+Optionally perform substitutions on a string, controllable via three flags.
+When you enter a string in a [TCL][] program substitutions are automatically 
+performed on that string, 'subst' can be used to perform a subset of those
+substitutions (command execution, variable substitutions, or escape character
+handling) a string.
+
+ - -nobackslashes 
+
+Disable escape characters.
+
+ - -novariables 
+
+Do not process variables.
+
+ - -nocommands
+
+Do not process command substitutions.
+
 ### Extension Commands
 
 These commands are present in the [main.c][] file and have been added to the
@@ -715,16 +739,27 @@ string.
 
 Exit the program with a status of 0, or with the provided status number.
 
-* clock *OR* clock format
+* clock seconds *OR* clock format time time-spec? *OR* clock clicks
 
-Not quite like the [TCL][] version of clock, this command does two things. If
-not given any arguments it will return the CPU time used so far in
-milliseconds. If given a format, it is passed to the C function [strftime][]
-and returned. This function can be used for doing performance tests, or just
-simple date creation.
+A simplified version of the TCL command 'clock' the subcommands it supports
+are:
 
-There are internal limits on this string length (probably around 512 bytes
-excluding the NUL terminator).
+ - clicks
+
+Return the CPU clock.
+
+ - seconds
+
+Return the seconds since the Unix Epoch.
+
+ - format time time-spec?
+
+The format command a time in seconds since the Unix Epoch against an optional
+time-specification (the default time specification is "%a %b %d %H:%M:%S %Z %Y").
+The formatting is done entirely by the function [strftime][].
+
+There are internal limits on this string length (512 bytes excluding 
+the NUL terminator).
 
 * source file-name
 
@@ -994,6 +1029,15 @@ a lot of noise to the function definitions. Also see
 
 ## Notes
 
+* Other implementations
+
+There are other implementations of [TCL][] and other extensions of the original
+[picol][] interpreter, here are a few:
+
+- Picol Extension <https://wiki.tcl-lang.org/page/Picol>
+- TCL reimplementation <http://jim.tcl.tk/index.html/doc/www/www/index.html>
+
+
 * Internal memory usage
 
 One of the goals of the interpreter is low(ish) memory usage, there are a few
@@ -1083,9 +1127,10 @@ This interpreter lacks a module system, there are a few small and simple
 modules that could be integrated with the library quite easily, see;
 Constant Data Base Library <https://github.com/howerj/cdb>, A HTTP 1.1
 client <https://github.com/howerj/httpc>, Tiny compression routines
-<https://github.com/howerj/shrink>, and a fixed point arithmetic library
-<https://github.com/howerj/q>. These would have to be external modules that
-could be integrated with this library.
+<https://github.com/howerj/shrink>, and a fixed point arithmetic
+library <https://github.com/howerj/q>, and UTF-8 string handling
+<https://github.com/howerj/utf8> These would have to be external modules
+that could be integrated with this library.
 
 The current project that attempts to remedy this is available at:
 
@@ -1126,58 +1171,56 @@ Known limitations of the interpreter include:
 * Maximum size of file - 2GiB
 * 'clock' command has a limited string available for formatting (512 bytes).
 
-[vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
-[update]: https://www.tcl.tk/man/tcl8.4/TclCmd/update.htm
-[coroutine]: <https://www.tcl.tk/man/tcl8.7/TclCmd/coroutine.htm>
-[readme.md]: readme.md
-[Lua]: https://www.lua.org/
-[Musl C library]: https://git.musl-libc.org/cgit/musl/tree/src/stdio
-[block.h]: block.h
-[main.c]: main.c
-[pickle.1]: pickle.1
-[pickle.c]: pickle.c
-[unit.tcl]: unit.tcl
-[picol]: http://oldblog.antirez.com/post/picol.html
-[TCL]: https://en.wikipedia.org/wiki/Tcl
-[stdio.h]: http://www.cplusplus.com/reference/cstdio/
-[snprintf]: http://www.cplusplus.com/reference/cstdio/snprintf/
-[vsnprintf]: http://www.cplusplus.com/reference/cstdio/vsnprintf/
-[FORTH]: https://en.wikipedia.org/wiki/Forth_(programming_language)
-[C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
-[Make]: https://en.wikipedia.org/wiki/Make_(software)
-[MIT License]: https://en.wikipedia.org/wiki/MIT_License
-[BSD License]: https://en.wikipedia.org/wiki/BSD_licenses
-[malloc]: https://en.wikipedia.org/wiki/C_dynamic_memory_allocation
-[C Preprocessor]: https://en.wikipedia.org/wiki/C_preprocessor
-[python]: https://www.python.org/
-[stdout]: http://www.cplusplus.com/reference/cstdio/stdout/
-[stdin]: http://www.cplusplus.com/reference/cstdio/stdin/
-[strftime]: http://www.cplusplus.com/reference/ctime/strftime/
-[readline]: https://tiswww.case.edu/php/chet/readline/rltop.html
-[linenoise]: https://github.com/antirez/linenoise
-[rlwrap]: https://linux.die.net/man/1/rlwrap
-[lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
-[homoiconic]: https://en.wikipedia.org/wiki/Homoiconicity
-[loc]: https://en.wikipedia.org/wiki/Source_lines_of_code
-[pickle-all]: https://github.com/howerj/pickle-all
-[insertion sort]: https://en.wikipedia.org/wiki/Insertion_sort
-[regex]: http://c-faq.com/lib/regex.html
 [ASCII]: https://en.wikipedia.org/wiki/ASCII
-[unit tests]: https://en.wikipedia.org/wiki/Unit_testing
-[ctype.h]: http://www.cplusplus.com/reference/cctype/
-[string.h]: http://www.cplusplus.com/reference/cstring/
+[AST]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
+[BSD License]: https://en.wikipedia.org/wiki/BSD_licenses
+[C Preprocessor]: https://en.wikipedia.org/wiki/C_preprocessor
+[C]: https://en.wikipedia.org/wiki/C_%28programming_language%29
+[FORTH]: https://en.wikipedia.org/wiki/Forth_(programming_language)
+[Lua]: https://www.lua.org/
+[MIT License]: https://en.wikipedia.org/wiki/MIT_License
+[Make]: https://en.wikipedia.org/wiki/Make_(software)
+[Musl C library]: https://git.musl-libc.org/cgit/musl/tree/src/stdio
+[TCL]: https://en.wikipedia.org/wiki/Tcl
+[UTF-8]: https://en.wikipedia.org/wiki/UTF-8
 [alnum]: http://www.cplusplus.com/reference/cctype/isalnum/
 [alpha]: http://www.cplusplus.com/reference/cctype/isalpha/
+[block.h]: block.h
+[cdb]: https://github.com/howerj/cdb
+[control]: http://www.cplusplus.com/reference/cctype/iscntrl/
+[coroutine]: <https://www.tcl.tk/man/tcl8.7/TclCmd/coroutine.htm>
+[ctype.h]: http://www.cplusplus.com/reference/cctype/
 [digit]: http://www.cplusplus.com/reference/cctype/isdigit/
 [graph]: http://www.cplusplus.com/reference/cctype/isgraph/
+[homoiconic]: https://en.wikipedia.org/wiki/Homoiconicity
+[insertion sort]: https://en.wikipedia.org/wiki/Insertion_sort
+[linenoise]: https://github.com/antirez/linenoise
+[lisp]: https://en.wikipedia.org/wiki/Lisp_(programming_language)
+[loc]: https://en.wikipedia.org/wiki/Source_lines_of_code
 [lower]: http://www.cplusplus.com/reference/cctype/islower/
+[main.c]: main.c
+[malloc]: https://en.wikipedia.org/wiki/C_dynamic_memory_allocation
+[pickle.1]: pickle.1
+[pickle.c]: pickle.c
+[picol]: http://oldblog.antirez.com/post/picol.html
 [print]: http://www.cplusplus.com/reference/cctype/isprint/
 [punct]: http://www.cplusplus.com/reference/cctype/ispunct/
+[python]: https://www.python.org/
+[readline]: https://tiswww.case.edu/php/chet/readline/rltop.html
+[readme.md]: readme.md
+[regex]: http://c-faq.com/lib/regex.html
+[rlwrap]: https://linux.die.net/man/1/rlwrap
+[snprintf]: http://www.cplusplus.com/reference/cstdio/snprintf/
 [space]: http://www.cplusplus.com/reference/cctype/isspace/
+[stdin]: http://www.cplusplus.com/reference/cstdio/stdin/
+[stdio.h]: http://www.cplusplus.com/reference/cstdio/
+[stdout]: http://www.cplusplus.com/reference/cstdio/stdout/
+[strftime]: http://www.cplusplus.com/reference/ctime/strftime/
+[string.h]: http://www.cplusplus.com/reference/cstring/
+[unit tests]: https://en.wikipedia.org/wiki/Unit_testing
+[unit.tcl]: unit.tcl
+[update]: https://www.tcl.tk/man/tcl8.4/TclCmd/update.htm
 [upper]: http://www.cplusplus.com/reference/cctype/isupper/
+[vsnprintf]: http://www.cplusplus.com/reference/cstdio/vsnprintf/
+[vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
 [xdigit]: http://www.cplusplus.com/reference/cctype/isxdigit/
-[control]: http://www.cplusplus.com/reference/cctype/iscntrl/
-[cdb]: https://github.com/howerj/cdb
-[AST]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
-[UTF-8]: https://en.wikipedia.org/wiki/UTF-8
-[strftime]: https://www.cplusplus.com/reference/ctime/strftime/

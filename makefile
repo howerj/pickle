@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x040000ul
+VERSION = 0x040002ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -54,30 +54,23 @@ check:
 clean:
 	git clean -dffx
 
-small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv
+small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv -DPICKLE_VERSION="${VERSION}"
 small: main.c ${TARGET}.c ${TARGET}.h
 	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
 	-strip $@
 
-micro: CFLAGS=-DNDEBUG -DDEFINE_TESTS=0 -DDEFINE_MATHS=0 -DDEFINE_STRING=0 -DDEFINE_REGEX=0 -DDEFINE_LIST=0
+micro: CFLAGS=-DNDEBUG -DDEFINE_TESTS=0 -DDEFINE_MATHS=0 -DDEFINE_STRING=0 -DDEFINE_REGEX=0 -DDEFINE_LIST=0 -DPICKLE_VERSION="${VERSION}"
 micro: CFLAGS+=-std=c99 -Os -m32 ${DEFINES} -Wall -Wextra -fwrapv
 micro: main.c ${TARGET}.c ${TARGET}.h
 	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
 	-strip $@
 
-fast: CFLAGS=-std=c99 -O3 -DNDEBUG -static -Wall -Wextra
+fast: CFLAGS=-std=c99 -O3 -DNDEBUG -static -Wall -Wextra -DPICKLE_VERSION="${VERSION}"
 fast: main.c ${TARGET}.c ${TARGET}.h
 	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
 	-strip $@
 
-#profile: CFLAGS=-std=c99 -g -pg -Wall -Wextra --coverage
-#profile: main.c ${TARGET}.c ${TARGET}.h shell
-#	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
-#	./$@ shell -t
-#	gcov ${TARGET}.c
-#	gcov main.c
-
-profile: CFLAGS=-std=c99 -g -Wall -Wextra
+profile: CFLAGS=-std=c99 -g -Wall -Wextra -DPICKLE_VERSION="${VERSION}"
 profile: main.c ${TARGET}.c ${TARGET}.h shell
 	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
 	valgrind --tool=callgrind ./$@ shell -t
