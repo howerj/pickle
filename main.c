@@ -122,7 +122,6 @@ static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 
 static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	int gmt = 1;
 	time_t ts = 0;
 	if (argc < 2)
 		return pickle_set_result_error(i, "Invalid command: %s subcommand...", argv[0]);
@@ -133,6 +132,7 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 	if (!strcmp(argv[1], "seconds"))
 		return pickle_set_result(i, "%ld", (long)time(&ts));
 	if (!strcmp(argv[1], "format")) {
+		const int gmt = 1;
 		char buf[512] = { 0 };
 		char *fmt = argc == 4 ? argv[3] : "%a %b %d %H:%M:%S %Z %Y";
 		int tv = 0;

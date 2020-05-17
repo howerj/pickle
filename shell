@@ -648,6 +648,7 @@ fails {split}
 fails {split "abc"}
 test {a b {c d e  } {  f {g h}}} {list a b "c d e  " "  f {g h}"}
 test {a b c xyz} {linsert {a b c} 99 xyz}
+test {{x y z}} {linsert "" 3 {x y z}}
 test {a b c xyz} {linsert {a b c} 3 xyz}
 test {xyz a b c} {linsert {a b c} 0 xyz}
 test {a {x yz} b c} {linsert {a b c} 1 {x yz}}
@@ -768,6 +769,7 @@ test  {-1 -1} {reg {\{} ""}
 test  {2 4} {reg {\{+} "??\{\{\{p"}
 fails {reg "a^" "a^"}
 fails {reg {$a} {$a}}
+test  {0 0} {reg ^ a^}
 test  {0 0} {reg -lazy {ab*} {abbbbbb}}
 test  {0 6} {reg {ab*} {abbbbbb}}
 # Hmm, probably need to differentiate between these two

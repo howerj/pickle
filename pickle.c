@@ -1866,7 +1866,9 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			move(h.p,                  arg1,            first);
 			move(h.p + first,          arg4,            extend);
 			move(h.p + first + extend, arg1 + last + 1, length - last);
-			h.p[first + extend + length - last] = 0;
+			const size_t index = first + extend + length - last;
+			assert(index < h.length);
+			h.p[index] = '\0';
 			if (picolOnHeap(i, &h))
 				return picolForceResult(i, h.p, 0);
 			const int r = picolSetResultString(i, h.p);
@@ -2195,7 +2197,7 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 	if (!a.argv)
 		return PICKLE_ERROR;
 	if (!a.argc) {
-		r = picolSetResultEmpty(i);
+		r = picolSetResultString(i, insert);
 		goto done;
 	}
 	index = MAX(0, MIN(index, a.argc));
@@ -2216,7 +2218,6 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 		prev = a.argv[index];
 		a.argv[index] = NULL;
 	}
-done:
 	if (r == PICKLE_OK) {
 		char *s = concatenate(i, " ", a.argc, a.argv, 0, 0);
 		if (!s)
@@ -2224,7 +2225,9 @@ done:
 		else if (picolForceResult(i, s, 0) != PICKLE_OK)
 			r = PICKLE_ERROR;
 	}
-	a.argv[index] = prev;
+	if (index < a.argc)
+		a.argv[index] = prev;
+done:
 
 	if (escape)
 		if (picolFree(i, insert) != PICKLE_OK)
@@ -3263,19 +3266,23 @@ static int picolRegexExtract(pickle_regex_t *x, const char *regexp, const char *
 	assert(text);
 	x->start = NULL;
 	x->end   = NULL;
-	if (regexp[0] == START)
-		return regexHere(x, 0, regexp + 1, text);
+	int m = 0;
+	if (regexp[0] == START) {
+		m = regexHere(x, 0, regexp + 1, text);
+		goto done;
+	}
 	do {    /* must look even if string is empty */
-		const int m = regexHere(x, 0, regexp, text);
-		if (m) {
-			if (m > 0)
-				x->start = text;
-			return m;
-		}
+		m = regexHere(x, 0, regexp, text);
+		if (m)
+		       goto done;	
 	} while (*text++ != EOI);
 	x->start = NULL;
 	x->end   = NULL;
 	return 0;
+done:
+	if (m > 0)
+		x->start = text;
+	return m;
 }
 
 static int picolRegex(const char *regexp, const char *text) {
