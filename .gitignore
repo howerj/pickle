@@ -6,6 +6,7 @@
 *.log
 *.o
 *.tgz
+afl/*
 callgrind.*
 fast
 install/*

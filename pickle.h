@@ -38,13 +38,12 @@ PICKLE_API int pickle_tests(allocator_fn fn, void *arena);
 PICKLE_API int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat); /* returned in 'cat', caller frees */
 PICKLE_API int pickle_get_allocator(pickle_t *i, allocator_fn *a, void **arena);
 
-PICKLE_API int pickle_set_result(pickle_t *i, const char *fmt, ...);
-PICKLE_API int pickle_set_result_error(pickle_t *i, const char *fmt, ...); /* always returns PICKLE_ERROR */
+PICKLE_API int pickle_set_result(pickle_t *i, int ret, const char *fmt, ...);
 PICKLE_API int pickle_set_result_string(pickle_t *i, const char *s);
 PICKLE_API int pickle_get_result_string(pickle_t *i, const char **s);
 
-PICKLE_API int pickle_set_var(pickle_t *i, const char *name, const char *val);
-PICKLE_API int pickle_get_var(pickle_t *i, const char *name, const char **val);
+PICKLE_API int pickle_set_var(pickle_t *i, int level, const char *name, const char *val);
+PICKLE_API int pickle_get_var(pickle_t *i, int level, const char *name, const char **val);
 
 #ifdef __cplusplus
 }
