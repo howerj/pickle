@@ -1085,6 +1085,7 @@ static int picolUnEscape(char *r, size_t length) {
 		if (ch == '\\') {
 			j++;
 			switch (r[j]) {
+			case '\0': return -1;
 			case '\\': r[k] = '\\'; break;
 			case  'a': r[k] = '\a'; break;
 			case  'b': r[k] = '\b'; break;
@@ -1353,8 +1354,10 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 		return PICKLE_ERROR;
 	picolParserInitialize(&p, o, eval);
 	for (int prevtype = p.type;;) {
-		if (picolGetToken(&p) != PICKLE_OK)
-			return pickle_set_result_error(i, "Invalid parse %s", eval);
+		if (picolGetToken(&p) != PICKLE_OK) {
+			retcode = pickle_set_result_error(i, "Invalid parse %s", eval);
+			goto err;
+		}
 		if (p.type == PT_EOF)
 			break;
 		int tlen = p.end - p.start + 1;
@@ -1858,7 +1861,7 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 				last = length;
 			if (first > last || first > length || last < 0)
 				return picolSetResultString(i, arg1);
-			const number_t diff = (last - first) + 1;
+			const number_t diff = (last - first);
 			const number_t resulting = (length - diff) + extend + 1;
 			assert(diff >= 0 && length >= 0);
 			if (picolStackOrHeapAlloc(i, &h, resulting) != PICKLE_OK)
@@ -2184,7 +2187,7 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 	assert(parse);
 	assert(position);
 	assert(insert);
-	const int escape = doEsc && picolStringNeedsEscaping(insert);
+	const int nogrow = op == SET || op == DELETE, escape = doEsc && picolStringNeedsEscaping(insert);
 	const size_t il  = picolStrlen(insert);
 	number_t index = 0, r = PICKLE_OK;
 	if (picolStringToNumber(i, position, &index) != PICKLE_OK)
@@ -2200,7 +2203,7 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 		r = picolSetResultString(i, insert);
 		goto done;
 	}
-	index = MAX(0, MIN(index, a.argc));
+	index = MAX(0, MIN(index, a.argc - nogrow));
 	if (op == INSERT) {
 		if (!(a.argv = picolArgsGrow(i, &a.argc, a.argv))) {
 			if (escape)
@@ -2211,10 +2214,11 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 			move(&a.argv[index + 1], &a.argv[index], sizeof (*a.argv) * (a.argc - index - 1));
 		a.argv[index] = insert;
 	} else if (op == SET) {
+		assert(index < a.argc);
 		prev = a.argv[index];
 		a.argv[index] = insert;
 	} else {
-		assert(op == DELETE);
+		assert(op == DELETE && index < a.argc);
 		prev = a.argv[index];
 		a.argv[index] = NULL;
 	}
@@ -2501,7 +2505,7 @@ static inline int picolCommandLRange(pickle_t *i, const int argc, char **argv, v
 	const args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1]);
 	if (!a.argv)
 		return PICKLE_ERROR;
-	if (a.argc == 0) {
+	if (a.argc == 0 || first > a.argc) {
 		if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
 			return PICKLE_ERROR;
 		return picolSetResultEmpty(i);
@@ -3221,7 +3225,9 @@ again:
 	if (r1 == END) {
 		if (r2 != EOI)
 			return -1;
-		return *text == EOI;
+		const int m = *text == EOI;
+		x->end = m == 1 ? text : NULL;
+		return m;
 	}
 	if (*text != EOI && regexChar(x, r1, *text)) {
 		regexp++, text++;
@@ -3283,13 +3289,6 @@ done:
 	if (m > 0)
 		x->start = text;
 	return m;
-}
-
-static int picolRegex(const char *regexp, const char *text) {
-	assert(regexp);
-	assert(text);
-	pickle_regex_t x = { NULL, NULL, PICKLE_MAX_RECURSION, LAZY, 0 };
-	return picolRegexExtract(&x, regexp, text);
 }
 
 static inline int picolCommandRegex(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -3719,9 +3718,11 @@ static int picolTestRegex(allocator_fn fn, void *arena) {
 		{ 1,  "ca?b",   "cab",      }, { 1,  "ca?b",   "cb",       },
 		{ 1,  "\\sz",   " \t\r\nz", }, { 0,  "\\s",    "x",        },
 	};
-	for (size_t j = 0; j < (sizeof (ts) / sizeof (ts[0])); j++)
-		if (ts[j].match != picolRegex(ts[j].reg, ts[j].str))
+	for (size_t j = 0; j < (sizeof (ts) / sizeof (ts[0])); j++) {
+		pickle_regex_t x = { NULL, NULL, PICKLE_MAX_RECURSION, LAZY, 0 };
+		if (ts[j].match != picolRegexExtract(&x, ts[j].reg, ts[j].str))
 			r--;
+	}
 	return -r;
 }
 

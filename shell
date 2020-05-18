@@ -727,6 +727,8 @@ test {a b c d e} {lrange {a b c d e} 0 4}
 test {a} {lrange {a b c d e} 0 0}
 test {c d} {lrange {a b c d e} 2 3}
 test {a b c d} {lrange {a b c d e} -2 3}
+test {} {lrange {a b c d e} 8 3}
+test {} {lrange {} 1 1}
 test 1 {lsearch {x abc def} abc}
 test -1 {lsearch {x abc def} xyz}
 test 0 {lsearch {x abc def} *x*}
@@ -783,6 +785,7 @@ test  {0 3} {reg -lazy {ba?c?d} {bacd}}
 test  {0 4} {reg -possessive {a*c} {aaaac}}
 test  {-1 -1} {reg -possessive {.*c} {aaaac}}
 test  {0 4} {reg -greedy {.*c} {aaaac}}
+test  {9 9} {reg {\S$} "@@@    \t@@"}
 
 assert [<= $passed $total]
 assert [>= $passed 0]

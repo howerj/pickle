@@ -29,9 +29,8 @@ around ~6000 lines.
 
 ## LICENSE
 
-The files [pickle.c][] and [pickle.h][] are licensed under the [BSD License][],
-to keep things consistent [block.c][] and [block.h][] (which contains a memory
-pool allocator) is also licensed under the 2 clause [BSD License][].
+The files [pickle.c][] and [pickle.h][] are licensed under the 2 clause
+[BSD License][], as are all the other files in this project.
 
 ## BUILDING
 
@@ -1064,6 +1063,9 @@ Some of the (internal) decisions made:
   currently just used for some unbounded string operations. (Of note, it might
   be worth creating memory pools for small arguments lists as they are
   generated fairly often).
+- Also of note is that the interpreter is designed to gracefully handle out of
+  memory conditions, it may not live up to this fact, but it is possible to
+  test this by returning NULL in the allocator provided randomly.
 
 Some of the design decisions made that prevent and hamper memory usage and
 things that could be done:
@@ -1185,7 +1187,6 @@ Known limitations of the interpreter include:
 [UTF-8]: https://en.wikipedia.org/wiki/UTF-8
 [alnum]: http://www.cplusplus.com/reference/cctype/isalnum/
 [alpha]: http://www.cplusplus.com/reference/cctype/isalpha/
-[block.h]: block.h
 [cdb]: https://github.com/howerj/cdb
 [control]: http://www.cplusplus.com/reference/cctype/iscntrl/
 [coroutine]: <https://www.tcl.tk/man/tcl8.7/TclCmd/coroutine.htm>
@@ -1200,8 +1201,8 @@ Known limitations of the interpreter include:
 [lower]: http://www.cplusplus.com/reference/cctype/islower/
 [main.c]: main.c
 [malloc]: https://en.wikipedia.org/wiki/C_dynamic_memory_allocation
-[pickle.1]: pickle.1
 [pickle.c]: pickle.c
+[pickle.h]: pickle.h
 [picol]: http://oldblog.antirez.com/post/picol.html
 [print]: http://www.cplusplus.com/reference/cctype/isprint/
 [punct]: http://www.cplusplus.com/reference/cctype/ispunct/

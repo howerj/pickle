@@ -8,6 +8,7 @@
 
 #define UNUSED(X) ((void)(X))
 
+/* NB. This allocator can be use to get memory statistics or test allocation failures */
 static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t newsz) {
 	UNUSED(arena);
 	if (newsz == 0) { free(ptr); return NULL; }
@@ -15,13 +16,13 @@ static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t 
 	return ptr;
 }
 
-static void release(pickle_t *i, void *ptr) {
+static int release(pickle_t *i, void *ptr) {
 	void *arena = NULL;
 	allocator_fn fn = NULL;
-	if (pickle_get_allocator(i, &fn, &arena) != PICKLE_OK)
-		abort();
-	if (allocator(arena, ptr, 0, 0) != PICKLE_OK)
-		abort();
+	const int r1 = pickle_get_allocator(i, &fn, &arena);
+	if (fn)
+		fn(arena, ptr, 0, 0);
+	return fn ? r1 : PICKLE_ERROR;
 }
 
 static void *reallocator(pickle_t *i, void *ptr, size_t sz) {
