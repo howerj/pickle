@@ -106,6 +106,12 @@ proc red    {} { color red }
 proc green  {} { color green }
 proc blue   {} { color blue }
 
+# An ersatz version of "{*}"
+proc expand {cmd args} {
+	set j [join $args " "]
+	uplevel 1 "$cmd $j"
+}
+
 proc error {msg} {
 	puts $msg
 	return "" -1

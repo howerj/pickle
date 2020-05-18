@@ -1,45 +1,10 @@
 /**@file pickle.c
- * @brief Pickle: A tiny TCL like interpreter
- *
- * A small TCL interpreter, called Pickle, that is basically just a copy
- * of the original written by Antirez, the original is available at
- *
- * <http://oldblog.antirez.com/post/picol.html>
- * <http://antirez.com/picol/picol.c.txt>
- *
- * Original Copyright notice:
- *
- * Tcl in ~ 500 lines of code.
- *
+ * @brief Pickle interpreter, a TCL like language based on 'picol'.
+ * BSD license: See <https://github.com/howerj/pickle/blob/master/LICENSE>
  * Copyright (c) 2007-2016, Salvatore Sanfilippo <antirez at gmail dot com>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright notice,
- *     this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- * Extensions/Changes by Richard James Howe, available at:
- * <https://github.com/howerj/pickle>
- * Also licensed under the same BSD license.
- *
- * NOTE: The string escaping could be improved upon. */
+ * Copyright (c) 2018-2020, Richard James Howe <howe.r.j.89@gmail.com> 
+ * See 'https://github.com/howerj/pickle' for the project repository.
+ * And <http://oldblog.antirez.com/post/picol.html> for the original. */
 
 #include "pickle.h"
 #include <assert.h>  /* !defined(NDEBUG): assert */
@@ -108,7 +73,7 @@
 #endif
 
 #ifndef PICKLE_MAX_STRING
-#define PICKLE_MAX_STRING (512) /* Max string/Data structure size, if USE_MAX_STRING != 0 */
+#define PICKLE_MAX_STRING (768) /* Max string/Data structure size, if USE_MAX_STRING != 0 */
 #endif
 
 #ifndef STRICT_NUMERIC_CONVERSION
@@ -235,6 +200,27 @@ static inline void static_assertions(void) { /* A neat place to put these */
 	BUILD_BUG_ON(PICKLE_ERROR != -1);
 }
 
+static inline void *locateByte(const void *m, int c, size_t n) {
+	assert(m);
+	return memchr(m, c, n);
+}
+
+static inline void pre(pickle_t *i) { /* assert API pre-conditions */
+	UNUSED(i); /* warning suppression when NDEBUG defined */
+	assert(i);
+	assert(i->initialized);
+	assert(i->result);
+	assert(i->length > 0);
+	assert(!!locateByte(i->result_buf, 0, sizeof i->result_buf));
+	assert(i->level >= 0);
+}
+
+static inline int post(pickle_t *i, const int r) { /* assert API post-conditions */
+	pre(i);
+	assert(r >= PICKLE_ERROR && r <= PICKLE_CONTINUE);
+	return i->fatal ? PICKLE_ERROR : r;
+}
+
 static inline int compare(const char *a, const char *b) {
 	assert(a);
 	assert(b);
@@ -282,11 +268,6 @@ static inline char *find(const char *haystack, const char *needle) {
 static inline char *locateChar(const char *s, const int c) {
 	assert(s);
 	return strchr(s, c);
-}
-
-static inline void *locateByte(const void *m, int c, size_t n) {
-	assert(m);
-	return memchr(m, c, n);
 }
 
 static inline void *picolMalloc(pickle_t *i, size_t size) {
@@ -606,9 +587,6 @@ static int advance(pickle_parser_t *p) {
 	return PICKLE_OK;
 }
 
-/* TODO: There is one bit of critical syntax that is missing, and that is
- * '{*}', technically a command could be used similar to apply that did the
- * same thing instead. */
 static inline void picolParserInitialize(pickle_parser_t *p, pickle_parser_opts_t *o, const char *text) {
 	/* NB. assert(o || !o); */
 	assert(p);
@@ -1305,6 +1283,7 @@ static char **picolArgsGrow(pickle_t *i, int *argc, char **argv) {
 	char **old = argv;
 	if (!(argv = picolRealloc(i, argv, sizeof(char*) * n))) {
 		(void)picolFreeArgList(i, *argc, old);
+		*argc = 0;
 		return NULL;
 	}
 	*argc = n;
@@ -2001,7 +1980,7 @@ static int picolCommandCatch(pickle_t *i, const int argc, char **argv, void *pd)
 	ARITY(argc != 2 && argc != 3, "expression variable: evaluate expression and catch return code");
 	const int r = picolEval(i, argv[1]);
 	const char *s = NULL;
-	if (pickle_get_result_string(i, &s) != PICKLE_OK)
+	if (pickle_get_result(i, &s) != PICKLE_OK)
 		return PICKLE_ERROR;
 	if (argc == 3)
 		if (pickle_set_var(i, argv[2], s) != PICKLE_OK)
@@ -2011,7 +1990,7 @@ static int picolCommandCatch(pickle_t *i, const int argc, char **argv, void *pd)
 
 static int picolCommandIf(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	int r = 0; /* TODO: This should implement the full TCL 'if'... */
+	int r = 0; /* NB. This should implement the full TCL 'if'...'elseif'...'else' command. */
 	ARITY(argc != 3 && argc != 5, "expression clause {else clause}?: conditionally evaluate expressions");
 	if (argc == 5)
 		if (compare("else", argv[3]))
@@ -2180,7 +2159,7 @@ static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, v
 	return r1 == PICKLE_OK && r2 == PICKLE_OK ? PICKLE_OK : PICKLE_ERROR;
 }
 
-enum { INSERT, DELETE, SET };
+enum { INSERT, DELETE, SET }; /* picolListOperation, and the list functions, are far too complex... */
 
 static inline int picolListOperation(pickle_t *i, const char *parse, const char *position, char *insert, int op, int doEsc) {
 	assert(i);
@@ -3726,22 +3705,6 @@ static int picolTestRegex(allocator_fn fn, void *arena) {
 	return -r;
 }
 
-static inline void pre(pickle_t *i) { /* assert API pre-conditions */
-	UNUSED(i); /* warning suppression when NDEBUG defined */
-	assert(i);
-	assert(i->initialized);
-	assert(i->result);
-	assert(i->length > 0);
-	assert(!!locateByte(i->result_buf, 0, sizeof i->result_buf));
-	assert(i->level >= 0);
-}
-
-static inline int post(pickle_t *i, const int r) { /* assert API post-conditions */
-	pre(i);
-	assert(r >= PICKLE_ERROR && r <= PICKLE_CONTINUE);
-	return i->fatal ? PICKLE_ERROR : r;
-}
-
 int pickle_get_version(unsigned long *version) {
 	assert(version);
 	unsigned long info = 0;
@@ -3756,7 +3719,7 @@ int pickle_get_version(unsigned long *version) {
 	return PICKLE_VERSION ? PICKLE_OK : PICKLE_ERROR;
 }
 
-int pickle_get_result_string(pickle_t *i, const char **s) {
+int pickle_get_result(pickle_t *i, const char **s) {
 	pre(i);
 	assert(s);
 	*s = i->result;

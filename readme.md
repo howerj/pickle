@@ -854,18 +854,7 @@ The function returns one of the following status codes:
 	PICKLE_CONTINUE =  3 (Immediately proceed to next iteration of while loop)
 
 These error codes can affect the flow control within the interpreter. The
-actual return value of the callback is set with 'pickle\_set\_result' functions.
-
-Some functions are define purely for convenience and are not strictly
-necessary, such as 'pickle\_set\_result\_error' and 'pickle\_set\_result\_error\_arity',
-these return 'PICKLE\_ERROR' always, the latter function deals specifically with
-arity errors within functions, formatting the return buffer an number of
-arguments related error message. Likewise, the functions that set the return
-value to a number and not a string are wrappers around calls to [vsnprintf][]
-and 'pickle\_set\_result\_string'. The 'get' and 'set' functions return 'PICKLE\_OK'
-on success, and 'PICKLE\_ERROR' on failure. A 'get' fails if the variable does
-not exists, a 'set' on a variable that does not exist creates that variable
-(which may failure, returning 'PICKLE\_ERROR').
+actual return string of the callback is set with 'pickle\_set\_result' functions.
 
 Variables can be set either within or outside of the user defined callbacks
 with the 'pickle\_set\_variable' family of functions.
@@ -903,7 +892,7 @@ line and then evaluates it:
 		for (char buf[512] = { 0 }; fgets(buf, sizeof buf, stdin);) {
 			const char *r = NULL;
 			const int er = pickle_eval(p, buf);
-			if (pickle_get_result_string(p, &r) != PICKLE_OK)
+			if (pickle_get_result(p, &r) != PICKLE_OK)
 				return 1;
 			if (prompt(stdout, 0, r) < 0)
 				return 1;
@@ -965,7 +954,6 @@ the pickle interpeter is:
 	$fh -close
 
 And an example of how this might be implemented in C is:
-
 
 	int pickleCommandFile(pickle_t *i, int argc, char **argv, void *pd) {
 		FILE *fh = (FILE*)pd;
@@ -1088,7 +1076,7 @@ about 500 LoC if that can be thought of as a proxy for complexity).
   tree just for them instead of adding them into the hash table (this would
   complicate the 'rename' command as well).
 
-* vsnprintf
+* [vsnprintf][]
 
 If you need an implementation of [vsnprintf][] the [Musl C library][] has one.
 This is the most complicate C function in use from the standard library and the
@@ -1097,14 +1085,6 @@ software packages are getting better nowadays). It is not difficult to make
 your own version of [vsnprintf][] function usable by this library as you do not
 need to support all of the functionality library function, for example,
 floating point numbers are not used within this library.
-
-* The list data structure
-
-The list data structure and functions are quite large, they are also quite
-inefficient. The functions are based upon the TCL list manipulation function, a
-more efficient solution would require a different set of functions, ones that
-operated quite differently from the standard TCL functions. One way of doing
-this would be use something similar to the file functions in this library.
 
 * Too big
 
@@ -1156,14 +1136,6 @@ library, but a Lisp Interpreter where I have done this, see
  - Lack of Floating point support, which should not really be expected either
  given the primary usage for this interpreter, as a command language in
  embedded devices.
- - (optional) Help strings and online help; a system for online help using 
- help strings that could be compiled out could be added to the core 
- interpreter, and a mechanism provided so external commands could be registered
- with help. Help strings or a 'help' command could be added externally if
- needs be, how the help is organized matters a lot, it is best if there is only
- one source of truth for each command and that the help is defined as close as
- possible to the source code that implements the function (eg. a help string
- next to the C definition of the function).
 
 ## Interpreter Limitations
 

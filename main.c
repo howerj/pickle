@@ -118,7 +118,7 @@ static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 		return pickle_set_result_error(i, "Invalid command: %s number?", argv[0]);
 	const char *code = argc == 2 ? argv[1] : "0";
 	exit(atoi(code));
-	return PICKLE_OK;
+	return PICKLE_ERROR; /* unreachable */
 }
 
 static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -174,7 +174,7 @@ static int evalFile(pickle_t *i, char *file) {
 		commandSource(i, 1, (char*[1]){ "source",      }, stdin);
 	if (r != PICKLE_OK) {
 		const char *f = NULL;
-		if (pickle_get_result_string(i, &f) != PICKLE_OK)
+		if (pickle_get_result(i, &f) != PICKLE_OK)
 			return r;
 		if (fprintf(stdout, "%s\n", f) < 0)
 			return PICKLE_ERROR;
