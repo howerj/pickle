@@ -7,10 +7,10 @@
 #include <time.h>
 
 #define UNUSED(X) ((void)(X))
-#define ok(i, ...)    pickle_set_result(i, PICKLE_OK,    __VA_ARGS__)
-#define error(i, ...) pickle_set_result(i, PICKLE_ERROR, __VA_ARGS__)
+#define ok(i, ...)    pickle_result_set(i, PICKLE_OK,    __VA_ARGS__)
+#define error(i, ...) pickle_result_set(i, PICKLE_ERROR, __VA_ARGS__)
 
-/* NB. This allocator can be use to get memory statistics or test allocation failures */
+/* NB. This allocator can be use to get memory statistics (printed atexit) or test allocation failures */
 static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t newsz) {
 	UNUSED(arena);
 	if (newsz == 0) { free(ptr); return NULL; }
@@ -21,7 +21,7 @@ static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t 
 static int release(pickle_t *i, void *ptr) {
 	void *arena = NULL;
 	allocator_fn fn = NULL;
-	const int r1 = pickle_get_allocator(i, &fn, &arena);
+	const int r1 = pickle_allocator_get(i, &fn, &arena);
 	if (fn)
 		fn(arena, ptr, 0, 0);
 	return fn ? r1 : PICKLE_ERROR;
@@ -30,7 +30,7 @@ static int release(pickle_t *i, void *ptr) {
 static void *reallocator(pickle_t *i, void *ptr, size_t sz) {
 	void *arena = NULL;
 	allocator_fn fn = NULL;
-	if (pickle_get_allocator(i, &fn, &arena) != PICKLE_OK)
+	if (pickle_allocator_get(i, &fn, &arena) != PICKLE_OK)
 		abort();
 	void *r = allocator(arena, ptr, 0, sz);
 	if (!r) {
@@ -176,7 +176,7 @@ static int evalFile(pickle_t *i, char *file) {
 		commandSource(i, 1, (char*[1]){ "source",      }, stdin);
 	if (r != PICKLE_OK) {
 		const char *f = NULL;
-		if (pickle_get_result(i, &f) != PICKLE_OK)
+		if (pickle_result_get(i, &f) != PICKLE_OK)
 			return r;
 		if (fprintf(stdout, "%s\n", f) < 0)
 			return PICKLE_ERROR;
@@ -184,28 +184,17 @@ static int evalFile(pickle_t *i, char *file) {
 	return r;
 }
 
-static int setArgv(pickle_t *i, int argc, char **argv) {
-	char *args = NULL;
-	int r = PICKLE_ERROR;
-	if ((pickle_concatenate(i, argc, argv, &args) != PICKLE_OK) || args == NULL)
-		goto done;
-	r = pickle_set_var(i, "argv", args);
-done:
-	release(i, args);
-	return r;
-}
-
 int main(int argc, char **argv) {
 	pickle_t *i = NULL;
 	if (pickle_tests(allocator, NULL)   != PICKLE_OK) goto fail;
 	if (pickle_new(&i, allocator, NULL) != PICKLE_OK) goto fail;
-	if (setArgv(i, argc, argv)  != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "exit",   commandExit,   NULL)   != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "source", commandSource, NULL)   != PICKLE_OK) goto fail;
-	if (pickle_register_command(i, "clock",  commandClock,  NULL)   != PICKLE_OK) goto fail;
+	if (pickle_var_set_args(i, "argv", argc, argv)  != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "exit",   commandExit,   NULL)   != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "source", commandSource, NULL)   != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "clock",  commandClock,  NULL)   != PICKLE_OK) goto fail;
 	int r = 0;
 	for (int j = 1; j < argc; j++) {
 		r = evalFile(i, argv[j]);

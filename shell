@@ -792,9 +792,6 @@ test  {0 4} {reg -possessive {a*c} {aaaac}}
 test  {-1 -1} {reg -possessive {.*c} {aaaac}}
 test  {0 4} {reg -greedy {.*c} {aaaac}}
 test  {9 9} {reg {\S$} "@@@    \t@@"}
-state {proc recurse {} {recurse}}
-fails {recurse}
-state {rename recurse ""}
 
 assert [<= $passed $total]
 assert [>= $passed 0]
@@ -805,7 +802,6 @@ set emphasize [green]
 if {!= $failed 0} {
 	set emphasize [red]
 }
-
 
 puts "\nCommands: [info cmdcount]\n"
 puts "$emphasize   pass[normal]/[blue]total $emphasize$passed[normal]/[blue]$total[normal]\n"

@@ -912,7 +912,7 @@ limited to); strlen, memcpy, memchr, memset and abort.
 ## C API
 
 The language can be extended by defining new commands in [C][] and registering
-those commands with the *pickle\_register\_command* function. The internal
+those commands with the *pickle\_command\_register* function. The internal
 structures used are mostly opaque and can be interacted with from within the
 language. As stated a custom allocator can be used and a block allocator is
 provided, it is possible to do quite a bit with this scripting language whilst
@@ -926,12 +926,12 @@ The language can be extended with new functions written in C, each function
 accepts an integer length, and an array of pointers to ASCIIZ strings - much
 like the 'main' function in C.
 
-User defined commands can be registered with the 'pickle\_register\_command'
-function. With in the user defined callbacks the 'pickle\_set\_result' family of
-functions can be used. The callbacks passed to 'pickle\_register\_command' look
+User defined commands can be registered with the 'pickle\_command\_register'
+function. With in the user defined callbacks the 'pickle\_result\_set' family of
+functions can be used. The callbacks passed to 'pickle\_command\_set' look
 like this:
 
-	typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
+	typedef int (*pickle_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
 The callbacks accept a pointer to an instance of the pickle interpreter, and
 a list of strings (in 'argc' and 'argv'). Arbitrary data may be passed to the
@@ -946,10 +946,10 @@ The function returns one of the following status codes:
 	PICKLE_CONTINUE =  3 (Immediately proceed to next iteration of while loop)
 
 These error codes can affect the flow control within the interpreter. The
-actual return string of the callback is set with 'pickle\_set\_result' functions.
+actual return string of the callback is set with 'pickle\_result\_set' functions.
 
 Variables can be set either within or outside of the user defined callbacks
-with the 'pickle\_set\_variable' family of functions.
+with the 'pickle\_var\_set' family of functions.
 
 The pickle library does not come with many built in functions, and comes with
 no Input/Output functions (even those available in the C standard library) to
@@ -984,7 +984,7 @@ line and then evaluates it:
 		for (char buf[512] = { 0 }; fgets(buf, sizeof buf, stdin);) {
 			const char *r = NULL;
 			const int er = pickle_eval(p, buf);
-			if (pickle_get_result(p, &r) != PICKLE_OK)
+			if (pickle_result_get(p, &r) != PICKLE_OK)
 				return 1;
 			if (prompt(stdout, 0, r) < 0)
 				return 1;
@@ -1035,7 +1035,7 @@ namespace with the resource in the private data field of the newly registered
 function. The newly created function, a limited form of a closure, can then
 perform operations on the handle. It can also cleanup the resource by release
 the object in its private data field, and then deleting itself with the
- 'pickle\_rename\_command' function. An example of this is the 'fopen' command,
+ 'pickle\_command\_rename' function. An example of this is the 'fopen' command,
 it returns a closure which contains a file handle.
 
 An example of using the 'fopen' command and the returned function from within
@@ -1051,14 +1051,14 @@ And an example of how this might be implemented in C is:
 		FILE *fh = (FILE*)pd;
 		if (!strcmp(argv[1], "-close")) { /* delete self */
 			fclose(fh);                                /* free handle */
-			return pickle_rename_command(argv[0], ""); /* delete self */
+			return pickle_command_rename(argv[0], ""); /* delete self */
 		}
 		if (!strcmp(argv[1], "-gets")) {
 			char buf[512];
 			fgets(buf, sizeof buf, fh);
-			return pickle_set_result_string(i, buf);
+			return pickle_result_set(i, "%s", buf);
 		}
-		return pickle_set_result_error(i, "invalid option");
+		return pickle_result_set(i, PICKLE_ERROR, "invalid option");
 	}
 
 	int pickleCommandFopen(pickle_t *i, int argc, char **argv, void *pd) {
@@ -1066,12 +1066,12 @@ And an example of how this might be implemented in C is:
 		FILE *fh = fopen(argv[1], argv[2]);
 		sprintf(name, "%p", fh); /* unique name */
 		pickle_register_command(i, name, pickleCommandFile, fh);
-		return pickle_set_result_string(i, name);
+		return pickle_set_result(i, "%s", name);
 	}
 
 The code illustrates the point, but lacks the assertions, error checking,
 and functionality of the real 'fopen' command. The 'pickleCommandFopen' should
-be registered with 'pickle\_register\_command', the 'pickleCommandFile' is not
+be registered with 'pickle\_command\_rename', the 'pickleCommandFile' is not
 as 'pickleCommandFopen' does the registering when needed.
 
 It should be possible to implement the commands 'update', 'after' and 'vwait',
@@ -1146,6 +1146,9 @@ Some of the (internal) decisions made:
   currently just used for some unbounded string operations. (Of note, it might
   be worth creating memory pools for small arguments lists as they are
   generated fairly often, or even a pool of medium size buffers we could lock).
+  This could also speed things up as we spend a lot of time allocating objects,
+  the working set may be small but the number of temporary objects created is
+  not, 'picolArgsGrow' could be targeted for this.
 - Also of note is that the interpreter is designed to gracefully handle out of
   memory conditions, it may not live up to this fact, but it is possible to
   test this by returning NULL in the allocator provided randomly.
@@ -1183,27 +1186,15 @@ floating point numbers are not used within this library.
 
 * Too big
 
-The project is currently pretty corpulent there are; too many functions in the
-header, the [pickle.c][] file is pretty big (although the biggest offenders 
-can be turned off), but there are also things in the C API/header that are 
-there for convenience and could be replace with calls to just
-'pickle\_set\_result'. This function could also be changed to accept an integer
-parameter to return containing a pickle error code, making the function easier
-to use on an error condition.
-
-The C API could be simplified as well for the set/get functions:
-
-- Change pickle\_set\_result to 'pickle\_set\_result(pickle\_t \*i, int ret, const char \*fmt, ...)'
-- Remove 'pickle\_set\_result\_\*'and 'pickle\_set\_result\_error\*'.
-- Add a scanf version of 'pickle\_get\_result'
-- The same could be done for the variable set/get, also unset should be added 
-
 The list functions are also far to complex, big, and error prone, they should
 be rewritten.
 
 It might be nice to go back to the original source, with what I know now, and
 create a very small version of this library with a goal of compiling to under
-30KiB. The 'micro' makefile target does this somewhat.
+30KiB. The 'micro' makefile target does this somewhat, or just starting from
+scratch and making my own version. A smaller API could be made as well, there
+really only needs to be; pickle\_new, pickle\_delete, pickle\_eval,
+pickle\_command\_register, and pickle\_result\_set.
 
 * A module system and some modules
 
