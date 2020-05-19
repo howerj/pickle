@@ -126,7 +126,7 @@ proc defined {x} {
 
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words' which is also from Forth.
-proc words {} { info commands }
+proc words {} { lsort [info commands] }
 proc see {w} {
 	if {eq "" [info commands $w]} {
 		return "'$w' is not defined" -1
@@ -279,19 +279,18 @@ proc state {x} {
 
 puts "SYSTEM OPTIONS"
 puts "Version:      [join [info version] .]"
-puts "Pointer Size: [info sizeof pointer]"
-puts "Number  Size: [info sizeof number]"
+puts "Pointer Size: [info system pointer]"
+puts "Number  Size: [info system number]"
 puts "Limits: "
-puts "\trecursion:  [info limits recursion]"
-puts "\tstring:     [info limits string]"
-puts "\tminimum:    [info limits minimum]"
-puts "\tmaximum:    [info limits maximum]"
+puts "\trecursion:  [info system recursion]"
+puts "\tstring:     [info system length]"
+puts "\tminimum:    [info system min]"
+puts "\tmaximum:    [info system max]"
 puts "Features:"
-puts "\tstring:     [info features string]"
-puts "\tmaths:      [info features maths]"
-puts "\tdebugging:  [info features debugging]"
-puts "\tstrict:     [info features strict]"
-puts "\tstr-length: [info features string-length]"
+puts "\tstring:     [info system string]"
+puts "\tmaths:      [info system maths]"
+puts "\tdebugging:  [info system debugging]"
+puts "\tstrict:     [info system strict]"
 
 puts "\n\[Pickle Tests\]\n"
 puts "Date: [clock format [clock seconds] {%Y/%m/%d %H:%M:%S}]\n"
@@ -302,7 +301,7 @@ test 0 {bool 0}
 fails {bool}
 fails {$a}
 
-if {== 0 [info features strict]} {
+if {== 0 [info system strict]} {
 	test 0 {bool 0b1}
 	test 1 {bool 9b1}
 	test 1 {== 0 abc}
@@ -581,7 +580,7 @@ fails {string ordinal }
 test ff {string dec2hex 255}
 test 1000 {string dec2hex 4096}
 test 4096 {string hex2dec 1000}
-if {== [info sizeof number] 16} { test -1 {string hex2dec FffF} } else { test 65535 {string hex2dec FffF} }
+if {== [info system number] 16} { test -1 {string hex2dec FffF} } else { test 65535 {string hex2dec FffF} }
 test 101 {string dec2base 5 2}
 fails {string dec2base A 2}
 test 5 {string base2dec 101 2}
@@ -735,6 +734,7 @@ test {c d} {lrange {a b c d e} 2 3}
 test {a b c d} {lrange {a b c d e} -2 3}
 test {} {lrange {a b c d e} 8 3}
 test {} {lrange {} 1 1}
+test {} {lrange {a b c d e} 4 0}
 test 1 {lsearch {x abc def} abc}
 test -1 {lsearch {x abc def} xyz}
 test 0 {lsearch {x abc def} *x*}
@@ -792,6 +792,9 @@ test  {0 4} {reg -possessive {a*c} {aaaac}}
 test  {-1 -1} {reg -possessive {.*c} {aaaac}}
 test  {0 4} {reg -greedy {.*c} {aaaac}}
 test  {9 9} {reg {\S$} "@@@    \t@@"}
+state {proc recurse {} {recurse}}
+fails {recurse}
+state {rename recurse ""}
 
 assert [<= $passed $total]
 assert [>= $passed 0]

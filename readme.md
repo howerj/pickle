@@ -498,6 +498,98 @@ For example, defining:
 Would mean any command the interpreter does know know about will be executed by
 the system shell, including its arguments.
 
+* info subcommand args...
+
+The 'info' command is used to query the status of the interpreter and supports
+many subcommands. The subcommands that are supported are:
+
+- commands match?
+
+Match defaults to '\*'. Get a list of all defined commands filtered on 'match'.
+
+- procs match?
+
+Match defaults to '\*'. Get a list of all commands defined with 'proc' filtered
+on 'match'.
+
+- functions match?
+
+Match defaults to '\*'. Get a list of all mathematical functions filtered on
+'match'.
+
+- locals match?
+
+Match defaults to '\*'. Get a list of all defined locals filtered on 'match'.
+
+- globals match?
+
+Match defaults to '\*'. Get a list of all defined globals filtered on 'match'.
+
+- level
+
+Get the current 'level' of the interpreter, which is the degree of nesting or
+scopes that exist relative to the top level scope. Entering a function
+increases the level by one, for example.
+
+- cmdcount
+
+Get the number of commands executed since startup, this can be used as a crude
+form of a performance counter if the command *clock* is not available.
+
+- version
+
+Return the version number of the interpreter in list format "major minor patch", 
+[semantic versioning](https://semver.org/) is used.
+
+- complete line
+
+Does the 'line' constitute a command that can be called (which may result in an
+error)? Or 'does this line parse correctly'? "0" is returned if it cannot, "1"
+is returned if it can.
+
+- exists variable
+
+Does 'variable' exist in the current scope, "0" is returned if it does not
+whilst "1" is returned if it does.
+
+- args name
+
+Get the arguments of the named function. Functions that are defined in C will
+returned the string 'built-in', otherwise a list is returned containing the
+function arguments.
+
+- body name
+
+Get the body of the named function. Functions that are built in functions
+defined in C will return a function pointer that represents that C function.
+Functions defined with 'proc' will return the body of the function as a string.
+
+- private name
+
+Get the private data of a function.
+
+- system attribute
+
+The "system" subcommand is used to access various attributes that have
+been set in the interpreter at compile time or due to the environment
+that the system is compiled for. 
+
+Attributes that can be looked up are:
+
+1. "pointer": size of a pointer in bits.
+2. "number": size of a number in bits.
+3. "recursion": recursion depth limit.
+4. "length": maximum length of a string or -1 if string length is unlimited.
+5. "min": minimum size of a signed number.
+6. "max": maximum size of a signed number.
+7. "string": are string operations defined?.
+8. "maths": are math operations defined?.
+9. "list": are list operations defined?.
+10. "regex": are regular expression operations defined?.
+11. "help": are help strings compiled in?.
+12. "debugging": is debugging turned on?.
+13. "strict": is strict numeric conversion turned on?.
+
 #### String Operator
 
 * string option arg *OR* string option arg arg *OR* string option arg arg arg
@@ -1023,7 +1115,10 @@ There are other implementations of [TCL][] and other extensions of the original
 
 - Picol Extension <https://wiki.tcl-lang.org/page/Picol>
 - TCL reimplementation <http://jim.tcl.tk/index.html/doc/www/www/index.html>
+- An entire list of implementations <https://blog.tcl.tk/17975>
+- Another Picol Extension <https://chiselapp.com/user/dbohdan/repository/picol/index>
 
+And I am sure if you were to search <https://github.com> you would find more.
 
 * Internal memory usage
 
@@ -1050,7 +1145,7 @@ Some of the (internal) decisions made:
   for more allocations we do, for example when creating argument lists, but is 
   currently just used for some unbounded string operations. (Of note, it might
   be worth creating memory pools for small arguments lists as they are
-  generated fairly often).
+  generated fairly often, or even a pool of medium size buffers we could lock).
 - Also of note is that the interpreter is designed to gracefully handle out of
   memory conditions, it may not live up to this fact, but it is possible to
   test this by returning NULL in the allocator provided randomly.
@@ -1102,6 +1197,13 @@ The C API could be simplified as well for the set/get functions:
 - Remove 'pickle\_set\_result\_\*'and 'pickle\_set\_result\_error\*'.
 - Add a scanf version of 'pickle\_get\_result'
 - The same could be done for the variable set/get, also unset should be added 
+
+The list functions are also far to complex, big, and error prone, they should
+be rewritten.
+
+It might be nice to go back to the original source, with what I know now, and
+create a very small version of this library with a goal of compiling to under
+30KiB. The 'micro' makefile target does this somewhat.
 
 * A module system and some modules
 

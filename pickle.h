@@ -23,29 +23,25 @@ typedef void *(*allocator_fn)(void *arena, void *ptr, size_t oldsz, size_t newsz
 
 struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
-typedef int (*pickle_command_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
+typedef int (*pickle_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
 enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
 
 PICKLE_API int pickle_new(pickle_t **i, allocator_fn a, void *arena);
 PICKLE_API int pickle_delete(pickle_t *i);
 PICKLE_API int pickle_eval(pickle_t *i, const char *t);
-PICKLE_API int pickle_register_command(pickle_t *i, const char *name, pickle_command_func_t f, void *privdata);
-PICKLE_API int pickle_rename_command(pickle_t *i, const char *src, const char *dst); /* if 'dst' is "" then command is deleted */
+PICKLE_API int pickle_register_command(pickle_t *i, const char *name, pickle_func_t f, void *privdata);
+PICKLE_API int pickle_rename_command(pickle_t *i, const char *src, const char *dst);
+PICKLE_API int pickle_get_allocator(pickle_t *i, allocator_fn *a, void **arena);
+PICKLE_API int pickle_set_result(pickle_t *i, int ret, const char *fmt, ...);
+PICKLE_API int pickle_get_result(pickle_t *i, const char **s);
+PICKLE_API int pickle_set_var(pickle_t *i, const char *name, const char *val);
+PICKLE_API int pickle_get_var(pickle_t *i, const char *name, const char **val);
 PICKLE_API int pickle_tests(allocator_fn fn, void *arena);
 
 PICKLE_API int pickle_concatenate(pickle_t *i, int argc, char **argv, char **cat); /* returned in 'cat', caller frees */
-PICKLE_API int pickle_get_allocator(pickle_t *i, allocator_fn *a, void **arena);
 
-PICKLE_API int pickle_set_result(pickle_t *i, const char *fmt, ...);
-PICKLE_API int pickle_set_result_error(pickle_t *i, const char *fmt, ...); /* always returns PICKLE_ERROR */
-PICKLE_API int pickle_set_result_string(pickle_t *i, const char *s);
-PICKLE_API int pickle_get_result(pickle_t *i, const char **s);
 
-PICKLE_API int pickle_set_var(pickle_t *i, const char *name, const char *val);
-PICKLE_API int pickle_get_var(pickle_t *i, const char *name, const char **val);
-
-PICKLE_API int pickle_get_version(unsigned long *version); /* in x.y.z format, z = LSB. */
 #ifdef __cplusplus
 }
 #endif
