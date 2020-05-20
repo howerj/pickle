@@ -124,6 +124,12 @@ proc defined {x} {
 	return undefined
 }
 
+proc lremove {lv v} {
+    upvar 1 $lv var
+    set idx [lsearch -exact $var $v]
+    set var [lreplace $var $idx $idx]
+}
+
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words' which is also from Forth.
 proc words {} { lsort [info commands] }
@@ -905,8 +911,8 @@ test -1 {lsearch {a b c d e} x}
 test 2 {lsearch {a b {c d} e} {c d}} 
 test 1 {lsearch {foo bar grill} b*} 
 test {1 x 3 4} {set a {1 2 3 4}; lset a 1 x} 
-test "list index out of range" {set a {1 2 3 4}; lset a 99 x} 
-test "list index out of range" {set a {1 2 3 4}; lset a -1 x} 
+fails {set a {1 2 3 4}; lset a 99 x} 
+fails {set a {1 2 3 4}; lset a -1 x} 
 fails {lset foobar 4 2} 
 test {{a b} {c d} foo} {set x {{a b} {c d} {e f}}; lset x 2 foo} 
 test {} {lsort {}} 
@@ -918,7 +924,7 @@ test {10 2 3 5} {lsort  {10 3 5 2}}
 test {2 3 5 10} {lsort -integer {10 3 2 5}} 
 #test {a b cc dd} {lsort -unique {cc a dd cc b}} 
 #test -unique {lsort -unique} 
-test 0 {max 0} 
+#test 0 {max 0} 
 test 1 {max 0 1} 
 test 99 {max -5 2 99 -100 47 52} 
 #test 0 {min 0} 
@@ -1030,7 +1036,19 @@ test "" {string trimright fffff f}
 test FOO {string toupper foo} 
 test {foo 3} {set a foo; subst {$a [string length $a]}} 
 test hello {subst {h\x65llo}} 
+test 0 {set foo 1;unset foo;info exists foo}
+test 1 {set foo 1;info exists foo}
+#test "" {set i 10; while {$i} {incr i -1}} 
+test 0 {set i 10; while {!= $i 0} {incr i -1}; set i} 
+test 5 {set i 10; while {> $i 5} {incr i -1}; set i} 
+test 55 {proc f x {uplevel 1 set gg $x}; f 55; set gg}
+state {rename f ""}
 
+
+
+
+# Version should not be '0':
+test 1 {ne "0" {eval "or [info version]"}}
 
 assert [<= $passed $total]
 assert [>= $passed 0]

@@ -1120,7 +1120,7 @@ static char *picolEscape(pickle_t *i, const char *s, size_t length) {
 
 static int picolStringNeedsEscaping(const char *s) {
 	assert(s);
-	long braces = 0, brackets = 0;
+	long braces = 0;
 	char start = s[0], end = 0, ch = 0, sp = 0;
 	for (size_t i = 0; (ch = s[i]); s++) {
 		end = ch;
@@ -1138,7 +1138,7 @@ static int picolStringNeedsEscaping(const char *s) {
 		}
 	}
 	if (!start || sp)
-		return brackets || braces || !(start == '{' && end == '}');
+		return braces || !(start == '{' && end == '}');
 	return 0;
 }
 
@@ -2120,15 +2120,23 @@ static int picolCommandFor(pickle_t *i, const int argc, char **argv, void *pd) {
 static inline int picolCommandLRepeat(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	assert(!pd);
-	ARITY(argc != 3, "number string: repeat a string to form a list");
+	ARITY(argc < 3, "number string...: repeat a string to form a list");
 	number_t count = 0;
 	if (picolStringToNumber(i, argv[1], &count) != PICKLE_OK)
 		return PICKLE_ERROR;
 	if (count < 0)
 		return error(i, "Invalid option %s", argv[1]);
-	const int escape = picolStringNeedsEscaping(argv[2]);
-	const size_t rl  = picolStrlen(argv[2]);
-	char *escaped = escape ? picolEscape(i, argv[2], rl) : argv[2];
+	char *repeat = argv[2];
+	int noescape = 0;
+	if (argc > 3) {
+		repeat = concatenate(i, " ", argc - 2, argv + 2, 0, 0);
+		if (!repeat)
+			return PICKLE_ERROR;
+		noescape = 1;
+	}
+	const int escape = !noescape && picolStringNeedsEscaping(repeat);
+	const size_t rl  = picolStrlen(repeat);
+	char *escaped = escape ? picolEscape(i, repeat, rl) : repeat;
 	const size_t el  = escape ? picolStrlen(escaped) : rl;
 	char *r = picolMalloc(i, ((el + 1) * count) + 1);
 	if (!r)
@@ -2137,9 +2145,9 @@ static inline int picolCommandLRepeat(pickle_t *i, const int argc, char **argv, 
 		move(r + ((el + 1) * j), escaped, el);
 		r[((el + 1) * j) + el] = j < (count - 1) ? ' ' : '\0';
 	}
-	r[count*el + count] = '\0';
+	r[count * el + count] = '\0';
 	if (escaped != argv[2])
-		picolFree(i, escaped);
+		(void)picolFree(i, escaped);
 	return picolForceResult(i, r, 0);
 fail:
 	if (escaped != argv[2])
@@ -2207,12 +2215,13 @@ static inline int picolCommandLIndex(pickle_t *i, const int argc, char **argv, v
 
 enum { INSERT, DELETE, SET }; /* picolListOperation, and the list functions, are far too complex... */
 
-static inline int picolListOperation(pickle_t *i, const char *parse, const char *position, char *insert, int op, int doEsc) {
+static inline int picolListOperation(pickle_t *i, const char *parse, const char *position, int strict, char *insert, int op, int doEsc) {
 	assert(i);
 	assert(parse);
 	assert(position);
 	assert(insert);
-	const int nogrow = op == SET || op == DELETE, escape = doEsc && picolStringNeedsEscaping(insert);
+	const int nogrow = op == SET || op == DELETE;
+       	const int escape = doEsc && picolStringNeedsEscaping(insert);
 	const size_t il  = picolStrlen(insert);
 	number_t index = 0, r = PICKLE_OK;
 	if (picolStringToNumber(i, position, &index) != PICKLE_OK)
@@ -2224,6 +2233,12 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 	assert(a.argc >= 0);
 	if (!a.argv)
 		return PICKLE_ERROR;
+	if (strict) {
+		if (index < 0 || index > a.argc) {
+			r = error(i, "Invalid index %s", position);
+			goto done;
+		}
+	}
 	if (!a.argc) {
 		r = picolSetResultString(i, insert);
 		goto done;
@@ -2248,7 +2263,7 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 		a.argv[index] = NULL;
 	}
 	if (r == PICKLE_OK) {
-		char *s = concatenate(i, " ", a.argc, a.argv, 0, 0);
+		char *s = concatenate(i, " ", a.argc, a.argv, doEsc, 0);
 		if (!s)
 			r = PICKLE_ERROR;
 		else if (picolForceResult(i, s, 0) != PICKLE_OK)
@@ -2257,7 +2272,6 @@ static inline int picolListOperation(pickle_t *i, const char *parse, const char 
 	if (index < a.argc)
 		a.argv[index] = prev;
 done:
-
 	if (escape)
 		if (picolFree(i, insert) != PICKLE_OK)
 			r = PICKLE_ERROR;
@@ -2274,7 +2288,7 @@ static inline int picolDoLInsert(pickle_t *i, const char *list, const char *posi
 	char *insert = concatenate(i, " ", argc, argv, 0, 0);
 	if (!insert)
 		return PICKLE_ERROR;
-	const int r1 = picolListOperation(i, list, position, insert, INSERT, doEsc);
+	const int r1 = picolListOperation(i, list, position, 0, insert, INSERT, doEsc);
 	const int r2 = picolFree(i, insert);
 	return r1 != PICKLE_OK || r2 != PICKLE_OK ? PICKLE_ERROR : PICKLE_OK;
 }
@@ -2295,7 +2309,9 @@ static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, voi
 	pickle_var_t *v = picolGetVar(i, argv[1], 1);
 	if (!v)
 		return error(i, "Invalid variable %s", argv[1]);
-	if (picolListOperation(i, picolGetVarVal(v), argv[2], argv[3], argv[3][0] ? SET : DELETE, 1) != PICKLE_OK)
+	if (picolListOperation(i, picolGetVarVal(v), argv[2], 1, argv[3], argv[3][0] ? SET : DELETE, 1) != PICKLE_OK)
+		return PICKLE_ERROR;
+	if (picolFreeVarVal(i, v) != PICKLE_OK)
 		return PICKLE_ERROR;
 	return picolSetVarString(i, v,  i->result);
 }
@@ -2402,32 +2418,35 @@ static inline int picolCommandLReplace(pickle_t *i, const int argc, char **argv,
 		const int r2 = picolFree(i, args);
 		return r1 == PICKLE_OK && r2 == PICKLE_OK ? PICKLE_OK : PICKLE_ERROR;
 	}
-	int r = 0, empty = 0;
+	int r = 0, empty = 0, used = 0;
 	args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1]);
 	char *repl = concatenate(i, " ", argc - 4, argv + 4, 1, 0), *n = NULL;
 	if (!a.argv || !repl)
 		goto err;
 	empty = repl[0] == '\0';
-	if (!empty && a.argc && first < 0)
-		return ok(i, "Invalid option %s", argv[2]);
 	for (size_t j = first; j <= (size_t)last && j < (size_t)a.argc; j++) {
 		char *f = a.argv[j];
 		a.argv[j] = NULL;
 		if (picolFree(i, f) != PICKLE_OK)
 			goto err;
-		if (j == (size_t)first && !empty)
+		if (j == (size_t)first && !empty) {
+			used = 1;
 			a.argv[j] = repl;
+		}
 	}
 	if (!(n = concatenate(i, " ", a.argc, a.argv, 0, 0)))
 		goto err;
 	r = picolForceResult(i, n, 0);
-	if (empty)
+	if (!used)
 		if (picolFree(i, repl) != PICKLE_OK)
 			r = PICKLE_ERROR;
 	if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
 		return PICKLE_ERROR;
 	return r;
 err:
+	if (!used)
+		if (picolFree(i, repl) != PICKLE_OK)
+			r = PICKLE_ERROR;
 	(void)picolFreeArgList(i, a.argc, a.argv);
 	(void)picolFree(i, repl);
 	(void)picolFree(i, n);
@@ -2522,27 +2541,25 @@ static inline int picolCommandLRange(pickle_t *i, const int argc, char **argv, v
 		return PICKLE_ERROR;
 	if (picolStringToNumber(i, argv[3], &last) != PICKLE_OK)
 		return PICKLE_ERROR;
-	if (first < 0)
-		first = 0;
-	if (last < 0)
-		last = 0;
-	int rs = 0;
+	if (first > last || (last < 0 && first < 0))
+		return picolSetResultEmpty(i);
+	first = MAX(0, first);
+	last  = MAX(0, last);
 	const args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1]);
 	if (!a.argv)
 		return PICKLE_ERROR;
+	last = MIN(last, a.argc - 1);
 	if (a.argc == 0 || first > a.argc || (1 + last - first) <= 0) {
 		if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
 			return PICKLE_ERROR;
 		return picolSetResultEmpty(i);
 	}
-	if (last >= a.argc)
-		last = a.argc - 1;
 	char *range = concatenate(i, " ", 1 + last - first, a.argv + first, 1, 0);
 	if (!range) {
 		(void)picolFreeArgList(i, a.argc, a.argv);
 		return PICKLE_ERROR;
 	}
-	rs = picolForceResult(i, range, 0);
+	const int rs = picolForceResult(i, range, 0);
 	return picolFreeArgList(i, a.argc, a.argv) == PICKLE_OK ? rs : PICKLE_ERROR;
 }
 
