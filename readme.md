@@ -479,7 +479,7 @@ Match the longest string possible.
 Match the longest string possible, with no backtracking. If backtracking is
 necessary the match fails.
 
-* unknown {list}
+* unknown cmd args...
 
 This command is *not* defined at startup, but can be defined by the user to
 catch command-not-found exceptions.
@@ -493,10 +493,27 @@ found then it is executed with the command and its arguments being passed to
 
 For example, defining:
 
-	proc unknown {l} { system "$l" }
+	proc unknown {args} { system "$args" }
 
 Would mean any command the interpreter does know know about will be executed by
-the system shell, including its arguments.
+the system shell, including its arguments, provided the *system* command is
+defined.
+
+If an unknown command is found within the unknown function then a generic error
+message is returned instead.
+
+* trace on *OR* trace off *OR* trace status
+
+This command can be used to turn tracing on, off, or to query the status of
+tracing. The [TCL trace command][] is quite powerful, this one is far more
+limited.
+
+* tracer cmd args...
+
+This command *not* defined at startup, but can be defined by the user. This can
+be used to trace the execution of the program.
+
+The commands executed within *tracer* will not be traced.
 
 * info subcommand args...
 
@@ -1248,6 +1265,7 @@ Known limitations of the interpreter include:
 [MIT License]: https://en.wikipedia.org/wiki/MIT_License
 [Make]: https://en.wikipedia.org/wiki/Make_(software)
 [Musl C library]: https://git.musl-libc.org/cgit/musl/tree/src/stdio
+[TCL trace command]: https://www.tcl.tk/man/tcl8.5/TclCmd/trace.htm
 [TCL]: https://en.wikipedia.org/wiki/Tcl
 [UTF-8]: https://en.wikipedia.org/wiki/UTF-8
 [alnum]: http://www.cplusplus.com/reference/cctype/isalnum/

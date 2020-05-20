@@ -88,7 +88,7 @@ static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
 			return PICKLE_ERROR;
 		return PICKLE_BREAK;
 	}
-	const int r = ok(i, line);
+	const int r = ok(i, "%s", line);
 	release(i, line);
 	return r;
 }
@@ -111,7 +111,7 @@ static int commandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 2)
 		return error(i, "Invalid command %s string", argv[0]);
 	const char *env = getenv(argv[1]);
-	return ok(i, env ? env : "");
+	return ok(i, "%s", env ? env : "");
 }
 
 static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {

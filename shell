@@ -101,10 +101,10 @@ proc ansi {cmd args} {
 	return "Invalid subcommand $cmd $args"
 }
 
-proc normal {} { color reset }
-proc red    {} { color red }
-proc green  {} { color green }
-proc blue   {} { color blue }
+proc normal {} "return {[color reset]} 0"
+proc red    {} "return {[color red]} 0"
+proc green  {} "return {[color green]} 0"
+proc blue   {} "return {[color blue]} 0"
 
 # An ersatz version of "{*}"
 proc expand {cmd args} {
@@ -161,6 +161,9 @@ proc time {x args} {
 	return [- [clock clicks] $t] 0
 }
 
+proc bye {} { exit }
+proc quit {args} { exit }
+
 proc {stack dump} {} {
 	set l [+ [info level] 0]
 	for {set i 1} {<= $i $l} {incr i} {
@@ -208,10 +211,11 @@ if {eq [getenv OS] "Windows_NT" } {
 
 proc shell {} {
 	catch {source "[getenv [uplevel #0 set HOME]]/.picklerc"}
-	set prompt "pickle> "
+	proc prompt {} { return "pickle> " }
 	set count 0
-	while {incr count} {
-		puts -nonewline $prompt
+	while { } {
+		incr count
+		puts -nonewline [prompt]
 		set line [string trim [io]]
 		set retcode [catch {eval $line} result]
 		set fail [red]
@@ -354,6 +358,12 @@ test 4 {min 90 8 4 6 7 89}
 test 4 {abs 4}
 test 4 {abs -4}
 test -1 {+ [invert 1] 1}
+test 3 {or 1 2}
+test 3 {xor 1 2}
+test 0 {xor 2 2}
+test 2 {xor 2 2 2}
+test 2 {or 2 2}
+test 2 {or 2 2 2}
 test 255 {or 85 170}
 test 255 {xor 85 170}
 test 0   {and 85 170}
@@ -428,17 +438,17 @@ test 4 {string length abcd}
 test 0 {string length ""}
 test 0 {string length {}}
 fails {string length}
-test 1 {string match %% %}
 test 1 {string match "" ""}
 test 1 {string match "*" ""}
 test 1 {string match "*" "a"}
 test 1 {string match "*" "aaa"}
-test 0 {string match "%*" ""}
-test 0 {string match "%*" "a"}
-test 0 {string match "%*" "aaa"}
+test 0 {string match {\*} ""}
+test 0 {string match {\*} "a"}
+test 0 {string match {\*} "aaa"}
 test 1 {string match "?" "?"}
 test 1 {string match "?" "a"}
-test 1 {string match "%?" "?"}
+test 1 {string match {\*} *}
+test 1 {string match {\?} ?}
 test 1 {string match "???" "abc"}
 test 1 {string match "???" "abc"}
 test 0 {string match "???" "abcd"}
@@ -650,7 +660,6 @@ test {} {split "" ""}
 test {{} {}} {split "." "."}
 test {{} {} {}} {split ".." "."}
 fails {split}
-fails {split "abc"}
 test {a b {c d e  } {  f {g h}}} {list a b "c d e  " "  f {g h}"}
 test {a b c xyz} {linsert {a b c} 99 xyz}
 test {{x y z}} {linsert "" 3 {x y z}}
@@ -707,6 +716,7 @@ test {c b a} {lsort -decreasing {b a c}}
 test {a b c} {lsort {a b c}}
 test {1 2 3} {lsort -integer {1 2 3}}
 test {3 2 1} {lsort -integer -decreasing {1 2 3}}
+test {a {b c} d} {lsort {d a {b c}}}
 fails {lsort}
 fails {lsort -integer {1 2 a}}
 # Test upvar links
@@ -755,6 +765,9 @@ fails {lappend}
 test "hello" {apply {{} { return hello 0; }}}
 test 4 {apply {{x} {* $x $x}} 2}
 test 8 {apply {{x y} {* $x $y}} 2 4}
+test {2 3 4} {apply {{args} { return $args }} 2 3 4}
+test {2 3 4 5} {apply {{args} { return $args }} 2 3 4 5}
+test {} {apply {{args} { return $args }}}
 fails {apply}
 fails {apply {}}
 fails {apply x}
@@ -792,6 +805,232 @@ test  {0 4} {reg -possessive {a*c} {aaaac}}
 test  {-1 -1} {reg -possessive {.*c} {aaaac}}
 test  {0 4} {reg -greedy {.*c} {aaaac}}
 test  {9 9} {reg {\S$} "@@@    \t@@"}
+
+# These test cases were taken from:
+# <https://chiselapp.com/user/dbohdan/repository/picol/index>
+# Also available at: <https://github.com/dbohdan/picol>
+# At the time of writing this the tests appeared also to be
+# licensed under the original BSD license.
+
+test 0 {catch {* 2 2}}
+test -1 {catch {/ 1 0}}
+test ""  concat
+test abc {concat abc}
+test {alpha bravo charlie} {concat alpha bravo charlie}
+test {alpha bravo charlie} {concat alpha {bravo charlie}}
+test {1 2 3 4 5} {concat {1 2} {3 4 5}}
+# BUG: Crashes interpreter
+#test "" {concat {} {}}
+test {foo bar} {concat foo {} bar}
+
+test b {lindex {a b c} 1}     
+test a {lindex {a b c d e} 0} 
+test a {lindex "         a                " 0} 
+test a {lindex "  \t   \n    a      \t \n   b    " 0} 
+test b {lindex "  \t   \n    a      \t \n   b    " 1} 
+test {} {lindex "  \t   \n    a      \t \n   b    " 2} 
+test {hello world} {lindex "  \t   \n    {hello world} \t  \n   " 0} 
+test {} {lindex "  \t   \n    {hello world} \t  \n   " 1} 
+test b {lindex {{a} {b} {c}} 1} 
+test b {lindex {a b c} 1} 
+test {a b c} {lindex {a b c}} 
+test {} {lindex {}} 
+test {} {lindex {a b "c"} 3} 
+test {b"c"} {lindex {a b"c"} 1} 
+test {} {lindex {a b"c"} 2} 
+test {a"b"c} {lindex {a"b"c} 0} 
+test {} {lindex {} -42} 
+test {} {lindex {a b c} -1} 
+test {} {lindex {a b c} -2} 
+test {} {lindex {a b c} -3} 
+test {a c b} {linsert {a b} 1 c}    
+test {a c d b} {linsert {a b} 1 c d}  
+test {a b c d e} {linsert {a b} 3 c d e}  
+test {c d e a b} {linsert {a b} 0 c d e}  
+test {} list 
+test {a {b c} d} {list a "b c" d}       
+test {{} a} {list "" a} 
+test {a {} b} {list a {} b} 
+test {a {}} {list a {}} 
+test "a {\t}" {list a \t} 
+test "a {\n}" {list a \n} 
+test {a {\n}} {list a {\n}} 
+test {a {\r}} {list a {\r}} 
+test {a {\t}} {list a {\t}} 
+test {{$a}} {list {$a}} 
+test {{[hi]}} {list {[hi]}} 
+test {{[hi]}} {list {[hi]}} 
+test 0 {llength {}} 
+test 0 {llength { }} 
+test 0 {llength {   }} 
+test 1 {llength {   1}} 
+test 1 {llength {   1 }} 
+test 2 {llength {   1 2}} 
+test 3 {llength {   1 2  3      }} 
+test 5 {llength {a b c d e}} 
+test 0 {llength "   \t  \n                          "} 
+test 1 {llength "   \t  \n         a                "} 
+test {b c d} {lrange {a b c d e f g} 1 3} 
+#test {d e f g} {lrange {a b c d e f g} 3 end} 
+test {d e f g} {lrange {a b c d e f g} 3 99} 
+test {do re mi} {lrange {do re mi fa so la si} 0 2} 
+test {} {lrange {do re mi fa so la si} -5 -7} 
+test {} {lrange {do re mi fa so la si} -7 -5} 
+test {do re mi} {lrange {do re mi fa so la si} -5 2} 
+test {} {lrange {do re mi fa so la si} 0 -7} 
+test {} {lrange {do re mi fa so la si} 99 99} 
+test {a b c} {lrepeat 1 a b c} 
+test {a b c a b c a b c} {lrepeat 3 a b c} 
+test {a b x d} {lreplace {a b c d} 2 2 x} 
+test {a b x y d} {lreplace {a b c d} 2 2 x y} 
+test {b c d} {lreplace {a b c d} 0 0}   
+test {} {lreplace {a b c d} 0 99}   
+#test {} {lreplace {a b c d} 0 end}   
+test {a B C d} {lreplace {a b c d} 1 2 B C}   
+#test {a B C D} {lreplace {a b c d} 1 end B C D}   
+test b {lreplace " \t \n a \n " 0 0 b} 
+test a {lreplace {} 0 0 a} 
+test {a b d e} {lreplace {a b c} 2 3 d e} 
+test a {lreplace {} -5 -1 a} 
+test {a b} {lreplace {c b} -5 0 a} 
+#test {c d} {lreplace {f x} -5 end c d} 
+test {a b c} {lreplace {b c} -5 -1 a} 
+test {} {lreverse {}} 
+test a {lreverse a} 
+test {b a} {lreverse {a b}} 
+test {b {longer string} a} {lreverse {a {longer string} b}} 
+test {5 4 3 2 1} {lreverse {    1       2  3  4  5 }} 
+test 2 {lsearch {a b c d e} c} 
+test -1 {lsearch {a b c d e} x} 
+test 2 {lsearch {a b {c d} e} {c d}} 
+test 1 {lsearch {foo bar grill} b*} 
+test {1 x 3 4} {set a {1 2 3 4}; lset a 1 x} 
+test "list index out of range" {set a {1 2 3 4}; lset a 99 x} 
+test "list index out of range" {set a {1 2 3 4}; lset a -1 x} 
+fails {lset foobar 4 2} 
+test {{a b} {c d} foo} {set x {{a b} {c d} {e f}}; lset x 2 foo} 
+test {} {lsort {}} 
+test {a b cc ddd} {lsort {cc a ddd b}} 
+test {1 2 3 4} {lsort {3 1 4 2}} 
+test {{a b} {c d}} {lsort {{c d} {a b}}} 
+test {d c b a} {lsort -decreasing {c a d b}} 
+test {10 2 3 5} {lsort  {10 3 5 2}} 
+test {2 3 5 10} {lsort -integer {10 3 2 5}} 
+#test {a b cc dd} {lsort -unique {cc a dd cc b}} 
+#test -unique {lsort -unique} 
+test 0 {max 0} 
+test 1 {max 0 1} 
+test 99 {max -5 2 99 -100 47 52} 
+#test 0 {min 0} 
+test 0 {min 0 1} 
+test -100 {min -5 2 99 -100 47 52} 
+test 42 {set x 42}                
+test 24 {set x 24; set x}         
+#test 37 {set x_y 37; return $x_y} 
+test 37 {set x_y 37; return $x_y 0} 
+test 35 {set x_y 35; set x_y}     
+test {aa bb cd efg} {split aa:bb:cd:efg :}     
+test {{} aa bb cd efg} {split :aa:bb:cd:efg :}    
+test {aa bb cd efg {}} {split aa:bb:cd:efg: :}    
+test {a {} b} {split {a  b}}             
+test {h e l l o} {split hello ""}           
+test {a b c d} {split a+b-c+d +-}         
+test {a b cc d} {split "a;b;cc;d" ";"}     
+test {abcdef ghi j} {split abcdef\nghi\nj \n}  
+test {abcdef ghi j} {split abcdefXghiXj X}     
+test 0 {string first a abcdefg}   
+test -1 {string first x abcdefg}   
+test 4 {string first e abcdefg}   
+test 5 {string first f abcdefg 2} 
+test -1 {string first a abcdefg 2} 
+test e {string index hello 1}   
+#test o {string index hello end} 
+test {} {string index {} 2}      
+#test {} {string index {} end}    
+test {} {string index {} -562}   
+test 1 {string is integer 42}  
+test 1 {string is integer -1}  
+test 0 {string is integer foo} 
+#test 5 {string last + a+b+c+d} 
+#test -1 {string last - a+b+c+d} 
+test 5 {string length hello}   
+test foo {string tolower FOO}    
+test 1 {string match f* foo}     
+test 0 {string match f* bar}     
+test 1 {string match *ll* hello} 
+test 0 {string match *ll* world} 
+test 1 {string match *lo hello}  
+test 0 {string match *lo world}  
+test 1 {string match foo foo}    
+test 0 {string match foo bar}    
+test 0 {string match foo FOO}    
+#test 1 {string match -nocase foo FOO} 
+test 1 {string match f?o foo} 
+test 0 {string match ?foo foo} 
+test 1 {string match f?o* foolish} 
+test 0 {string match f foo} 
+test 1 {string match "" ""} 
+test 1 {string match {\*\*\?\*} **?*} 
+test 0 {string match {\*\*\?\*} **a*} 
+test 0 {string match {\*\*\?\*} x*?*} 
+test 0 {string match {\*\*\?\*} **?x} 
+test 1 {string match {\\\\} {\\}} 
+test 0 {string match {\\} {\\}} 
+test 1 {string match * {}} 
+test 1 {string match ** dasdasdsadfdsafs} 
+test 1 {string match ** {}} 
+test 1 {string match ** dasdasdsadfdsafs} 
+test 1 {string match foobar* foobarbaz} 
+test 1 {string match foobar* foobar} 
+test 0 {string match foobar* foo} 
+test 1 {string match *barbaz foobarbaz} 
+test 1 {string match *barbaz barbaz} 
+test 0 {string match *barbaz baz} 
+test 1 {string match *bar* foobarbaz} 
+test 1 {string match *bar* bar} 
+test 0 {string match *bar* a} 
+test 0 {string match *baaar* aa} 
+test 0 {string match *bar* ba} 
+test 0 {string match *bar* ar} 
+test 0 {string match *a* {}} 
+test 1 {string match *a* a} 
+test 1 {string match *a* aa} 
+test 1 {string match *a* aaa} 
+test 0 {string match *aa* a} 
+test 1 {string match *aa* aa} 
+test 1 {string match *aa* aaa} 
+test 1 {string match \n \n} 
+test 0 {string match {\n} \n} 
+test 1 {string match {\\a} \\a} 
+test 1 {string match {*\\\\} {\\}} 
+test 1 {string match {\\\\*} {\\}} 
+test 1 {string match {*\\\\*} {\\}} 
+test bcd {string range abcde 1 3} 
+test "" {string range abcde 1 0} 
+#test "abcdefg" {string range abcdefg 0 end} 
+test {} {string range abcdefg -5 -7} 
+test {} {string range abcdefg -7 -5} 
+test ab {string range abcdefg -2 1} 
+test abc {string range abcdefg -99 2} 
+test {} {string range abcdefg  0 -1} 
+test abcdefg {string range abcdefg  0 99} 
+test abcdefg {string range abcdefg  0 6} 
+test abcdef {string range abcdefg  0 5} 
+test {} {string range abcdefg  99 99} 
+test foofoofoo {string repeat foo 3}    
+test "" {string repeat foo 0}    
+test abc {string trim "  abc\t\t"}     
+test def {string trim ::def::: :}      
+test ghi {string trim ghi xkl}         
+test bcdaa {string trimleft  aaabcdaa a} 
+test aaabcd {string trimright aaabcdaa a} 
+test "" {string trim      fffff f}    
+test "" {string trimleft  fffff f}    
+test "" {string trimright fffff f}    
+test FOO {string toupper foo} 
+test {foo 3} {set a foo; subst {$a [string length $a]}} 
+test hello {subst {h\x65llo}} 
+
 
 assert [<= $passed $total]
 assert [>= $passed 0]
