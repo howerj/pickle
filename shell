@@ -12,28 +12,82 @@
 # shell.
 #
 
-set program [lindex $argv 2]
-set argc [llength $argv]
 
-proc usage {r} {
-	puts "Usage: [uplevel #0 {lindex $argv} 1] -\[hpst\]"
+# Defining the function 'tracer' installs this function for tracing,
+# which can be turned on or off with 'trace', a quirk of this interpreter
+# implementation
+proc tracer {args} {
+	set args [string tr r "\t\x1b\r\n" " " ${args}]
+	set args [string tr s " " ${args}]
+	puts "+[info cmdcount]/[info level]: ${args}"
+}
+
+# Execute and monitor a command
+proc monitor {args} {
+	set r [catch "uplevel 1 {trace on; $args; trace off}" v]
+	trace off
+	return $v $r
+}
+
+# A getopt inspired from <https://wiki.tcl-lang.org/page/getopt>
+#
+# Usage:
+#
+# getopt argv -x
+# getopt argv -x opt
+# getopt argv -x opt default
+#
+# Returns: 1 on argument found in ${argv}, 0 on argument not found in ${argv}
+#
+proc getopt {ax opt args} {
+	upvar 1 ${ax} alist
+ 	set var [lindex $args 0]
+ 	set def [lindex $args 1]
+ 	set pos [lsearch $alist ${opt}*]
+	if {>= ${pos} 0} {
+ 		set to ${pos}
+		if {ne ${var} ""} {
+			upvar 1 ${var} v
+			set v [lindex $alist [incr to]]
+		}
+ 		set alist [lreplace $alist $pos $to]
+		return 1
+	}
+	if {ne ${var} ""} { 
+		upvar 1 ${var} v
+		set v $def
+	}
+	return 0
+}
+
+#set seed [clock seconds];
+getopt argv -S seed 1
+if {getopt argv -T} { trace on }
+if {getopt argv -h} {
+	puts "Usage: [lindex $argv 1] -\[hpst\]"
 	puts ""
 	puts "\t-h\tPrint this help message and quit"
 	puts "\t-s\tRun a shell (default)"
 	puts "\t-t\tRun the system tests"
 	puts "\t-p\tRun a crude performance test"
+	puts "\t-T\tTurn tracing on"
+	puts "\t-S #\tSet the seed for the PRNG"
+	#puts "\t-e str\tEvaluate a string"
 	puts ""
-	exit $r
+	exit 0
 }
 
-if {eq $program "-h" } { usage 0 }
+#while {== 1 [getopt argv -e line]} { eval $line }; unset line
+
+set program [lindex $argv 2]
+set argc [llength $argv]
 
 # Crude Performance Test
 #
 # Using 'incr loop -1' greatly speeds things up, but
 # exercises less.
 #
-if {eq $program "-p" } {
+if {getopt argv -p} {
 	proc decr {x} { upvar 1 $x i; set i [- $i 1] }
 
 	proc waste1 {x} {
@@ -71,9 +125,26 @@ if {eq $program "-p" } {
 	break
 }
 
-# ### Shell Handler ### #
+# TCL supports two version of 'foreach', this only does one of those
+# versions: for each element in the list 'l' set the variable named by
+# 'v' to that element then execute 'b'.
+proc foreach {v l b} {
+	set ll [llength $l];
+	set t ""
+	upvar 1 $v m
+	for {set i 0} {< $i $ll} {incr i} {
+		set x [lindex $l $i]
+		uplevel 1 "set $v {[set x]};";
+		set r [uplevel 1 "catch {$b} $v"]
+		set t $m
+		set m $x
+		if {or [== $r 1] [== $r 2]} { return $t 0 }
+		if {!= $r 0} { return $t $r }
+	}
+	return $t 0
+}
 
-proc assert {x} { if {== $x "0"} { puts "assert failed"; exit 1 } }
+# ### Shell Handler ### #
 
 proc color {c} {
 	if {ne [getenv COLOR] on} { return "" }
@@ -82,47 +153,13 @@ proc color {c} {
 	return "\x1b\[3$i;1m"
 }
 
-proc ansi {cmd args} {
-	set c1 ""
-	set c2 ""
-	if {ne $args ""}      { set c1 [lindex $args 0] }
-	if {ne $args ""}      { set c2 [lindex $args 1] }
-	if {eq $cmd color}    { return [color $args] }
-	if {eq $cmd sgr}      { return "\x1b\[${c1}m" }
-	if {eq $cmd up}       { return "\x1b\[${c1}A" }
-	if {eq $cmd down}     { return "\x1b\[${c1}B" }
-	if {eq $cmd forward}  { return "\x1b\[${c1}C" }
-	if {eq $cmd back}     { return "\x1b\[${c1}D" }
-	if {eq $cmd next}     { return "\x1b\[${c1}E" }
-	if {eq $cmd previous} { return "\x1b\[${c1}F" }
-	if {eq $cmd position} { return "\x1b\[${c1};${c2}H" }
-	if {eq $cmd clear}    { return "\x1b\[${c1}J" }
-	if {eq $cmd status}   { return "\x1b\[6n" }
-	return "Invalid subcommand $cmd $args"
-}
+proc normal {} "return {[color reset]}"
+proc red    {} "return {[color red]}"
+proc green  {} "return {[color green]}"
+proc blue   {} "return {[color blue]}"
+rename color ""
 
-proc normal {} "return {[color reset]} 0"
-proc red    {} "return {[color red]} 0"
-proc green  {} "return {[color green]} 0"
-proc blue   {} "return {[color blue]} 0"
-
-# An ersatz version of "{*}"
-proc expand {cmd args} {
-	set j [join $args " "]
-	uplevel 1 "$cmd $j"
-}
-
-proc error {msg} {
-	puts $msg
-	return "" -1
-}
-
-proc defined {x} {
-	set c [info commands $x]
-	if {ne "" $c} { return command }
-	if {eq 0 [catch {uplevel 1 "set $x"}]} { return variable }
-	return undefined
-}
+proc error {msg} { puts $msg; return "" -1 }
 
 proc lremove {lv v} {
     upvar 1 $lv var
@@ -139,31 +176,20 @@ proc see {w} {
 	}
 	set type proc
 	if {eq "" [info procs $w]} {
-		set type built-in
+		set type "built-in"
 	}
 	set args [info args $w]
 	set body [info body $w]
-	puts "$type $w {$args} {$body}"
+	return "$type [list $w] {$args} {$body}"
 }
 
-proc decode {r} {
-	incr r
-	lindex {error ok return break continue} $r
-}
-
-proc global {x} {
-	uplevel 1 "upvar #0 $x"
-}
+proc global {x} { uplevel 1 "upvar #0 {$x} {$x}"; }
 
 proc time {x args} {
 	set c 1;
-	if {ne $args ""} {
-		set c $args;
-	}
+	if {ne $args ""} { set c $args }
 	set t [clock clicks]
-	for {set i 0} {< $i $c} {incr i} {
-		uplevel 1 $x
-	}
+	for {set i 0} {< $i $c} {incr i} { uplevel 1 $x }
 	return [- [clock clicks] $t] 0
 }
 
@@ -186,9 +212,6 @@ proc {stack dump} {} {
 	}
 }
 
-#set seed [clock seconds];
-set seed 1;
-
 proc random {} {
 	upvar #0 seed x;
 	if {== $x 0} { incr x; }
@@ -197,12 +220,12 @@ proc random {} {
 	set x [xor $x [lshift $x  5]];
 }
 
+# proc decode {r} { lindex {error ok return break continue} [incr r] }
+
 proc io {} {
 	set e [catch {gets} l]
-	if {or [eq [decode $e] break] [eq [decode $e] error]} {
-		if {eq $l "EOF"} {
-			return "EOF" 2
-		}
+	if {or [eq $e 2] [eq $e -1]} {
+		if {eq $l "EOF"} { return "EOF" 2 }
 		return "ERROR" 2
 	}
 	return $l
@@ -215,7 +238,7 @@ if {eq [getenv OS] "Windows_NT" } {
 	set HOME "HOMEPATH"
 }
 
-proc shell {} {
+if {or [getopt argv -s] [eq $program ""]} {
 	catch {source "[getenv [uplevel #0 set HOME]]/.picklerc"}
 	proc prompt {} { return "pickle> " }
 	set count 0
@@ -229,25 +252,24 @@ proc shell {} {
 		puts "\[$fail$retcode[normal]\] $result"
 		unset fail retcode line result
 	}
-}
-
-if {or [eq $program "-s"] [eq $program ""]} {
-	shell
-	break
+	puts
+	exit
 }
 
 if {ne $program "-t"} {
-	usage 1
+	puts "Invalid command line arguments $argv"
+	puts "Use -h for a list of commands available"
 }
 
 # ### Clean up   ### #
 
-rename usage ""
-rename shell ""
+#rename tracer ""
+rename getopt ""
+rename monitor ""
 rename see   ""
 rename words ""
 rename io    ""
-unset program argc
+unset program
 
 # ### Unit Tests ### #
 
@@ -1044,12 +1066,10 @@ test 5 {set i 10; while {> $i 5} {incr i -1}; set i}
 test 55 {proc f x {uplevel 1 set gg $x}; f 55; set gg}
 state {rename f ""}
 
-
-
-
 # Version should not be '0':
 test 1 {ne "0" {eval "or [info version]"}}
 
+proc assert {x} { if {== $x "0"} { puts "assert failed"; exit 1 } }
 assert [<= $passed $total]
 assert [>= $passed 0]
 

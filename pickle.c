@@ -393,7 +393,7 @@ static inline int picolLogarithm(number_t a, const number_t b, number_t *c) {
 	return PICKLE_OK;
 }
 
-static int picolPower(number_t base, number_t exp, number_t *r) {
+static inline int picolPower(number_t base, number_t exp, number_t *r) {
 	assert(r);
 	number_t result = 1, negative = 1;
 	*r = 0;
@@ -423,7 +423,7 @@ static int picolStackOrHeapAlloc(pickle_t *i, pickle_stack_or_heap_t *s, size_t 
 	assert(s);
 
 	if (s->p == NULL) { /* take care of initialization */
-		s->p = s->buf;
+		s->p      = s->buf;
 		s->length = sizeof (s->buf);
 	}
 
@@ -1339,8 +1339,6 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 	assert(i);
 	assert(argc >= 1);
 	assert(argv);
-	if (picolSetResultEmpty(i) != PICKLE_OK)
-		return PICKLE_ERROR;
 	i->cmdcount++;
 	if (i->trace && !(i->inside_trace)) {
 		pickle_command_t *t = picolGetCommand(i, "tracer");
@@ -1352,10 +1350,12 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 				return r;
 		}
 	}
+	if (picolSetResultEmpty(i) != PICKLE_OK)
+		return PICKLE_ERROR;
 	pickle_command_t *c = picolGetCommand(i, argv[0]);
 	if (c == NULL) {
 		if (i->inside_unknown || ((c = picolGetCommand(i, "unknown")) == NULL))
-			return error(i, "Invalid command %s", argv[0]);
+			return error(i, "Invalid unknown command %s", argv[0]);
 		i->inside_unknown = 1;
 		const int r = picolDoSpecialCommand(i, c, "unknown", argc, argv);
 		i->inside_unknown = 0;
@@ -1906,8 +1906,8 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 		}
 		if (!compare(rq, "tr"))
 			return picolCommandTranslate(i, argc - 1, argv + 1, NULL);
-	}
-	return picolSetResultArgError(i, 0, "", "", argc, argv);
+	} /* NB. We could call 'unknown' here, this would allow us to add commands later. */
+	return error(i, "Invalid command %s", argv[0]);
 }
 
 static inline int picolCommandEqual(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2282,12 +2282,12 @@ done:
 	return r;
 }
 
-static inline int picolDoLInsert(pickle_t *i, const char *list, const char *position, const int argc, char **argv, int doEsc) {
+static inline int picolDoLInsert(pickle_t *i, const char *list, const char *position, const int argc, char **argv, int doEsc, int doEscCat) {
 	assert(i);
 	assert(list);
 	assert(position);
 	implies(argc >= 0, argv);
-	char *insert = concatenate(i, " ", argc, argv, 0, 0);
+	char *insert = concatenate(i, " ", argc, argv, doEscCat, 0);
 	if (!insert)
 		return PICKLE_ERROR;
 	const int r1 = picolListOperation(i, list, position, 0, insert, INSERT, doEsc);
@@ -2299,7 +2299,7 @@ static inline int picolCommandLInsert(pickle_t *i, const int argc, char **argv, 
 	UNUSED(pd);
 	assert(!pd);
 	ARITY(argc < 4, "list index value: insert a value into a list at an index");
-	return picolDoLInsert(i, argv[1], argv[2], argc - 3, argv + 3, 1);
+	return picolDoLInsert(i, argv[1], argv[2], argc - 3, argv + 3, 0, 1);
 }
 
 static inline int picolCommandLSet(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2412,19 +2412,25 @@ static inline int picolCommandLReplace(pickle_t *i, const int argc, char **argv,
 		return PICKLE_ERROR;
 	if (picolStringToNumber(i, argv[3], &last) != PICKLE_OK)
 		return PICKLE_ERROR;
-	if (last < first || first < 0) {
+	if (last < first || (first < 0 && last < 0)) {
 		char *args = concatenate(i, " ", argc - 4, argv + 4, 1, 0);
 		if (!args)
 			return PICKLE_ERROR;
-		const int r1 = picolDoLInsert(i, argv[1], argv[2], 1, (char *[1]) { args }, 0);
+		const int r1 = picolDoLInsert(i, argv[1], argv[2], 1, (char *[1]) { args }, 0, 0);
 		const int r2 = picolFree(i, args);
 		return r1 == PICKLE_OK && r2 == PICKLE_OK ? PICKLE_OK : PICKLE_ERROR;
 	}
+	first = MAX(0, first);
 	int r = 0, empty = 0, used = 0;
 	args_t a = picolArgs(i, &(pickle_parser_opts_t){ 1, 1, 1, 1 }, argv[1]);
 	char *repl = concatenate(i, " ", argc - 4, argv + 4, 1, 0), *n = NULL;
 	if (!a.argv || !repl)
 		goto err;
+	if (a.argc == 0) {
+		if (picolFreeArgList(i, a.argc, a.argv) != PICKLE_OK)
+			return PICKLE_ERROR;
+		return picolForceResult(i, repl, 0);
+	}
 	empty = repl[0] == '\0';
 	for (size_t j = first; j <= (size_t)last && j < (size_t)a.argc; j++) {
 		char *f = a.argv[j];
@@ -2447,10 +2453,8 @@ static inline int picolCommandLReplace(pickle_t *i, const int argc, char **argv,
 	return r;
 err:
 	if (!used)
-		if (picolFree(i, repl) != PICKLE_OK)
-			r = PICKLE_ERROR;
+		(void)picolFree(i, repl);
 	(void)picolFreeArgList(i, a.argc, a.argv);
-	(void)picolFree(i, repl);
 	(void)picolFree(i, n);
 	return PICKLE_ERROR;
 }
@@ -2460,7 +2464,7 @@ static inline int picolCommandLSearch(pickle_t *i, const int argc, char **argv, 
 	UNUSED(pd);
 	assert(!pd);
 	ARITY(argc < 3, "-integer? -exact? -inline? -not? -glob? [-start number]? list pattern: search a list for a pattern");
-	enum { oGLOB, oEXACT, oINTEGER };
+	enum { oGLOB, oEXACT, oINTEGER, /*oREGEXP*/ };
 	number_t start = 0, value = 0;
 	int op = oGLOB, last = argc - 2, index = -1, not = 0, inl = 0;
 	char *list = argv[argc - 2], *pattern = argv[argc - 1];
@@ -2874,7 +2878,7 @@ again:
 		goto again;
 	}
 	if (argc != 2)
-		return picolSetResultArgError(i, 0, "", "", argc, argv);
+		return error(i, "Invalid command %s", argv[0]);
 	return picolEvalAndSubst(i, &o, argv[1]);
 }
 
@@ -3072,7 +3076,7 @@ static int picolInfoVars(pickle_t *i, const char *pat) {
 static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc < 2)
-		return picolSetResultArgError(i, 0, "", "", argc, argv);
+		return error(i, "Invalid command %s", argv[0]);
 	const char *rq = argv[1];
 	if (!compare(rq, "commands"))
 		return picolInfoCommands(i, COMMANDS, argc == 2 ? "*" : argv[2]);
@@ -3100,7 +3104,7 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 		return ok(i, "%d %d %d", (int)((PICKLE_VERSION >> 16) & 255), 
 			(int)((PICKLE_VERSION >> 8) & 255), (int)(PICKLE_VERSION & 255));
 	if (argc < 3)
-		return picolSetResultArgError(i, 0, "", "", argc, argv);
+		return error(i, "Invalid command %s", argv[0]);
 	if (!compare(rq, "complete")) {
 		pickle_parser_opts_t o = { .noeval = 1, };
 		pickle_parser_t p = { .p = NULL };

@@ -83,20 +83,20 @@ static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	if (!line)
 		return error(i, "Out Of Memory");
 	if (!length) {
-		release(i, line);
+		if (release(i, line) != PICKLE_OK)
+			return PICKLE_ERROR;
 		if (ok(i, "EOF") != PICKLE_OK)
 			return PICKLE_ERROR;
 		return PICKLE_BREAK;
 	}
 	const int r = ok(i, "%s", line);
-	release(i, line);
-	return r;
+	return release(i, line) == PICKLE_OK ? r : PICKLE_ERROR;
 }
 
 static int commandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *out = pd;
 	if (argc != 1 && argc != 2 && argc != 3)
-		return error(i, "Invalid command %s -nonewline? string?", argv[0]);
+		return error(i, "Invalid command %s", argv[0]);
 	if (argc == 1)
 		return fputc('\n', out) < 0 ? PICKLE_ERROR : PICKLE_OK;
 	if (argc == 2)
@@ -109,7 +109,7 @@ static int commandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 static int commandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
-		return error(i, "Invalid command %s string", argv[0]);
+		return error(i, "Invalid command %s", argv[0]);
 	const char *env = getenv(argv[1]);
 	return ok(i, "%s", env ? env : "");
 }
@@ -117,7 +117,7 @@ static int commandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2 && argc != 1)
-		return error(i, "Invalid command %s number?", argv[0]);
+		return error(i, "Invalid command %s", argv[0]);
 	const char *code = argc == 2 ? argv[1] : "0";
 	exit(atoi(code));
 	return PICKLE_ERROR; /* unreachable */
@@ -127,7 +127,7 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	time_t ts = 0;
 	if (argc < 2)
-		return error(i, "Invalid command %s subcommand...", argv[0]);
+		return error(i, "Invalid command %s", argv[0]);
 	if (!strcmp(argv[1], "clicks")) {
 		const long t = (((double)(clock()) / (double)CLOCKS_PER_SEC) * 1000.0);
 		return ok(i, "%ld", t);
@@ -140,7 +140,7 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 		char *fmt = argc == 4 ? argv[3] : "%a %b %d %H:%M:%S %Z %Y";
 		int tv = 0;
 		if (argc != 3 && argc != 4)
-			return error(i, "Invalid subcommand");
+			return error(i, "Invalid subcommand %s", argv[1]);
 		if (sscanf(argv[2], "%d", &tv) != 1)
 			return error(i, "Invalid number %s", argv[2]);
 		ts = tv;
@@ -148,12 +148,12 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 		strftime(buf, sizeof buf, fmt, timeinfo);
 		return ok(i, "%s", buf);
 	}
-	return error(i, "Invalid command %s subcommand...", argv[0]);
+	return error(i, "Invalid command %s", argv[0]);
 }
 
 static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 1 && argc != 2)
-		return error(i, "Invalid command %s string?", argv[0]);
+		return error(i, "Invalid command %s", argv[0]);
 	errno = 0;
 	FILE *file = argc == 1 ? pd : fopen(argv[1], "rb");
 	if (!file)
@@ -164,10 +164,8 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 		fclose(file);
 	if (!program)
 		return error(i, "Out Of Memory");
-
 	const int r = pickle_eval(i, program);
-	release(i, program);
-	return r;
+	return release(i, program) == PICKLE_OK ? r : PICKLE_ERROR;
 }
 
 static int evalFile(pickle_t *i, char *file) {
