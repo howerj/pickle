@@ -142,7 +142,7 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 		if (argc != 3 && argc != 4)
 			return error(i, "Invalid subcommand");
 		if (sscanf(argv[2], "%d", &tv) != 1)
-			return error(i, "Invalid number: %s", argv[2]);
+			return error(i, "Invalid number %s", argv[2]);
 		ts = tv;
 		struct tm *timeinfo = (gmt ? gmtime : localtime)(&ts);
 		strftime(buf, sizeof buf, fmt, timeinfo);

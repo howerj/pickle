@@ -1216,14 +1216,16 @@ static char *concatenate(pickle_t *i, const char *join, const int argc, char **a
 		if (!arg)
 			continue;
 
+		k++;
 		if (trim) {
 			char *lt = (char*)trimleft(string_white_space, arg);
 			char *rt = (char*)lastUnmatching(string_white_space, lt);
-			ls[j] = 1 + rt - lt;
+			if (*lt == '\0')
+				continue;
+			ls[j] = 1 + (rt - lt);
 			arg = lt;
 		}
 
-		k++;
 		const int escape = esc[j];
 		char *f = escape ? picolEscape(i, arg, ls[j]) : NULL;
 		char *p = escape ? f : arg;

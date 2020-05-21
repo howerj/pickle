@@ -825,8 +825,8 @@ test abc {concat abc}
 test {alpha bravo charlie} {concat alpha bravo charlie}
 test {alpha bravo charlie} {concat alpha {bravo charlie}}
 test {1 2 3 4 5} {concat {1 2} {3 4 5}}
-# BUG: Crashes interpreter
-#test "" {concat {} {}}
+test "" {concat {} {}}
+test {a b c} {concat a {} b {} {} c}
 test {foo bar} {concat foo {} bar}
 
 test b {lindex {a b c} 1}     
