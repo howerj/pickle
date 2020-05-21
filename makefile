@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x040007ul
+VERSION = 0x040102ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -18,7 +18,7 @@ run: ${TARGET} shell
 	${TRACE} ./${TARGET} shell
 
 test: ${TARGET} shell
-	./${TARGET} shell -t 
+	${TRACE} ./${TARGET} shell -t 
 
 main.o: main.c ${TARGET}.h
 
@@ -51,7 +51,8 @@ check:
 	-cppcheck --enable=all *.c
 
 clean:
-	git clean -dffx
+	rm -fv ${TARGET} *.o *.a *.tgz *.1
+	-git clean -dffx
 
 small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv -DPICKLE_VERSION="${VERSION}"
 small: main.c ${TARGET}.c ${TARGET}.h
