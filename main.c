@@ -10,11 +10,13 @@
 #define ok(i, ...)    pickle_result_set(i, PICKLE_OK,    __VA_ARGS__)
 #define error(i, ...) pickle_result_set(i, PICKLE_ERROR, __VA_ARGS__)
 
-/* NB. This allocator can be use to get memory statistics (printed atexit) or test allocation failures */
+typedef struct { long allocs, frees, reallocs, total; } heap_t;
+
 static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t newsz) {
-	UNUSED(arena);
-	if (newsz == 0) { free(ptr); return NULL; }
-	if (newsz > oldsz) return realloc(ptr, newsz);
+	/* assert(h->frees <= h->allocs); */
+	heap_t *h = arena;
+	if (newsz == 0) { if (ptr) h->frees++; free(ptr); return NULL; }
+	if (newsz > oldsz) { h->reallocs += !!ptr; h->allocs++; h->total += newsz; return realloc(ptr, newsz); }
 	return ptr;
 }
 
@@ -42,7 +44,7 @@ static void *reallocator(pickle_t *i, void *ptr, size_t sz) {
 
 static char *slurp(pickle_t *i, FILE *input, size_t *length, char *class) {
 	char *m = NULL;
-	const size_t bsz = class ? 4096 : 80;
+	const size_t bsz = class ? 80 : 4096;
 	size_t sz = 0;
 	if (length)
 		*length = 0;
@@ -158,7 +160,6 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *file = argc == 1 ? pd : fopen(argv[1], "rb");
 	if (!file)
 		return error(i, "Could not open file '%s' for reading: %s", argv[1], strerror(errno));
-
 	char *program = slurp(i, file, NULL, NULL);
 	if (file != pd)
 		fclose(file);
@@ -166,6 +167,17 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 		return error(i, "Out Of Memory");
 	const int r = pickle_eval(i, program);
 	return release(i, program) == PICKLE_OK ? r : PICKLE_ERROR;
+}
+
+static int commandHeap(pickle_t *i, int argc, char **argv, void *pd) {
+	heap_t *h = pd;
+	if (argc != 2)
+		return error(i, "Invalid command %s", argv[0]);
+	if (!strcmp(argv[1], "frees"))         return ok(i, "%ld", h->frees);
+	if (!strcmp(argv[1], "allocations"))   return ok(i, "%ld", h->allocs);
+	if (!strcmp(argv[1], "total"))         return ok(i, "%ld", h->total);
+	if (!strcmp(argv[1], "reallocations")) return ok(i, "%ld", h->reallocs);
+	return error(i, "Invalid command %s", argv[0]);
 }
 
 static int evalFile(pickle_t *i, char *file) {
@@ -183,9 +195,10 @@ static int evalFile(pickle_t *i, char *file) {
 }
 
 int main(int argc, char **argv) {
+	heap_t h = { 0, 0, 0, 0 };
 	pickle_t *i = NULL;
-	if (pickle_tests(allocator, NULL)   != PICKLE_OK) goto fail;
-	if (pickle_new(&i, allocator, NULL) != PICKLE_OK) goto fail;
+	if (pickle_tests(allocator, &h)   != PICKLE_OK) goto fail;
+	if (pickle_new(&i, allocator, &h) != PICKLE_OK) goto fail;
 	if (pickle_var_set_args(i, "argv", argc, argv)  != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
@@ -193,6 +206,7 @@ int main(int argc, char **argv) {
 	if (pickle_command_register(i, "exit",   commandExit,   NULL)   != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "source", commandSource, NULL)   != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "clock",  commandClock,  NULL)   != PICKLE_OK) goto fail;
+	if (pickle_command_register(i, "heap",   commandHeap,   &h)     != PICKLE_OK) goto fail;
 	int r = 0;
 	for (int j = 1; j < argc; j++) {
 		r = evalFile(i, argv[j]);

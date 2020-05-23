@@ -1082,7 +1082,7 @@ And an example of how this might be implemented in C is:
 		char name[64];
 		FILE *fh = fopen(argv[1], argv[2]);
 		sprintf(name, "%p", fh); /* unique name */
-		pickle_register_command(i, name, pickleCommandFile, fh);
+		pickle_command_register(i, name, pickleCommandFile, fh);
 		return pickle_set_result(i, "%s", name);
 	}
 
@@ -1134,6 +1134,8 @@ There are other implementations of [TCL][] and other extensions of the original
 - TCL reimplementation <http://jim.tcl.tk/index.html/doc/www/www/index.html>
 - An entire list of implementations <https://blog.tcl.tk/17975>
 - Another Picol Extension <https://chiselapp.com/user/dbohdan/repository/picol/index>
+- Partcl <https://github.com/zserge/partcl>, a complete reimplementation, also
+with a blog post <https://zserge.com/posts/tcl-interpreter/> describing it.
 
 And I am sure if you were to search <https://github.com> you would find more.
 
@@ -1166,6 +1168,8 @@ Some of the (internal) decisions made:
   This could also speed things up as we spend a lot of time allocating objects,
   the working set may be small but the number of temporary objects created is
   not, 'picolArgsGrow' could be targeted for this.
+- The empty string could be treated specially by the interpreter and all empty
+  strings never freed nor allocated.
 - Also of note is that the interpreter is designed to gracefully handle out of
   memory conditions, it may not live up to this fact, but it is possible to
   test this by returning NULL in the allocator provided randomly.
