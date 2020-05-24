@@ -2,7 +2,7 @@
  * @brief Pickle interpreter, a TCL like language based on 'picol'.
  * BSD license: See <https://github.com/howerj/pickle/blob/master/LICENSE>
  * Copyright (c) 2007-2016, Salvatore Sanfilippo <antirez at gmail dot com>
- * Copyright (c) 2018-2020, Richard James Howe <howe.r.j.89@gmail.com> 
+ * Copyright (c) 2018-2020, Richard James Howe <howe.r.j.89@gmail.com>
  * See 'https://github.com/howerj/pickle' for the project repository.
  * And <http://oldblog.antirez.com/post/picol.html> for the original. */
 
@@ -1032,8 +1032,7 @@ static inline void picolAssertCommandPostConditions(pickle_t *i, const int retco
 
 static int picolFreeArgList(pickle_t *i, const int argc, char **argv) {
 	assert(i);
-	assert(argc >= 0);
-	implies(argc != 0, argv);
+	implies(argc > 0, argv);
 	int r = 0;
 	for (int j = 0; j < argc; j++)
 		if (picolFree(i, argv[j]) != PICKLE_OK)
@@ -3105,7 +3104,7 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 	if (!compare(rq, "cmdcount")) /* For (very rough) code profiling */
 		return picolSetResultNumber(i, i->cmdcount);
 	if (!compare(rq, "version"))
-		return ok(i, "%d %d %d", (int)((PICKLE_VERSION >> 16) & 255), 
+		return ok(i, "%d %d %d", (int)((PICKLE_VERSION >> 16) & 255),
 			(int)((PICKLE_VERSION >> 8) & 255), (int)(PICKLE_VERSION & 255));
 	if (argc < 3)
 		return error(i, "Invalid subcommand %s", argv[0]);
@@ -3126,9 +3125,9 @@ static int picolCommandInfo(pickle_t *i, const int argc, char **argv, void *pd) 
 		return picolForceResult(i, picolGetVar(i, argv[2], 0) ? "1" : "0", 1);
 	if (!compare(rq, "args"))
 		return picolInfoFunction(i, ARGS, argv[2]);
-	if (!compare(rq, "body")) 
+	if (!compare(rq, "body"))
 		return picolInfoFunction(i, BODY, argv[2]);
-	if (!compare(rq, "private")) 
+	if (!compare(rq, "private"))
 		return picolInfoFunction(i, PRIVATE, argv[2]);
 	if (!compare(rq, "system")) {
 		static const struct opts { const char *name; number_t info; } opts[] = {
@@ -3337,7 +3336,7 @@ static int picolRegexExtract(pickle_regex_t *x, const char *regexp, const char *
 	do {    /* must look even if string is empty */
 		m = regexHere(x, 0, regexp, text);
 		if (m)
-		       goto done;	
+		       goto done;
 	} while (*text++ != EOI);
 	x->start = NULL;
 	x->end   = NULL;
@@ -3356,10 +3355,10 @@ static inline int picolCommandRegex(pickle_t *i, const int argc, char **argv, vo
 	unsigned type = GREEDY, nocase = 0;
 	const int last = argc - 2;
 	for (int j = 1; j < last; j++) {
-		if (!compare(argv[j], "-nocase"))          { nocase = 1; } 
-		else if (!compare(argv[j], "-possessive")) { type = POSSESSIVE; } 
-		else if (!compare(argv[j], "-lazy"))       { type = LAZY; } 
-		else if (!compare(argv[j], "-greedy"))     { type = GREEDY; } 
+		if (!compare(argv[j], "-nocase"))          { nocase = 1; }
+		else if (!compare(argv[j], "-possessive")) { type = POSSESSIVE; }
+		else if (!compare(argv[j], "-lazy"))       { type = LAZY; }
+		else if (!compare(argv[j], "-greedy"))     { type = GREEDY; }
 		else if (!compare(argv[j], "-start")) {
 			if (!((j + 1) < last))
 				return error(i, "Invalid option %s", argv[j]);
@@ -3641,8 +3640,7 @@ static inline int concatenateTest(pickle_t *i, const char *result, const char *j
 	char *f = NULL;
 	if (!(f = concatenate(i, join, argc, argv, 0, -1, 0)) || compare(f, result))
 		r = PICKLE_ERROR;
-	picolFree(i, f);
-	return r;
+	return picolFree(i, f) == PICKLE_OK ? r : PICKLE_ERROR;
 }
 
 static inline int picolTestConcat(allocator_fn fn, void *arena) {
@@ -3877,12 +3875,15 @@ int pickle_var_set_args(pickle_t *i, const char *name, int argc, char **argv) {
 int pickle_result_set(pickle_t *i, const int ret, const char *fmt, ...) {
 	pre(i);
 	assert(fmt);
-	if (fmt[0] == '\0') {
-		if (picolSetResultEmpty(i) != PICKLE_OK)
-			return PICKLE_ERROR;
-		return post(i, ret);
-	}
 	va_list ap;
+	if (fmt[0] == '\0')
+		return post(i, picolSetResultEmpty(i));
+	if (fmt[0] == '%' && fmt[1] == 's' && fmt[2] == '\0') {
+		va_start(ap, fmt);
+		const int r = picolSetResultString(i, va_arg(ap, char*));
+		va_end(ap);
+		return post(i, r);
+	}
 	va_start(ap, fmt);
 	char *r = picolVsprintf(i, fmt, ap);
 	va_end(ap);

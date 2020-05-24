@@ -13,7 +13,7 @@
 typedef struct { long allocs, frees, reallocs, total; } heap_t;
 
 static void *allocator(void *arena, void *ptr, const size_t oldsz, const size_t newsz) {
-	/* assert(h->frees <= h->allocs); */
+	/* assert(h && (h->frees <= h->allocs)); */
 	heap_t *h = arena;
 	if (newsz == 0) { if (ptr) h->frees++; free(ptr); return NULL; }
 	if (newsz > oldsz) { h->reallocs += !!ptr; h->allocs++; h->total += newsz; return realloc(ptr, newsz); }

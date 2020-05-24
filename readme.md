@@ -38,14 +38,57 @@ To build you will need a [C][] compiler and [Make][].
 
 Type 'make' to build the executable 'pickle' (or 'pickle.exe') on Windows. To
 run type 'make run', which will drop you into a pickle shell. 'make test' will
-run the built in unit tests and the unit tests in [test.tcl][].
+run the built in unit tests and the unit tests in [shell][].
+
+## RUNNING
+
+To run the project you will need to build it, the default makefile target will
+do this, type:
+
+	make
+
+Or:
+
+	make pickle
+
+This will build the pickle library and then link this library with an example
+program contained in [main.c][]. This example program is very simple and adds a
+few commands to the interpreter that do not exist in the library ("gets", "puts",
+"clock", "getenv", "exit", "source", "clock" and "heap"), this is the minimal
+set of commands that are needed to get a usable shell up and running and do
+performance optimization.
+
+The executable 'pickle' that is built is quite simple, it executes all arguments
+given to it on given to it on the command line as scripts. There are no
+options, flags or detection of an interactive session with [isatty][]. This
+makes usage of the interpreter in interactive sessions challenging, instead,
+the language itself can be used to define a shell and process command line
+arguments. This is done in a program called '[shell][]'. As mentioned it
+contains the unit tests for the project, as well as other subprograms, and most
+importantly it contains the interactive shell that reads a line at a time and
+prints the result.
+
+The code in [shell][] is quite large, if you do not want to use it an
+incredibly minimal shell can be defined with the code:
+
+	#!./pickle
+
+	set r 0
+	while { } {
+		puts -nonewline "pickle> "
+		set r [catch [list eval [gets]] v]
+		puts "\[$r\] $v"
+	}
+
+For those experienced with [TCL][] some differences in the 'while' and 'gets'
+command should be apparent.
 
 ## The Picol Language
 
-The internals of the interpreter do not deviate from the original interpreter,
-so the document on the [picol][] language still applies. The language is like a
-simplified version of [TCL][], where everything is a command and the primary
-data structure is the string.
+The internals of the interpreter do not deviate much from the original
+interpreter, so the document on the [picol][] language still applies. The
+language is like a simplified version of [TCL][], where everything is
+a command and the primary data structure is the string.
 
 Some programmers seem to an obsessive interest in their language of choice,
 do not become one of those programmers. This language, like any other
@@ -70,9 +113,11 @@ will be slow).
 * This is a Do-It-Yourself solution, it may require that you modify the library
 itself and will almost certainly require that you define your own new commands
 in [C][].
-* The language interpreter is not well tested and is likely to be insecure. If
-you find a bug, please report it.
 * Lacks Unicode/UTF-8 support.
+* The language interpreter is not well tested and is likely to be insecure. If
+you find a bug, please report it. It is however better tested that most
+(re)implementations or extensions to the [picol][] interpreter and far less
+likely to segfault or crash if you misuse the interpreter.
 
 Potential Improvements:
 
@@ -85,6 +130,27 @@ interpreter to suite your purposes:
   - Base-64: <https://stackoverflow.com/questions/342409/>
   - Line editing: <https://github.com/antirez/linenoise>
   - Fixed point (Q16.16, signed) library: <https://github.com/howerj/q>
+
+The interpreter is fairly small, on my 64-bit x86 machine the interpreter
+weighs in at 100KiB (stripped, dynamically linked to C library, Linux ELF). The
+interpreter can be configured so that it is even smaller, for example:
+
+	On Debian Linux, x86_64, dyanmically linking against glibc, using
+	gcc version 8.3.0, with version 4.1.4 of the interpreter:
+	Size    Options/Notes
+	100KiB  Normal target, optimized for speed (-O2).
+	84KiB   No debugging (-DNDEBUG), optimized for speed (-O2).
+	54KiB   No debugging (-DNDEBUG), 32-bit target (-m32), optimized
+	        for size (-Os), stripped, No features disabled.
+	34KiB   No debugging, 32-bit target, optimized for size, stripped,
+	        with as many features disabled as possible.
+
+	On Debian Linux, x86_64, statically linked against musl C library:
+	147KiB  Normal target, optimized for speed, statically linked.
+
+This is still larger than I would like it to be, the original picol interpreter
+in the smallest configuration (32 bit target, optimized for size), comes in at
+18KiB.
 
 ### The language itself
 
@@ -403,6 +469,10 @@ The search command attempts to find a pattern within a list and if found it
 returns the index as which the pattern was found within the list, or '-1' if
 it was not found.
 
+  - '-nocase'
+
+Do a case insensitive search, beware this is ASCII only!
+
   - '-not'
 
 Invert the selection, matching patterns that *do not* match.
@@ -456,25 +526,25 @@ Trim arguments before concatenating them into a string.
 matches from text. It has a few options that can be passed to it, and a few
 virtues; lazy, greedy and possessive.
 
- - nocase
+ - -nocase
 
 Ignore case when matching a string.
 
- - start index
+ - -start index
 
 Set the start of the string to match from, numbers less than zero are treated
 as zero, and numbers greater than the length of the string are treated as
 referring to the end of the string.
 
- - lazy
+ - -lazy
 
 Match the shortest string possible.
 
- - greedy (default)
+ - -greedy (default)
 
 Match the longest string possible.
 
- - possessive
+ - -possessive
 
 Match the longest string possible, with no backtracking. If backtracking is
 necessary the match fails.
@@ -555,7 +625,7 @@ form of a performance counter if the command *clock* is not available.
 
 - version
 
-Return the version number of the interpreter in list format "major minor patch", 
+Return the version number of the interpreter in list format "major minor patch",
 [semantic versioning](https://semver.org/) is used.
 
 - complete line
@@ -589,7 +659,7 @@ Get the private data of a function.
 
 The "system" subcommand is used to access various attributes that have
 been set in the interpreter at compile time or due to the environment
-that the system is compiled for. 
+that the system is compiled for.
 
 Attributes that can be looked up are:
 
@@ -618,13 +688,13 @@ C library functions from '[ctype.h][]' and '[string.h][]'.
 
 Some of the commands that are implemented:
 
-  - string match pattern String
+  - string match -nocase? pattern String
 
 This command is a primitive regular expression matcher, as available from
 <http://c-faq.com/lib/regex.html>. What it lacks in functionality, safety and
 usability, it makes up for by being only ten lines long (in the original). It
 is meant more for wildcard expansion of file names (so '?' replaces the meaning
-of '.' is most regular expression languages). '%' is used as an escape
+of '.' is most regular expression languages). '\\' is used as an escape
 character, which escapes the next character.
 
 The following operations are supported: '\*' (match any string) and '?' (match
@@ -804,16 +874,16 @@ And it is used often in looping constructs.
 * subst opts... string
 
 Optionally perform substitutions on a string, controllable via three flags.
-When you enter a string in a [TCL][] program substitutions are automatically 
+When you enter a string in a [TCL][] program substitutions are automatically
 performed on that string, 'subst' can be used to perform a subset of those
 substitutions (command execution, variable substitutions, or escape character
 handling) a string.
 
- - -nobackslashes 
+ - -nobackslashes
 
 Disable escape characters.
 
- - -novariables 
+ - -novariables
 
 Do not process variables.
 
@@ -866,8 +936,35 @@ The format command a time in seconds since the Unix Epoch against an optional
 time-specification (the default time specification is "%a %b %d %H:%M:%S %Z %Y").
 The formatting is done entirely by the function [strftime][].
 
-There are internal limits on this string length (512 bytes excluding 
-the NUL terminator).
+There are internal limits on this string length (512 bytes excluding the NUL 
+terminator).
+
+* heap option
+
+This command is useful for inspecting the size of the heap, it can report the
+number of bytes allocator, the number of frees, the number of allocations, and
+other statistics.
+
+The options are:
+
+- frees
+
+This is the number of frees that have taken place, excluding freeing 'NULL'.
+
+- allocations
+
+This is the number of allocations that have taken place, including any
+reallocations.
+
+- total
+
+This is the total number of bytes that have been allocated.
+
+- reallocations
+
+This is the number of reallocations that have been performed on an already
+allocated pointer.
+
 
 * source file-name
 
@@ -1143,7 +1240,7 @@ And I am sure if you were to search <https://github.com> you would find more.
 
 One of the goals of the interpreter is low(ish) memory usage, there are a few
 design decisions that go against this, along with the language itself, however
-an effort has been made to make sure memory usage is kept low. 
+an effort has been made to make sure memory usage is kept low.
 
 Some of the (internal) decisions made:
 
@@ -1158,10 +1255,10 @@ Some of the (internal) decisions made:
 - The parser operates on a full program string and tokens to the string a
   indices into the string, which means a large [AST][] does not
   have to be assembled.
-- Memory is allocated on the stack where possible, with the function 
+- Memory is allocated on the stack where possible, with the function
   'picolStackOrHeapAlloc' helping with this, it moves allocations to the
   heap if they become too large for the stack. This could conceivably be used
-  for more allocations we do, for example when creating argument lists, but is 
+  for more allocations we do, for example when creating argument lists, but is
   currently just used for some unbounded string operations. (Of note, it might
   be worth creating memory pools for small arguments lists as they are
   generated fairly often, or even a pool of medium size buffers we could lock).
@@ -1181,7 +1278,7 @@ things that could be done:
 
 It would be possible to include some simple complication on the procedures that
 are stored, turning certain keywords into bytes codes that fall outside of the
-[UTF-8][] and [ASCII][] character ranges, as well as removing runs of white 
+[UTF-8][] and [ASCII][] character ranges, as well as removing runs of white
 space and comments entirely. This would be possible to implement without
 changing the interface and would both speed things up and reduce memory usage,
 however it would increase the complexity of the implementation (perhaps by
@@ -1298,6 +1395,7 @@ Known limitations of the interpreter include:
 [readme.md]: readme.md
 [regex]: http://c-faq.com/lib/regex.html
 [rlwrap]: https://linux.die.net/man/1/rlwrap
+[shell]: shell
 [snprintf]: http://www.cplusplus.com/reference/cstdio/snprintf/
 [space]: http://www.cplusplus.com/reference/cctype/isspace/
 [stdin]: http://www.cplusplus.com/reference/cstdio/stdin/
@@ -1312,3 +1410,4 @@ Known limitations of the interpreter include:
 [vsnprintf]: http://www.cplusplus.com/reference/cstdio/vsnprintf/
 [vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
 [xdigit]: http://www.cplusplus.com/reference/cctype/isxdigit/
+[isatty]: http://man7.org/linux/man-pages/man3/isatty.3.html
