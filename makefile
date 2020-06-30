@@ -2,9 +2,11 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x040104ul
+VERSION = 0x050000ul
 TARGET  = pickle
-CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
+#SANITIZE= -fsanitize=address
+SANITIZE=
+CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}" ${SANITIZE}
 AR      = ar
 ARFLAGS = rcs
 TRACE   =

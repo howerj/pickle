@@ -3859,17 +3859,16 @@ int pickle_var_get(pickle_t *i, const char *name, const char **val) {
 	return post(i, *val ? PICKLE_OK : PICKLE_ERROR);
 }
 
-int pickle_var_set_args(pickle_t *i, const char *name, int argc, char **argv) {
+int pickle_eval_args(pickle_t *i, int argc, char **argv) {
 	pre(i);
-	assert(name);
 	assert(argc >= 0);
 	assert(argv);
 	char *c = concatenate(i, " ", argc, argv, 1, -1, 0);
 	if (!c)
 		return post(i, PICKLE_ERROR);
-	const int r1 = pickle_var_set(i, name, c);
+	const int r1 = pickle_eval(i, c);
 	const int r2 = picolFree(i, c);
-	return r1 == PICKLE_OK && r2 == PICKLE_OK ? PICKLE_OK : PICKLE_ERROR;
+	return r2 == PICKLE_OK ? r1 : PICKLE_ERROR;
 }
 
 int pickle_result_set(pickle_t *i, const int ret, const char *fmt, ...) {
