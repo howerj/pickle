@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x040104ul
+VERSION = 0x040105ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -54,13 +54,13 @@ clean:
 	rm -fv ${TARGET} *.o *.a *.tgz *.1
 	-git clean -dffx
 
-small: CFLAGS=-std=c99 -Os -m32 -DNDEBUG -Wall -Wextra -fwrapv -DPICKLE_VERSION="${VERSION}"
+small: CFLAGS=-std=c99 -Os -DNDEBUG -Wall -Wextra -fwrapv -DPICKLE_VERSION="${VERSION}"
 small: main.c ${TARGET}.c ${TARGET}.h
 	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
 	-strip $@
 
 micro: CFLAGS=-DNDEBUG -DDEFINE_TESTS=0 -DDEFINE_MATHS=0 -DDEFINE_STRING=0 -DDEFINE_REGEX=0 -DDEFINE_LIST=0 -DPICKLE_VERSION="${VERSION}"
-micro: CFLAGS+=-std=c99 -Os -m32 ${DEFINES} -Wall -Wextra -fwrapv
+micro: CFLAGS+=-std=c99 -Os ${DEFINES} -Wall -Wextra -fwrapv
 micro: main.c ${TARGET}.c ${TARGET}.h
 	${CC} ${CFLAGS} main.c ${TARGET}.c -o $@
 	-strip $@

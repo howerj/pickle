@@ -3030,7 +3030,7 @@ static int picolInfoCommands(pickle_t *i, const int type, const char *pat) {
 	assert(pat);
 	assert(type == COMMANDS || type == PROCS || type == FUNCTIONS);
 	args_t a = { 0, NULL };
-	if (DEFINE_MATHS && type == FUNCTIONS)
+	if (!DEFINE_MATHS && type == FUNCTIONS)
 		return picolSetResultEmpty(i);
 	for (long j = 0; j < i->length; j++) {
 		pickle_command_t *c = i->table[j];

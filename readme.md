@@ -1270,6 +1270,13 @@ Some of the (internal) decisions made:
 - Also of note is that the interpreter is designed to gracefully handle out of
   memory conditions, it may not live up to this fact, but it is possible to
   test this by returning NULL in the allocator provided randomly.
+- There dictionary is currently initialized at startup from a list of functions
+  and their names, this takes up RAM and not ROM, a two level hashing function
+  could be used instead. Calling 'rename' on these built-in functions could
+  be handled with a single bit per entry separate from the built-in function
+  hash table, or by disallowing 'rename' on built in functions. A not trivial
+  (for an embedded system) amount of memory is used by this table. The 
+  trade-off is more lines of code, more complexity, and a bigger executable.
 
 Some of the design decisions made that prevent and hamper memory usage and
 things that could be done:
