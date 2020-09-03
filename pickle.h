@@ -30,6 +30,7 @@ enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINU
 PICKLE_API int pickle_new(pickle_t **i, allocator_fn a, void *arena);
 PICKLE_API int pickle_delete(pickle_t *i);
 PICKLE_API int pickle_eval(pickle_t *i, const char *t);
+PICKLE_API int pickle_eval_args(pickle_t *i, int argc, char **argv);
 PICKLE_API int pickle_command_register(pickle_t *i, const char *name, pickle_func_t f, void *privdata);
 PICKLE_API int pickle_command_rename(pickle_t *i, const char *src, const char *dst);
 PICKLE_API int pickle_allocator_get(pickle_t *i, allocator_fn *a, void **arena);
@@ -37,7 +38,6 @@ PICKLE_API int pickle_result_set(pickle_t *i, int ret, const char *fmt, ...);
 PICKLE_API int pickle_result_get(pickle_t *i, const char **s);
 PICKLE_API int pickle_var_set(pickle_t *i, const char *name, const char *val);
 PICKLE_API int pickle_var_get(pickle_t *i, const char *name, const char **val);
-PICKLE_API int pickle_var_set_args(pickle_t *i, const char *name, int argc, char **argv);
 PICKLE_API int pickle_tests(allocator_fn fn, void *arena);
 
 #ifdef __cplusplus

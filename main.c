@@ -194,12 +194,31 @@ static int evalFile(pickle_t *i, char *file) {
 	return r;
 }
 
+static int setArgv(pickle_t *i, int argc, char **argv) {
+	const char *r = NULL;
+	char **l = reallocator(i, NULL, (argc + 1) * sizeof (char*));
+	if (!l)
+		return PICKLE_ERROR;
+	memcpy(&l[1], argv, argc * sizeof (char*));
+	l[0] = "list";
+	if (pickle_eval_args(i, argc + 1, l) != PICKLE_OK)
+		goto fail;
+	if (pickle_result_get(i, &r) != PICKLE_OK)
+		goto fail;
+	if (pickle_eval_args(i, 3, (char*[3]){"set", "argv", (char*)r}) != PICKLE_OK)
+		goto fail;
+	return release(i, l);
+fail:
+	(void)release(i, l);
+	return PICKLE_ERROR;
+}
+
 int main(int argc, char **argv) {
 	heap_t h = { 0, 0, 0, 0 };
 	pickle_t *i = NULL;
 	if (pickle_tests(allocator, &h)   != PICKLE_OK) goto fail;
 	if (pickle_new(&i, allocator, &h) != PICKLE_OK) goto fail;
-	if (pickle_var_set_args(i, "argv", argc, argv)  != PICKLE_OK) goto fail;
+	if (setArgv(i, argc, argv)  != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "gets",   commandGets,   stdin)  != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "puts",   commandPuts,   stdout) != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "getenv", commandGetEnv, NULL)   != PICKLE_OK) goto fail;
