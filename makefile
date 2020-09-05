@@ -2,7 +2,7 @@
 # LICENSE: BSD (see 'pickle.c' or 'LICENSE' file)
 # SITE:    https://github.com/howerj/pickle
 #
-VERSION = 0x050001ul
+VERSION = 0x050002ul
 TARGET  = pickle
 #SANITIZE= -fsanitize=address
 SANITIZE=

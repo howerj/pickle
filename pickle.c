@@ -1866,7 +1866,7 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			const number_t diff = (last - first) + 1;
 			if (diff <= 1)
 				return picolSetResultEmpty(i);
-			if (picolStackOrHeapAlloc(i, &h, diff) != PICKLE_OK)
+			if (picolStackOrHeapAlloc(i, &h, diff + 1) != PICKLE_OK)
 				return PICKLE_ERROR;
 			move(h.p, &arg1[first], diff);
 			h.p[diff] = 0;
