@@ -118,7 +118,7 @@ typedef PREPACK struct {
 	size_t length;                 /**< length of 'p' */
 } POSTPACK pickle_stack_or_heap_t;     /**< allocate on stack, or move to heap, depending on needs */
 
-enum { PV_STRING, PV_SMALL_STRING, PV_LINK };
+enum { PV_STRING, PV_SMALL_STRING, PV_LINK, };
 
 typedef union {
 	char *ptr,  /**< pointer to string that has spilled over 'small' in size */
@@ -425,6 +425,7 @@ static int picolStackOrHeapAlloc(pickle_t *i, pickle_stack_or_heap_t *s, size_t 
 	if (s->p == NULL) { /* take care of initialization */
 		s->p      = s->buf;
 		s->length = sizeof (s->buf);
+		zero(s->buf, sizeof (s->buf));
 	}
 
 	if (needed <= s->length)
@@ -435,6 +436,7 @@ static int picolStackOrHeapAlloc(pickle_t *i, pickle_stack_or_heap_t *s, size_t 
 		if (!(s->p = picolMalloc(i, needed)))
 			return PICKLE_ERROR;
 		s->length = needed;
+		move(s->p, s->buf, sizeof (s->buf));
 		return PICKLE_OK;
 	}
 	char *old = s->p;
@@ -452,6 +454,7 @@ static int picolStackOrHeapFree(pickle_t *i, pickle_stack_or_heap_t *s) {
 	if (s->p != s->buf) {
 		const int r = picolFree(i, s->p);
 		s->p = NULL; /* prevent double free */
+		s->length = 0;
 		return r;
 	}
 	return PICKLE_OK; /* pointer == buffer, no need to free */
