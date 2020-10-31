@@ -25,7 +25,7 @@ struct pickle_interpreter;
 typedef struct pickle_interpreter pickle_t;
 typedef int (*pickle_func_t)(pickle_t *i, int argc, char **argv, void *privdata);
 
-enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE };
+enum { PICKLE_ERROR = -1, PICKLE_OK, PICKLE_RETURN, PICKLE_BREAK, PICKLE_CONTINUE, };
 
 PICKLE_API int pickle_new(pickle_t **i, allocator_fn a, void *arena);
 PICKLE_API int pickle_delete(pickle_t *i);

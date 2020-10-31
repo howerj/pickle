@@ -79,7 +79,7 @@ static char *slurp(pickle_t *i, FILE *input, size_t *length, char *class) {
 
 static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 1)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	size_t length = 0;
 	char *line = slurp(i, (FILE*)pd, &length, "\n");
 	if (!line)
@@ -98,20 +98,20 @@ static int commandGets(pickle_t *i, int argc, char **argv, void *pd) {
 static int commandPuts(pickle_t *i, int argc, char **argv, void *pd) {
 	FILE *out = pd;
 	if (argc != 1 && argc != 2 && argc != 3)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	if (argc == 1)
 		return fputc('\n', out) < 0 ? PICKLE_ERROR : PICKLE_OK;
 	if (argc == 2)
 		return fprintf(out, "%s\n", argv[1]) < 0 ? PICKLE_ERROR : PICKLE_OK;
 	if (!strcmp(argv[1], "-nonewline"))
 		return fputs(argv[2], out) < 0 ? PICKLE_ERROR : PICKLE_OK;
-	return error(i, "Invalid option %s", argv[1]);
+	return error(i, "Error option %s", argv[1]);
 }
 
 static int commandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	const char *env = getenv(argv[1]);
 	return ok(i, "%s", env ? env : "");
 }
@@ -119,7 +119,7 @@ static int commandGetEnv(pickle_t *i, int argc, char **argv, void *pd) {
 static int commandExit(pickle_t *i, int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	if (argc != 2 && argc != 1)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	const char *code = argc == 2 ? argv[1] : "0";
 	exit(atoi(code));
 	return PICKLE_ERROR; /* unreachable */
@@ -129,7 +129,7 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
 	time_t ts = 0;
 	if (argc < 2)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	if (!strcmp(argv[1], "clicks")) {
 		const long t = (((double)(clock()) / (double)CLOCKS_PER_SEC) * 1000.0);
 		return ok(i, "%ld", t);
@@ -137,25 +137,26 @@ static int commandClock(pickle_t *i, const int argc, char **argv, void *pd) {
 	if (!strcmp(argv[1], "seconds"))
 		return ok(i, "%ld", (long)time(&ts));
 	if (!strcmp(argv[1], "format")) {
-		const int gmt = 1;
-		char buf[512] = { 0 };
-		char *fmt = argc == 4 ? argv[3] : "%a %b %d %H:%M:%S %Z %Y";
 		int tv = 0;
 		if (argc != 3 && argc != 4)
-			return error(i, "Invalid subcommand %s", argv[1]);
+			return error(i, "Error %s %s", argv[0], argv[1]);
+		char buf[512] = { 0, };
+		char *fmt = argc == 4 ? argv[3] : "%a %b %d %H:%M:%S %Z %Y";
 		if (sscanf(argv[2], "%d", &tv) != 1)
-			return error(i, "Invalid number %s", argv[2]);
+			return error(i, "Error number %s", argv[2]);
 		ts = tv;
-		struct tm *timeinfo = (gmt ? gmtime : localtime)(&ts);
-		strftime(buf, sizeof buf, fmt, timeinfo);
+		struct tm *timeinfo = gmtime(&ts);
+		const size_t sz = strftime(buf, sizeof buf, fmt, timeinfo);
+		if (sz == 0 && fmt[0])
+			return error(i, "Error %s %s", argv[1], fmt);
 		return ok(i, "%s", buf);
 	}
-	return error(i, "Invalid command %s", argv[0]);
+	return error(i, "Error option %s", argv[0]);
 }
 
 static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 	if (argc != 1 && argc != 2)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	errno = 0;
 	FILE *file = argc == 1 ? pd : fopen(argv[1], "rb");
 	if (!file)
@@ -172,12 +173,12 @@ static int commandSource(pickle_t *i, int argc, char **argv, void *pd) {
 static int commandHeap(pickle_t *i, int argc, char **argv, void *pd) {
 	heap_t *h = pd;
 	if (argc != 2)
-		return error(i, "Invalid command %s", argv[0]);
+		return error(i, "Error command %s", argv[0]);
 	if (!strcmp(argv[1], "frees"))         return ok(i, "%ld", h->frees);
 	if (!strcmp(argv[1], "allocations"))   return ok(i, "%ld", h->allocs);
 	if (!strcmp(argv[1], "total"))         return ok(i, "%ld", h->total);
 	if (!strcmp(argv[1], "reallocations")) return ok(i, "%ld", h->reallocs);
-	return error(i, "Invalid command %s", argv[0]);
+	return error(i, "Error option %s", argv[0]);
 }
 
 static int evalFile(pickle_t *i, char *file) {
