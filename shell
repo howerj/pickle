@@ -429,6 +429,9 @@ test 720 {* 1 2 3 4 5 6}
 test 1 "< 3 4"
 test 0 {< 5 -5}
 test -25 {* 5 -5}
+test 60 {* 3 4 5}
+test -60 {* -3 4 5}
+test 60 {* -3 4 -5}
 test 1 {< 6 9}
 test 1 {< 6 9 10 7}
 test 0 {< 6 9 10 6}
@@ -457,6 +460,9 @@ test 2 {or 2 2 2}
 test 255 {or 85 170}
 test 255 {xor 85 170}
 test 0   {and 85 170}
+test 1   {and 1 1 1}
+test 0   {and 1 0 1 1}
+test 0   {and 0 0 0}
 test 0 {not 3}
 test 1 {not 0}
 test 3 {/ 12 4}
@@ -476,6 +482,11 @@ test 3 {negate -3}
 test 8 {pow 2 3}
 test 9   {pow 3 2}
 test 81  {pow 3 2 2}
+test 1   {pow 9 0}
+test -8  {pow -2 3}
+test 4   {pow -2 2}
+test -2  {pow -2 1}
+test 1   {pow -2 0}
 test 3 {log 8 2}
 # Integer logarithm!
 test 3 {log 9 2}
@@ -892,6 +903,11 @@ test  {2 4} {reg {\{+} "??\{\{\{p"}
 fails {reg "a^" "a^"}
 fails {reg {$a} {$a}}
 test  {0 0} {reg ^ a^}
+test  {0 2} {reg ^ab* abb}
+test  {-1 -1} {reg ^ab aabb}
+test  {0 0} {reg ^ab* aabb}
+test  {-1 -1} {reg ^abb* aabb}
+test  {1 3} {reg abb* aabb}
 test  {0 0} {reg -lazy {ab*} {abbbbbb}}
 test  {0 6} {reg {ab*} {abbbbbb}}
 # Hmm, probably need to differentiate between these two

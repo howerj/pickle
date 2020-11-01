@@ -19,7 +19,7 @@
 #define PRINT_NUMBER_BUF_SZ       (64 /* base 2 */ + 1 /* '-'/'+' */ + 1 /* NUL */)
 #define UNUSED(X)                 ((void)(X))
 #define BUILD_BUG_ON(condition)   ((void)sizeof(char[1 - 2*!!(condition)]))
-#define implies(P, Q)             assert(!(P) || (Q)) /* material implication, immaterial if NDEBUG defined */
+#define implies(P, Q)             implication(!!(P), !!(Q)) /* material implication, immaterial if NDEBUG defined */
 #define mutual(P, Q)              (implies((P), (Q)), implies((Q), (P)))
 #define member_size(TYPE, MEMBER) (sizeof(((TYPE *)0)->MEMBER)) /* apparently fine */
 #define MIN(X, Y)                 ((X) > (Y) ? (Y) : (X))
@@ -194,6 +194,10 @@ static const char *string_digits      = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 static int picolForceResult(pickle_t *i, const char *result, const int is_static);
 static int picolSetResultString(pickle_t *i, const char *s);
+
+static inline void implication(const int p, const int q) { 
+	assert((!p) || q); 
+}
 
 static inline void static_assertions(void) { /* A neat place to put these */
 	BUILD_BUG_ON(PICKLE_MAX_STRING    < 128);
@@ -395,13 +399,13 @@ static inline int picolLogarithm(number_t a, const number_t b, number_t *c) {
 
 static inline int picolPower(number_t base, number_t exp, number_t *r) {
 	assert(r);
-	number_t result = 1, negative = 1;
+	number_t result = 1, negative = 0;
 	*r = 0;
 	if (exp < 0)
 		return PICKLE_ERROR;
 	if (base < 0) {
 		base = -base;
-		negative = -1;
+		negative = exp & 1;
 	}
 	for (;;) {
 		if (exp & 1)
@@ -411,7 +415,7 @@ static inline int picolPower(number_t base, number_t exp, number_t *r) {
 			break;
 		base *= base;
 	}
-	*r = result * negative;
+	*r = negative ? -result : result;
 	return PICKLE_OK;
 }
 
@@ -1803,10 +1807,9 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 				return error(i, "Error option %s", arg2);
 			if (picolStackOrHeapAlloc(i, &h, (count * length) + 1) != PICKLE_OK)
 				return PICKLE_ERROR;
-			for (; j < count; j++) {
-				implies(USE_MAX_STRING, (((j * length) + length) < PICKLE_MAX_STRING));
+			implies(USE_MAX_STRING, ((((count - 1) * length) + length) < PICKLE_MAX_STRING));
+			for (; j < count; j++)
 				move(&h.p[j * length], arg1, length);
-			}
 			h.p[j * length] = 0;
 			const int r = picolSetResultString(i, h.p);
 			if (picolStackOrHeapFree(i, &h) != PICKLE_OK)
@@ -3332,23 +3335,18 @@ static int picolRegexExtract(pickle_regex_t *x, const char *regexp, const char *
 	assert(text);
 	x->start = NULL;
 	x->end   = NULL;
-	int m = 0;
-	if (regexp[0] == START) {
-		m = regexHere(x, 0, regexp + 1, text);
-		goto done;
-	}
+	const int start = regexp[0] == START;
 	do {    /* must look even if string is empty */
-		m = regexHere(x, 0, regexp, text);
-		if (m)
-		       goto done;
+		const int m = regexHere(x, 0, regexp + start, text);
+		if (m || start) {
+			if (m > 0)
+				x->start = text;
+			return m;
+		}
 	} while (*text++ != EOI);
 	x->start = NULL;
 	x->end   = NULL;
 	return 0;
-done:
-	if (m > 0)
-		x->start = text;
-	return m;
 }
 
 static inline int picolCommandRegex(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -3382,7 +3380,7 @@ static inline int picolCommandRegex(pickle_t *i, const int argc, char **argv, vo
 			index = l;
 		string += index;
 	}
-	pickle_regex_t x = { NULL, NULL, PICKLE_MAX_RECURSION, type, nocase };
+	pickle_regex_t x = { NULL, NULL, PICKLE_MAX_RECURSION, type, nocase, };
 	const int r = picolRegexExtract(&x, pattern, string);
 	mutual(x.start, x.end);
 	if (r < 0)
