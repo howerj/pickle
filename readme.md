@@ -322,11 +322,14 @@ It should be noted that because all variables are stored internally as strings,
 mathematical operations are egregiously slow. Numbers are first converted to
 strings, the operation performed, then converted back to strings. There are
 also some bitwise operations; 'lshift', 'rshift', 'and', 'or', 'xor'. These
-mathematical operations can accept a list integers.
+mathematical operations can accept a list integers. '&', '|' and '^' are
+aliases for 'and', 'or' and 'xor' respectively. '&&' and '||' implement logical
+'and' and 'or', *but all arguments are evaluated -- and it is not a bug!*.
 
-There are also the following unary mathematical operators defined: 'not'
-(logical negation), 'invert' (bitwise inversion), 'abs' (absolute value),
-'bool' (turn number into a boolean 0 or 1), 'negate' (negate a number).
+There are also the following unary mathematical operators defined: 'not'/'!'
+(logical negation), 'invert'/'~' (bitwise inversion), 'abs' (absolute value),
+'bool' (turn number into a boolean 0 or 1), 'negate' (negate a number). '-' is
+not defined as negate, as that symbol is already used for subtraction.
 
 Numbers conversion is strict, an invalid number will not be silently converted
 into a zero, or a string containing a part of a number will not become that
@@ -936,7 +939,7 @@ The format command a time in seconds since the Unix Epoch against an optional
 time-specification (the default time specification is "%a %b %d %H:%M:%S %Z %Y").
 The formatting is done entirely by the function [strftime][].
 
-There are internal limits on this string length (512 bytes excluding the NUL 
+There are internal limits on this string length (512 bytes excluding the NUL
 terminator).
 
 * heap option
@@ -965,6 +968,13 @@ This is the total number of bytes that have been allocated.
 This is the number of reallocations that have been performed on an already
 allocated pointer.
 
+The "heap" command has another subcommand "fail-after", which is used for
+internal testing purposes, it takes a number and after that many calls to
+the allocation function it causes it to return a failure, which is fatal to
+the interpreter (but should not cause a crash). You should not need to use
+this subcommand. Calling this subcommand again resets the count until failure,
+setting the count to zero disables deliberate failure. This feature could be
+used as a crude watchdog, but it would be inadvisable to do so.
 
 * source file-name
 
@@ -1275,7 +1285,7 @@ Some of the (internal) decisions made:
   could be used instead. Calling 'rename' on these built-in functions could
   be handled with a single bit per entry separate from the built-in function
   hash table, or by disallowing 'rename' on built in functions. A not trivial
-  (for an embedded system) amount of memory is used by this table. The 
+  (for an embedded system) amount of memory is used by this table. The
   trade-off is more lines of code, more complexity, and a bigger executable.
 
 Some of the design decisions made that prevent and hamper memory usage and

@@ -195,8 +195,9 @@ static const char *string_digits      = "0123456789abcdefghijklmnopqrstuvwxyz";
 static int picolForceResult(pickle_t *i, const char *result, const int is_static);
 static int picolSetResultString(pickle_t *i, const char *s);
 
-static inline void implication(const int p, const int q) { 
-	assert((!p) || q); 
+static inline void implication(const int p, const int q) {
+	UNUSED(p); UNUSED(q); /* warning suppression if NDEBUG defined */
+	assert((!p) || q);
 }
 
 static inline void static_assertions(void) { /* A neat place to put these */
@@ -282,7 +283,7 @@ static inline char *locateChar(const char *s, const int c) {
 
 static void *picolMalloc(pickle_t *i, size_t size) {
 	assert(i);
-	assert(size > 0); /* we should not allocate any zero length objects here */
+	assert(size > 0); /* we do not allocate any zero length objects in this code */
 	if (i->fatal || (USE_MAX_STRING && size > PICKLE_MAX_STRING))
 		goto fail;
 	void *r = i->allocator(i->arena, NULL, 0, size);
@@ -313,7 +314,6 @@ static int picolFree(pickle_t *i, void *p) {
 	assert(i);
 	assert(i->allocator);
 	const void *r = i->allocator(i->arena, p, 0, 0);
-	assert(r == NULL); /* should just return it, but we do not check it throughout program */
 	if (r != NULL) {
 		static const char msg[] = "Error free";
 		BUILD_BUG_ON(sizeof(msg) > SMALL_RESULT_BUF_SZ);
@@ -1971,7 +1971,8 @@ enum {
 	BADD,  BSUB,    BMUL,    BDIV, BMOD,
 	BMORE, BMEQ,    BLESS,   BLEQ, BEQ,
 	BNEQ,  BLSHIFT, BRSHIFT, BAND, BOR,
-	BXOR,  BMIN,    BMAX,    BPOW, BLOG
+	BXOR,  BMIN,    BMAX,    BPOW, BLOG,
+	BLAND, BLOR,
 };
 
 static inline int picolCommandMathUnary(pickle_t *i, const int argc, char **argv, void *pd) {
@@ -2017,6 +2018,8 @@ static inline int picolCommandMath(pickle_t *i, const int argc, char **argv, voi
 		case BRSHIFT: c = ((unumber_t)a) >> b; a = c; break;
 		case BAND:    c = a & b; a = c; break;
 		case BOR:     c = a | b; a = c; break;
+		case BLAND:   c = a && b; a = c; break;
+		case BLOR:    c = a || b; a = c; break;
 		case BXOR:    c = a ^ b; a = c; break;
 		case BMIN:    c = MIN(a, b); a = c; break;
 		case BMAX:    c = MAX(a, b); a = c; break;
@@ -2058,17 +2061,35 @@ static int picolCommandCatch(pickle_t *i, const int argc, char **argv, void *pd)
 
 static int picolCommandIf(pickle_t *i, const int argc, char **argv, void *pd) {
 	UNUSED(pd);
-	int r = 0; /* NB. This should implement the full TCL 'if'...'elseif'...'else' command. */
-	ARITY(argc != 3 && argc != 5, "expression clause {else clause}?: conditionally evaluate expressions");
-	if (argc == 5)
-		if (compare("else", argv[3]))
-			return error(i, "Error operation %s", argv[0]);
-	if ((r= picolEval(i, argv[1])) != PICKLE_OK)
-		return r;
-	if (!isFalse(i->result))
-		return picolEval(i, argv[2]);
-	else if (argc == 5)
-		return picolEval(i, argv[4]);
+	ARITY(argc < 3, "if {expr} {clause} [elseif {expr} {clause}]* [else {clause}]? : conditionally evaluate expressions");
+	int j = 0;
+	for (j = 3; j < argc;) { /* syntax check */
+		if (!compare("elseif", argv[j])) {
+			j += 3;
+			if ((argc - j) < 0)
+				return error(i, "Error %s %s", argv[0], argv[j]);
+		} else if (!compare("else", argv[j])) {
+			if ((argc - j) != 2)
+				return error(i, "Error %s %s", argv[0], argv[j]);
+			break;
+		} else {
+			return error(i, "Error %s %s", argv[0], argv[j]);
+		}
+	}
+	for (j = 0; j < argc; j += 3) {
+		if ((argc - j) == 2) { /* else */
+			assert(!compare("else", argv[j]));
+			assert((j + 1) < argc);
+			return picolEval(i, argv[j + 1]);
+		}
+		/* must be 'if' or 'elseif' */
+		assert((j + 2) < argc);
+		const int r = picolEval(i, argv[j + 1]);
+		if (r != PICKLE_OK)
+			return r;
+		if (!isFalse(i->result))
+			return picolEval(i, argv[j + 2]);
+	}
 	return PICKLE_OK;
 }
 
@@ -3452,31 +3473,38 @@ static int picolRegisterCoreCommands(pickle_t *i) {
 		{ "string",    picolCommandString,    NULL },
 #endif
 #if DEFINE_MATHS
+		{ "!=",        picolCommandMath,      (char*)BNEQ,     },
+		{ "&",         picolCommandMath,      (char*)BAND,     },
+		{ "&&",        picolCommandMath,      (char*)BLAND,    },
+		{ "*",         picolCommandMath,      (char*)BMUL,     },
+		{ "+",         picolCommandMath,      (char*)BADD,     },
+		{ "-",         picolCommandMath,      (char*)BSUB,     },
+		{ "/",         picolCommandMath,      (char*)BDIV,     },
+		{ "<",         picolCommandMath,      (char*)BLESS,    },
+		{ "<=",        picolCommandMath,      (char*)BLEQ,     },
+		{ "==",        picolCommandMath,      (char*)BEQ,      },
+		{ ">",         picolCommandMath,      (char*)BMORE,    },
+		{ ">=",        picolCommandMath,      (char*)BMEQ,     },
+		{ "^",         picolCommandMath,      (char*)BXOR,     },
+		{ "and",       picolCommandMath,      (char*)BAND,     },
+		{ "log",       picolCommandMath,      (char*)BLOG,     },
+		{ "lshift",    picolCommandMath,      (char*)BLSHIFT,  },
+		{ "max",       picolCommandMath,      (char*)BMAX,     },
+		{ "min",       picolCommandMath,      (char*)BMIN,     },
+		{ "mod",       picolCommandMath,      (char*)BMOD,     },
+		{ "or",        picolCommandMath,      (char*)BOR,      },
+		{ "pow",       picolCommandMath,      (char*)BPOW,     },
+		{ "rshift",    picolCommandMath,      (char*)BRSHIFT,  },
+		{ "xor",       picolCommandMath,      (char*)BXOR,     },
+		{ "|",         picolCommandMath,      (char*)BOR,      },
+		{ "||",        picolCommandMath,      (char*)BLOR,     },
+		{ "!",         picolCommandMathUnary, (char*)UNOT      },
 		{ "abs",       picolCommandMathUnary, (char*)UABS      },
 		{ "bool",      picolCommandMathUnary, (char*)UBOOL     },
 		{ "invert",    picolCommandMathUnary, (char*)UINV      },
 		{ "negate",    picolCommandMathUnary, (char*)UNEGATE   },
 		{ "not",       picolCommandMathUnary, (char*)UNOT      },
-		{  "+",        picolCommandMath,      (char*)BADD,     },
-		{  "-",        picolCommandMath,      (char*)BSUB,     },
-		{  "*",        picolCommandMath,      (char*)BMUL,     },
-		{  "/",        picolCommandMath,      (char*)BDIV,     },
-		{  "mod",      picolCommandMath,      (char*)BMOD,     },
-		{  ">",        picolCommandMath,      (char*)BMORE,    },
-		{  ">=",       picolCommandMath,      (char*)BMEQ,     },
-		{  "<",        picolCommandMath,      (char*)BLESS,    },
-		{  "<=",       picolCommandMath,      (char*)BLEQ,     },
-		{  "==",       picolCommandMath,      (char*)BEQ,      },
-		{  "!=",       picolCommandMath,      (char*)BNEQ,     },
-		{  "lshift",   picolCommandMath,      (char*)BLSHIFT,  },
-		{  "rshift",   picolCommandMath,      (char*)BRSHIFT,  },
-		{  "and",      picolCommandMath,      (char*)BAND,     },
-		{  "or",       picolCommandMath,      (char*)BOR,      },
-		{  "xor",      picolCommandMath,      (char*)BXOR,     },
-		{  "min",      picolCommandMath,      (char*)BMIN,     },
-		{  "max",      picolCommandMath,      (char*)BMAX,     },
-		{  "pow",      picolCommandMath,      (char*)BPOW,     },
-		{  "log",      picolCommandMath,      (char*)BLOG,     },
+		{ "~",         picolCommandMathUnary, (char*)UINV      },
 #endif
 	};
 	for (size_t j = 0; j < sizeof(commands)/sizeof(commands[0]); j++)

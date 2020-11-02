@@ -65,7 +65,10 @@ if {getopt argv -T} { trace on }
 while {getopt argv -e line} { set shell off; eval $line }; unset line;
 if {getopt argv -t} { set shell off; set testing on; };
 if {getopt argv -s} { set shell on }
-getopt argv -S seed 1
+getopt argv -S seed [clock seconds]
+getopt argv -F fail 0
+heap fail-after $fail
+unset fail
 
 if {getopt argv -h} {
 	puts "Usage: [lindex $argv 1] -\[tsphT\] \[-S seed\] \[-e string\]"
@@ -77,6 +80,7 @@ if {getopt argv -h} {
 	puts "\t-e str\tEvaluate a string"
 	puts "\t-T\tTurn tracing on"
 	puts "\t-S #\tSet the seed for the PRNG"
+	puts "\t-F #\tIntroduce memory fault after # allocations"
 	puts ""
 	break
 }
@@ -123,6 +127,29 @@ if {getopt argv -} {
 	puts "Invalid command line option!"
 	return "" -1
 }
+
+# This Non Cryptographically Secure Pseudo Random Number Generator
+# is based of off XORSHIFT 32 (see <https://en.wikipedia.org/wiki/Xorshift>).
+# It SHOULD NOT be used for cryptographic purposes. A seed of zero is checked
+# for, and changed to a one, as a seed of zero produces only zeros.
+#
+# The "seed" variable is seed to the clock in seconds, which is better than
+# nothing but a very poor entropy source. The seed is set during argument
+# processing.
+proc random {args} {
+	upvar #0 seed x;
+	set alen [llength $args]
+	if {> $alen 1 } { return "Error args" -1 }
+	set ns [lindex $args 0]
+	if {> $alen 0 } { set x $ns }
+	if {== $x 0} { incr x; }
+	set x [xor $x [lshift $x 13]];
+	set x [xor $x [rshift $x 17]];
+	set x [xor $x [lshift $x  5]];
+}
+# Call 'random' a few times, using a small seed usually means the first
+# few numbers are quite small as well.
+for {set i 0} {< $i 10} {incr i} { random }
 
 # TCL supports two version of 'foreach', this only does one of those
 # versions: for each element in the list 'l' set the variable named by
@@ -172,8 +199,6 @@ proc switch {args} {
 # This is a limited version of the 'format' command, this could have been made
 # to be a built in C function for the sake of efficiency, and if you find
 # yourself using the command a lot then it might be worth doing that.
-#
-#
 proc format {fmt args} {
 	set l [split $fmt ""]
 	set w [llength $l]
@@ -184,12 +209,13 @@ proc format {fmt args} {
 			set s [lindex $l [incr i]]
 			set v [lindex $args $j]
 			incr j
-			if {eq $s %} { set r $r% }
-			if {eq $s s} { set r $r$v }
-			if {eq $s x} { set r $r[string dec2hex $v] }
-			if {eq $s X} { set r $r[string toupper [string dec2hex $v]] }
-			if {eq $s o} { set r $r[string dec2base $v 8] }
-			if {eq $s c} { set r $r[string char $v] }
+			if {eq $s %} { set r $r%
+			} elseif {eq $s s} { set r $r$v
+			} elseif {eq $s x} { set r $r[string dec2hex $v]
+			} elseif {eq $s X} { set r $r[string toupper [string dec2hex $v]]
+			} elseif {eq $s o} { set r $r[string dec2base $v 8]
+			} elseif {eq $s c} { set r $r[string char $v]
+			} else { return "Error format $s" -1 }
 		} else {
 			set r $r$o
 		}
@@ -206,13 +232,27 @@ proc color {c} {
 	return "\x1b\[3$i;1m"
 }
 
+# Making these variables would be more efficient, however they would have
+# to be accessed via upvar, functions do not.
 proc normal {} "return {[color reset]}"
 proc red    {} "return {[color red]}"
 proc green  {} "return {[color green]}"
 proc blue   {} "return {[color blue]}"
 rename color ""
 
-proc error {msg} { puts $msg; return "" -1 }
+# Unfortunately this does not write to stderr.
+proc error {msg args} {
+	set r -1
+	set alen [llength $args]
+	if {> $alen 1} { return "Error args" -1 }
+	if {> $alen 0} {
+		set d [lindex $args 0]
+		if {== 0 [string is integer $d]} { return "Error invalid number: $d" -1 }
+		set r $d
+	}
+	puts $msg;
+	return "" $r
+}
 
 proc lremove {lv v} {
     upvar 1 $lv var
@@ -272,13 +312,6 @@ proc {stack dump} {} {
 	}
 }
 
-proc random {} {
-	upvar #0 seed x;
-	if {== $x 0} { incr x; }
-	set x [xor $x [lshift $x 13]];
-	set x [xor $x [rshift $x 17]];
-	set x [xor $x [lshift $x  5]];
-}
 
 proc io {} {
 	set e [catch {gets} l]
@@ -359,7 +392,7 @@ proc fails {x} {
 		uplevel #0 { set passed [+ $passed 1] }
 		set f "[green]ok[normal]:    "
 	}
-	puts [string tr r "\n\r" " " "$f{$x} with error \"$r\""]
+	puts [string tr r "\n\r" " " "$f{$x} returns \"$r\""]
 }
 
 proc state {x} {
@@ -403,11 +436,20 @@ if {== 0 [info system strict]} {
 	test 1 {not x}
 }
 
-fails {set}
 fails {if}
+fails {if { }}
 # NB. Different from TCL, which is an error
-test {1} {if { } { return 1 0 } else { return 2 0 }}
+test 1 {if { } { return 1 0 } else { return 2 0 }}
+test 2 {if {== 0 1} { return 1 0 } else { return 2 0 }}
+test 3 {if {== 0 1} { return 1 0 } elseif {== 1 1} { return 3 0 } else { return 2 0 }}
+test 3 {if {== 0 1} { return 1 0 } elseif {== 1 1} { return 3 0 }}
+# Quirk - the result of the last condition is returned
+test "0" {if {== 0 1} { return 1 0 } elseif {== 1 2} { return 3 0 }}
+fails {if {== 0 0} { puts a } not-else { puts b } else { puts c }}
+fails {if {== 0 0} { puts a } else}
 fails {if {== 0 0} { puts a } not-else { puts b }}
+fails {if {== 0 0} { puts a } not-elseif { } { puts b }}
+fails {set}
 fails {while}
 fails {while {== 0 x} { puts "not run" }}
 state {proc recurse {} { recurse }}
@@ -451,20 +493,46 @@ test 4 {min 90 8 4 6 7 89}
 test 4 {abs 4}
 test 4 {abs -4}
 test -1 {+ [invert 1] 1}
+test 170 {and 255 [invert 85]}
+test 170 {and 255 [~ 85]}
 test 3 {or 1 2}
-test 3 {xor 1 2}
-test 0 {xor 2 2}
-test 2 {xor 2 2 2}
 test 2 {or 2 2}
 test 2 {or 2 2 2}
 test 255 {or 85 170}
+test 3 {| 1 2}
+test 2 {| 2 2}
+test 2 {| 2 2 2}
+test 255 {| 85 170}
+test 3 {xor 1 2}
+test 0 {xor 2 2}
+test 2 {xor 2 2 2}
 test 255 {xor 85 170}
+test 3 {^ 1 2}
+test 0 {^ 2 2}
+test 2 {^ 2 2 2}
+test 1 {^ 1 1 1}
+test 255 {^ 85 170}
 test 0   {and 85 170}
 test 1   {and 1 1 1}
 test 0   {and 1 0 1 1}
 test 0   {and 0 0 0}
+test 0   {& 85 170}
+test 1   {& 1 1 1}
+test 0   {& 1 0 1 1}
+test 0   {& 0 0 0}
+test 0   {&& 0 0}
+test 1   {&& 1 1}
+test 1   {&& 1 2}
+test 1   {&& 1 2 3}
+test 0   {&& 1 2 0 3}
+test 0   {|| 0 0}
+test 0   {|| 0 0 0}
+test 1   {|| 0 9 0}
+test 1   {|| 1 9}
 test 0 {not 3}
 test 1 {not 0}
+test 0 {! 3}
+test 1 {! 0}
 test 3 {/ 12 4}
 test 2 {/ 20 5 2}
 test 10 {+ 4 1 3 2}
@@ -487,6 +555,7 @@ test -8  {pow -2 3}
 test 4   {pow -2 2}
 test -2  {pow -2 1}
 test 1   {pow -2 0}
+test 16  {pow 2 2 2}
 test 3 {log 8 2}
 # Integer logarithm!
 test 3 {log 9 2}
@@ -1159,8 +1228,23 @@ test 5 {set i 10; while {> $i 5} {incr i -1}; set i}
 test 55 {proc f x {uplevel 1 set gg $x}; f 55; set gg}
 state {rename f ""}
 
+fails {format}
+fails {format "%Y"}
+test "" {format %s {}}
+test "Alpha-Omega" {format %s-%s Alpha Omega}
+test "ABC" {format ABC}
+test "ABC" {format ABC D E F}
+test "AxC" {format A%sC x}
+test "AxxC" {format A%sC xx}
+test "" {format ""}
+test "AA" {format A%c 65}
+test "3e8" {format %x 1000}
+test "3E8" {format %X 1000}
+test "%s" {format %%s}
+
 # Version should not be '0':
 test 1 {ne "0" {eval "or [info version]"}}
+
 
 proc assert {x} { if {== $x "0"} { puts "assert failed"; exit 1 } }
 assert [<= $passed $total]
