@@ -124,14 +124,17 @@ if {getopt argv -p} {
 }
 
 if {getopt argv -} {
-	puts "Invalid command line option!"
+	puts "Error command line option"
+	puts "Use '-h' to see a list of valid options"
 	return "" -1
 }
 
 # This Non Cryptographically Secure Pseudo Random Number Generator
 # is based of off XORSHIFT 32 (see <https://en.wikipedia.org/wiki/Xorshift>).
 # It SHOULD NOT be used for cryptographic purposes. A seed of zero is checked
-# for, and changed to a one, as a seed of zero produces only zeros.
+# for, and changed to a one, as a seed of zero produces only zeros. One
+# difference between XORSHIFT 32 and this version is that arithmetic is not
+# done modulo 2 to the power of 32.
 #
 # The "seed" variable is seed to the clock in seconds, which is better than
 # nothing but a very poor entropy source. The seed is set during argument
@@ -150,6 +153,7 @@ proc random {args} {
 # Call 'random' a few times, using a small seed usually means the first
 # few numbers are quite small as well.
 for {set i 0} {< $i 10} {incr i} { random }
+unset i
 
 # TCL supports two version of 'foreach', this only does one of those
 # versions: for each element in the list 'l' set the variable named by
@@ -170,7 +174,7 @@ proc foreach {v l b} {
 	return $t 0
 }
 
-proc match {x y} { string match $y $x }
+proc match {x y} { string match $x $y }
 
 proc switch {args} {
 	set f eq
@@ -254,10 +258,13 @@ proc error {msg args} {
 	return "" $r
 }
 
-proc lremove {lv v} {
-    upvar 1 $lv var
-    set idx [lsearch -exact $var $v]
-    set var [lreplace $var $idx $idx]
+proc lremove {lst args} {
+	set l [llength $args]
+	for {set i 0} {< $i $l} {incr i} {
+		set v [lindex $args $i]
+		set lst [lreplace $lst $v $v]
+	}
+	return $lst
 }
 
 proc lprepend {varName args} {
@@ -266,9 +273,24 @@ proc lprepend {varName args} {
    set var [eval [list linsert $var 0] $args]
 }
 
+proc lassign {dats args} {
+	set ld [llength $dats]
+	set la [llength $args]
+	for {set i 0} {< $i $la} {incr i} {
+		set var [lindex $args $i]
+		set val ""
+		if {< $i $la} { set val [lindex $dats $i] }
+		upvar 1 $var $var
+		set $var $val
+	}
+	return [lrange $dats $i $ld]
+}
+
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words' which is also from Forth.
+
 proc words {} { lsort [info commands] }
+
 proc see {w} {
 	if {eq "" [info commands $w]} {
 		return "'$w' is not defined" -1
@@ -283,7 +305,13 @@ proc see {w} {
 	return "$type [list $w] {$args} {$body}"
 }
 
-proc global {x} { uplevel 1 upvar #0 $x $x }
+proc global {args} { 
+	set l [llength $args]
+	for {set i 0} {< $i $l} {incr i} {
+		set x [lindex $args $i]
+		uplevel 1 upvar #0 $x $x 
+	}
+}
 
 proc time {x args} {
 	set c 1;
@@ -305,8 +333,7 @@ proc {stack dump} {} {
 		for {set j 0} {< $j $m} {incr j} {
 			set var [uplevel $i "lindex {$q} $j"]
 			set val [uplevel $i set $var]
-			lappend r $var
-			lappend r $val
+			lappend r [list $var $val]
 		}
 		puts "[- $i 1]: $r"
 	}
@@ -355,7 +382,6 @@ if {eq off $testing} {
 # ### Clean up   ### #
 
 #rename tracer ""
-rename getopt ""
 rename monitor ""
 rename see   ""
 rename words ""
@@ -417,6 +443,7 @@ puts "\tstrict:     [info system strict]"
 puts "Heap Usage:"
 puts "\tallocs:     [heap allocations]"
 puts "\tfrees:      [heap frees]"
+puts "\trealloc:    [heap reallocations]"
 puts "\ttotal:      [heap total] ([/ [heap total] 1024]KiB)"
 
 puts "\n\[Pickle Tests\]\n"
@@ -512,23 +539,23 @@ test 0 {^ 2 2}
 test 2 {^ 2 2 2}
 test 1 {^ 1 1 1}
 test 255 {^ 85 170}
-test 0   {and 85 170}
-test 1   {and 1 1 1}
-test 0   {and 1 0 1 1}
-test 0   {and 0 0 0}
-test 0   {& 85 170}
-test 1   {& 1 1 1}
-test 0   {& 1 0 1 1}
-test 0   {& 0 0 0}
-test 0   {&& 0 0}
-test 1   {&& 1 1}
-test 1   {&& 1 2}
-test 1   {&& 1 2 3}
-test 0   {&& 1 2 0 3}
-test 0   {|| 0 0}
-test 0   {|| 0 0 0}
-test 1   {|| 0 9 0}
-test 1   {|| 1 9}
+test 0 {and 85 170}
+test 1 {and 1 1 1}
+test 0 {and 1 0 1 1}
+test 0 {and 0 0 0}
+test 0 {& 85 170}
+test 1 {& 1 1 1}
+test 0 {& 1 0 1 1}
+test 0 {& 0 0 0}
+test 0 {&& 0 0}
+test 1 {&& 1 1}
+test 1 {&& 1 2}
+test 1 {&& 1 2 3}
+test 0 {&& 1 2 0 3}
+test 0 {|| 0 0}
+test 0 {|| 0 0 0}
+test 1 {|| 0 9 0}
+test 1 {|| 1 9}
 test 0 {not 3}
 test 1 {not 0}
 test 0 {! 3}
@@ -585,6 +612,9 @@ test a {join a ,}
 test "" {join "" ,}
 fails {join}
 fails {join {}}
+test a##b##c##d {join {a b c d} ##}  
+test abcxd      {join {a b cx d} ""} 
+test "e;f;g;h"  {join {e f g h} ";"} 
 state {proc square {x} { * $x $x }}
 test 16 {square 4}
 fails {square a}
@@ -791,6 +821,51 @@ test {a1d} {string replace "abcd" 1 2 "1"}
 test {123} {string replace "" 0 0 "123"}
 test {$tv1 world} {set tv1 hello; return {$tv1 world} 0}
 test {hello world} {set tv1 hello; subst {$tv1 world}}
+test  b     {lindex {a b c} 1}     
+test  a     {lindex {a b c d e} 0} 
+test  a     {lindex "         a                " 0} 
+test  a     {lindex "  \t   \n    a      \t \n   b    " 0} 
+test  b     {lindex "  \t   \n    a      \t \n   b    " 1} 
+test  {}     {lindex "  \t   \n    a      \t \n   b    " 2} 
+test  {hello world}     {lindex "  \t   \n    {hello world} \t  \n   " 0} 
+test  {}     {lindex "  \t   \n    {hello world} \t  \n   " 1} 
+test  b     {lindex {{a} {b} {c}} 1} 
+test  b    {lindex {a b c} 1} 
+test  {a b c}    {lindex {a b c}} 
+test  {}    {lindex {}} 
+test  {}    {lindex {a b "c"} 3} 
+test  {b"c"}    {lindex {a b"c"} 1} 
+test  {}    {lindex {a b"c"} 2} 
+test  a    {lindex {a "b"c} 0} 
+test  b    {lindex {a "b"c} 1} 
+test  c    {lindex {a "b"c} 2} 
+test  {a"b"c}    {lindex {a"b"c} 0} 
+#test  5    {lindex {0 1 2 3 4 5} end} 
+#test  0    {lindex 0 end} 
+#test  {}    {lindex {} end} 
+test  {}    {lindex {} -42} 
+test  {}    {lindex {a b c} -1} 
+test  {}    {lindex {a b c} -2} 
+test  {}    {lindex {a b c} -3} 
+test  {a c b}    {linsert {a b} 1 c}    
+test  {a c d b}    {linsert {a b} 1 c d}  
+#test  {a b c}    {linsert {a b} end c}  
+#test  {a b c d e}    {linsert {a b} end c d e}  
+test  {a b c d e}    {linsert {a b} 3 c d e}  
+test  {c d e a b}    {linsert {a b} 0 c d e}  
+test  {}       list 
+test  {a {b c} d}       {list a "b c" d}       
+test  {{} a}       {list "" a} 
+test  {a {} b}       {list a {} b} 
+test  {a {}}       {list a {}} 
+test  "a {\t}"       {list a \t} 
+test  "a {\n}"       {list a \n} 
+test  {a {\n}}       {list a {\n}} 
+test  {a {\r}}       {list a {\r}} 
+test  {a {\t}}       {list a {\t}} 
+test  {{$a}}      {list {$a}} 
+test  {{[hi]}}      {list {[hi]}} 
+test  {{[hi]}}      {list {[hi]}} 
 test 0 {llength ""}
 test 0 {llength " "}
 test 1 {llength "a"}
@@ -802,6 +877,16 @@ test 3 {llength "a { { b } } c"}
 test 3 {llength {a { { \" b \" } } c}}
 test 3 {llength {a " b " c}}
 fails {llength}
+test  0  {llength {}} 
+test  0  {llength { }} 
+test  0  {llength {   }} 
+test  1  {llength {   1}} 
+test  1  {llength {   1 }} 
+test  2  {llength {   1 2}} 
+test  3  {llength {   1 2  3      }} 
+test  5  {llength {a b c d e}} 
+test  0  {llength "   \t  \n                          "} 
+test  1  {llength "   \t  \n         a                "} 
 test a {lindex "a b c" 0}
 test b {lindex "a b c" 1}
 test c {lindex "a b c" 2}
@@ -943,6 +1028,10 @@ test  {a b {c d}} {lappend l1 a b {c d}; set l1}
 test  {} {lappend l2}
 test  {a b c} {lappend l3 a b c}
 fails {lappend}
+test {w x} {set a w; lappend a x} 
+test {} {lappend a} 
+test {x y z} {lappend a x y z; set a}    
+test {x {y z}} {lappend a x {y z}; set a}  
 test "hello" {apply {{} { return hello 0; }}}
 test 4 {apply {{x} {* $x $x}} 2}
 test 8 {apply {{x y} {* $x $y}} 2 4}
@@ -1236,15 +1325,34 @@ test "ABC" {format ABC}
 test "ABC" {format ABC D E F}
 test "AxC" {format A%sC x}
 test "AxxC" {format A%sC xx}
+test "Hello, World!" {format "%s, %s!" Hello World}
 test "" {format ""}
 test "AA" {format A%c 65}
 test "3e8" {format %x 1000}
 test "3E8" {format %X 1000}
 test "%s" {format %%s}
+test "A"  {switch 0 { 0 { return "A" 0 } 1 { return "B" 0 } default { return "C" 0 } } }
+test "B"  {switch 1 { 0 { return "A" 0 } 1 { return "B" 0 } default { return "C" 0 } } }
+test "C"  {switch 2 { 0 { return "A" 0 } 1 { return "B" 0 } default { return "C" 0 } } }
+test "A"  {switch -nocase XxX { xxx { return "A" 0 } yyy { return "B" 0 } default { return "C" 0 } } }
+test "B"  {switch -nocase YYY { xxx { return "A" 0 } yyy { return "B" 0 } default { return "C" 0 } } }
+test "C"  {switch -nocase ZZZ { xxx { return "A" 0 } yyy { return "B" 0 } default { return "C" 0 } } }
+test "A"  {switch -glob x?x { xbx { return "A" 0 } yyy { return "B" 0 } default { return "C" 0 } } }
+test "A"  {switch -glob x?x { xbx { return "A" 0 } xbx { return "B" 0 } default { return "C" 0 } } }
+test "C"  {switch -glob X?X { xbx { return "A" 0 } xbx { return "B" 0 } default { return "C" 0 } } }
+test "A"  {switch -glob X?X -nocase { xbx { return "A" 0 } xbx { return "B" 0 } default { return "C" 0 } } }
+test "B"  {switch -glob y*  { xxx { return "A" 0 } yyy { return "B" 0 } default { return "C" 0 } } }
+test "C"  {switch -glob ZZZ { xxx { return "A" 0 } yyy { return "B" 0 } default { return "C" 0 } } }
+test ""   {switch -glob ZZZ { xxx { return "A" 0 } yyy { return "B" 0 } } }
+test "a b d e" {lremove {a b c d e} 2}
+test "b d e" {lremove {a b c d e} 2 0}
+test {{} {} {}}               {lassign {} a b c; list $a $b $c} 
+test {foo {} {}}              {lassign {foo} a b c; list $a $b $c} 
+test {foo bar baz}            {lassign {foo bar baz} a b c; list $a $b $c} 
+test {foo bar baz {qux quux}} {set rem [lassign {foo bar baz qux quux} a b c]; list $a $b $c $rem} 
 
 # Version should not be '0':
 test 1 {ne "0" {eval "or [info version]"}}
-
 
 proc assert {x} { if {== $x "0"} { puts "assert failed"; exit 1 } }
 assert [<= $passed $total]
@@ -1261,6 +1369,7 @@ puts
 puts "Heap Usage:"
 puts "\tallocs:\t[heap allocations]"
 puts "\tfrees:\t[heap frees]"
+puts "\tgrow:\t[heap reallocations]"
 puts "\ttotal:\t[heap total] ([/ [heap total] 1024]KiB)"
 puts "\tavg:\t[/ [heap total] [heap allocations]]"
 puts "Commands:\n\tcount:\t[info cmdcount]\n"
