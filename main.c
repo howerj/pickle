@@ -262,6 +262,10 @@ int main(int argc, char **argv) {
 	if (pickle_command_register(i, "source", commandSource, NULL)   != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "clock",  commandClock,  NULL)   != PICKLE_OK) goto fail;
 	if (pickle_command_register(i, "heap",   commandHeap,   &h)     != PICKLE_OK) goto fail;
+#ifdef PICKLE_EXTEND
+	extern int pickle_extend(pickle_t *i);
+	if (pickle_extend(i) != PICKLE_OK) goto fail;
+#endif
 	int r = 0;
 	for (int j = 1; j < argc; j++) {
 		r = evalFile(i, argv[j]);

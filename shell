@@ -1227,8 +1227,8 @@ test {} {string index {} -562}
 test 1 {string is integer 42}
 test 1 {string is integer -1}
 test 0 {string is integer foo}
-#test 5 {string last + a+b+c+d}
-#test -1 {string last - a+b+c+d}
+test 5 {string last + a+b+c+d}
+test -1 {string last - a+b+c+d}
 test 5 {string length hello}
 test foo {string tolower FOO}
 test 1 {string match f* foo}

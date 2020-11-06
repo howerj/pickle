@@ -282,6 +282,16 @@ static inline char *find(const char *haystack, const char *needle) {
 	return strstr(haystack, needle);
 }
 
+static inline const char *rfind(const char *haystack, const char *needle) {
+	check(haystack);
+	check(needle);
+	const size_t hay = strlen(haystack);
+	for (size_t i = 0; i < hay; i++)
+		if (strstr(&haystack[hay - i - 1], needle))
+			return &haystack[hay - i - 1];
+	return NULL;
+}
+
 static inline char *locateChar(const char *s, const int c) {
 	check(s);
 	return strchr(s, c);
@@ -372,6 +382,10 @@ static int picolConvertBaseNNumber(pickle_t *i, const char *s, number_t *out, in
 	return PICKLE_OK;
 }
 
+/* NB. We could make a version of this that could also process 'end' and
+ * 'end-#' numbers for indexing, it would require a length however. This
+ * would be useful for commands like 'string index' and some of the list
+ * manipulation commands. */
 static int picolStringToNumber(pickle_t *i, const char *s, number_t *out) {
 	check(i);
 	check(s);
@@ -1824,6 +1838,12 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 		}
 		if (!compare(rq, "first")) {
 			const char *found = find(arg2, arg1);
+			if (!found)
+				return picolSetResultNumber(i, -1);
+			return picolSetResultNumber(i, found - arg2);
+		}
+		if (!compare(rq, "last")) {
+			const char *found = rfind(arg2, arg1);
 			if (!found)
 				return picolSetResultNumber(i, -1);
 			return picolSetResultNumber(i, found - arg2);
