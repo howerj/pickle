@@ -12,7 +12,7 @@
 #include <stdint.h>  /* intptr_t */
 #include <limits.h>  /* CHAR_BIT, LONG_MAX, LONG_MIN */
 #include <stdarg.h>  /* va_list, va_start, va_end */
-#include <stdio.h>   /* vsnprintf */
+#include <stdio.h>   /* vsnprintf see <https://github.com/mpaland/printf> if you lack this */
 #include <string.h>  /* memset, memchr, strstr, strcmp, strncmp, strcpy, strlen, strchr */
 
 #define SMALL_RESULT_BUF_SZ       (96)
