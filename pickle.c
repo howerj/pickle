@@ -974,7 +974,7 @@ static int picolNumberToString(char buf[/*static*/ 64/*base 2*/ + 1/*'+'/'-'*/ +
 	if (!picolIsBaseValid(base))
 		return PICKLE_ERROR;
 	if (in < 0) {
-		dv     = -in;
+		dv     = -(unumber_t)in;
 		negate = 1;
 	}
 	do
