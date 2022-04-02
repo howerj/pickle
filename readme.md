@@ -935,7 +935,7 @@ Return the seconds since the Unix Epoch.
 
  - format time time-spec?
 
-The format command a time in seconds since the Unix Epoch against an optional
+The format command expects a time in seconds since the Unix Epoch against an optional
 time-specification (the default time specification is "%a %b %d %H:%M:%S %Z %Y").
 The formatting is done entirely by the function [strftime][].
 
@@ -1372,6 +1372,10 @@ Known limitations of the interpreter include:
 * Recursion Depth - 128, set via a compile time option.
 * Maximum size of file - 2GiB
 * 'clock' command has a limited string available for formatting (512 bytes).
+* Although not tested and there are no known issues there might be
+[locale][] related issues lurking in the interpreter, it does not help
+that the locale functions are fundamentally broken and should never have
+been standardized.
 
 [ASCII]: https://en.wikipedia.org/wiki/ASCII
 [AST]: https://en.wikipedia.org/wiki/Abstract_syntax_tree
@@ -1428,3 +1432,4 @@ Known limitations of the interpreter include:
 [vwait]: https://www.tcl.tk/man/tcl8.4/TclCmd/vwait.htm
 [xdigit]: http://www.cplusplus.com/reference/cctype/isxdigit/
 [isatty]: http://man7.org/linux/man-pages/man3/isatty.3.html
+[locale]: https://github.com/mpv-player/mpv/commit/1e70e82baa9193f6f027338b0fab0f5078971fbe

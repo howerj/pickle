@@ -203,6 +203,12 @@ proc switch {args} {
 # This is a limited version of the 'format' command, this could have been made
 # to be a built in C function for the sake of efficiency, and if you find
 # yourself using the command a lot then it might be worth doing that.
+#
+# Adding extra options to the arguments such as printing leading zeros or
+# spaces would be useful, but has not been done (yet).
+#
+# The corresponding "scan" function does not (yet) exist, which would be
+# very useful.
 proc format {fmt args} {
 	set l [split $fmt ""]
 	set w [llength $l]
@@ -238,10 +244,15 @@ proc color {c} {
 
 # Making these variables would be more efficient, however they would have
 # to be accessed via upvar, functions do not.
-proc normal {} "return {[color reset]}"
-proc red    {} "return {[color red]}"
-proc green  {} "return {[color green]}"
-proc blue   {} "return {[color blue]}"
+proc normal  {} "return {[color reset]}"
+proc red     {} "return {[color red]}"
+proc green   {} "return {[color green]}"
+proc yellow  {} "return {[color yellow]}"
+proc blue    {} "return {[color blue]}"
+proc magenta {} "return {[color magenta]}"
+proc cyan    {} "return {[color cyan]}"
+proc black   {} "return {[color black]}"
+proc white   {} "return {[color white]}"
 rename color ""
 
 # Unfortunately this does not write to stderr.
@@ -288,9 +299,6 @@ proc lassign {dats args} {
 
 # Decompiler, of sorts. The name 'see' comes from Forth, like the function
 # 'words' which is also from Forth.
-
-proc words {} { lsort [info commands] }
-
 proc see {w} {
 	if {eq "" [info commands $w]} {
 		return "'$w' is not defined" -1
@@ -304,6 +312,8 @@ proc see {w} {
 	set body [info body $w]
 	return "$type [list $w] {$args} {$body}"
 }
+
+proc words {} { lsort [info commands] }
 
 proc global {args} { 
 	set l [llength $args]
@@ -339,7 +349,6 @@ proc {stack dump} {} {
 	}
 }
 
-
 proc io {} {
 	set e [catch {gets} l]
 	if {or [eq $e 2] [eq $e -1]} {
@@ -354,6 +363,145 @@ set OS Unix
 if {eq [getenv OS] "Windows_NT" } {
 	set OS Windows
 	set HOME "HOMEPATH"
+}
+
+# The help database.
+#
+# A custom set of words for manipulating hash objects would help,
+# which could reuse the chained hashing used within "pickle.c",
+# also missing are functions for manipulating binary data, but that's
+# a different issue...
+#
+# The hash words could be used for as an in memory database, perhaps
+# with an easily serializable on disk representation (perhaps based
+# upon CDB <https://github.com/howerj/cdb>).
+#
+# It might be better to put this in a separate file and "source" it,
+# optionally or on demand.
+#
+# The help database could be married to the test suite, allowing
+# examples to be produced for each entry.
+#
+set helpdb {
+  argv {} {'argv' is a variable, not a function, which should contain the arguments passed to the pickle interpreter on the command line in a TCL list.}
+  set {variable value?} {Create a variable, or overwrite an existing variable, with a value. If only one argument is given, it returns the value of that variable if it exists or an error if it does not.} 
+  if {condition true-clause  *OR*  condition true-clause "else" false-clause} {*if* is the command used to implement conditional execution of either one clause, or one clause or (exclusive or) another clause. Like in every other programming language ever (or more accurately the languages with more than one user, the implementer).}
+  while {condition clause} {Keep executing the while clause whilst the condition is true (ie. is non-zero)}
+  break {} {Break out of a while loop. This will continue to break out of a things until the return code is caught by a loop, or 'catch'.}
+  continue {} {Desist from executing the rest of the clause in a while loop, and go back to testing the condition.}
+  proc {identifier {argument list} {function body}} {Create a new command with the name 'identifier', or function if you prefer, with the arguments in 'argument list', and code to be executed in the 'function body'. If the final command is not a 'return' then the result of the last command is used.\n\nThere is a special case whereby the last argument in the argument list is called 'args', if this is the case then the renaming arguments are concatenated together and passed in to the function body. This allows variadic functions to be created.}
+  return {string? number?} {Optionally return a string, optionally with an internal number that can affect control flow.}
+  uplevel {number strings...} {Evaluate the 'strings...' in the scope indicated by 'number'. A special case is '#0', which is the global context. The strings are concatenated together as with if they have been run through the 'concat' command. A scope of 0 is the current scope, of 1, the caller, of 2, the caller's caller, and so on. A '#' prefix is meant to reverse the search and start from the global scope and work down through the call stack, however only '#0' is supported.}
+  upvar {number otherVar myVar} {Form a link from myVar to otherVar in the scope specified by number. A special case is '#0', which is the global context, see 'uplevel' for a description of the scoping traversal rules implied by the number argument.\n\nYou may have noticed that 'upvar' and 'uplevel', which come from TCL, are strange, very strange. No arguments from me.}
+  unset {string} {Unset a variable, removing it from the current scope.}
+  eval {strings...} {Concatenate a list of strings with a space in-between them, as with 'concat', then evaluate the string, returning the result of the evaluation.}
+  apply {{{arg-list} {body}} args} {Applies an argument list to a function body, substituting the provided arguments into the variables.\n\nExamples:\n\n\t# Returns 4\n\tapply {{x} {* $x $x}} 2\n\t# Returns 7\n\tapply {{x y} {+ $x $y}} 3 4\n\nIt essential allows for anonymous functions to be made.}
+  + {x y args} {Add two or more numbers together after performing numeric conversion of strings to numbers.}
+  - {x y args} {Subtract the number 'y' from the number 'x', if there are more arguments they are also subtracted from 'x'.}
+  * {x y args} {Multiple a list of two or more numbers together.}
+  / {x y args} {Divide 'x' by a list of numbers.}
+  mod {x y args} {Return the remainder of 'x' divided by 'y', the result can then be used on the next argument performing the same remainder operation.}
+  < {x y args} {Returns true if every number after the first is greater than the first number.}
+  > {x y args} {Returns true if every number after the first is less than the first number.}
+  >= {x y args} {Perform a greater than or equal to on a list of numbers.}
+  <= {x y args} {Perform a less than or equal to on a list of numbers.}
+  == {x y args} {Returns true if all numbers in list are equal, false if not}
+  =! {x y args} {Returns true if all numbers in list are not equal to each other, false if not}
+  min {x y args} {Returns the smallest number from a list of numbers}
+  max {x y args} {Returns the largest number from a list of numbers}
+  pow {x y args} {Raise a number 'x' to a power 'y', which is then subsequently raised in turn by all of the others numbers present in the list}
+  log {x y args} {Take the integer logarithms of 'x' in base 'y', and then taking the result perform the logarithm by any remaining arguments.}
+  rshift {x y args} {Shift 'x' by 'y' places right, and then shift the results by any remaining arguments in turn.}
+  lshift {x y args} {Shift 'x' by 'y' places left, and then shift the results by any remaining arguments in turn.}
+  and {x y args} {Bitwise AND of all arguments.}
+  & {x y args} {Bitwise AND of all arguments.}
+  or {x y args} {Bitwise OR of all arguments.}
+  | {x y args} {Bitwise OR of all arguments.}
+  xor {x y args} {Bitwise XOR of all arguments.}
+  ^ {x y args} {Bitwise XOR of all arguments.}
+  || {x y args} {Logical OR of all arguments, this evaluates all arguments and this is *not* a bug.}
+  && {x y args} {Logical AND of all arguments, this evaluates all arguments and this is *not* a bug.}
+  not {number} {Logical Not.}
+  ! {number} {Logical Not.}
+  invert {number} {Perform a bitwise invert of a number.}
+  ~ {number} {Perform a bitwise invert of a number.}
+  abs {number} {Return the absolute value of a number, this may give incorrect results for the smallest possible integer representable in the interpreters number system. The smallest number representable can be found with the command "info system min".}
+  bool {number} {Turn a number into a boolean value, true if non-zero, otherwise false.}
+  negate {number} {Negate a number}
+  catch {expr varname} {This allows arbitrary codes to be caught, 'catch' evaluates an expression and puts the return code into 'varname', the string returned is the result of the evaluation of 'expr'.}
+  command {item number *OR* command} {This function is used to inspect the currently defined commands in the system.\n\nIf no arguments are given then the number of commands defined is returned. If an item is given a number indicates which command that it applies to. Commands are indexed by numbers. Defining new command may change the index of other commands. Commands are either user defined or built in commands.\n\n- args: get a functions arguments (returns '{built-in pointer pointer}' for built in commands)\n- body: get a functions body (returns '{built-in pointer pointer}' for built in commands)\n- name: get a functions name}
+  join {{list} string} {Given a TCL list, 'join' will flatten that list and return a string by inserting a String in-between its elements. For example "join {a b c} ," yields "a,b,c".}
+  conjoin {string arguments*} {'conjoin' works the same as 'join' except instead of a list it joins its arguments, for example:\n\n\tjoin {a b c} ,\n\tconjoin , a b c\n\nAre equivalent.}
+  for {{start} {test} {next} {body}} {Implements a for loop.}
+  rename {function-name new-name} {Rename a function to 'new-name', this will fail if the function does not exist or a function by the same name exists for the name we are trying to rename to. A special case exists when the new-name is an empty string, the function gets deleted.}
+  llength {list} {Get the length a list. A TCL list consists of a specially formatted string argument, each element of that list is separated by either space or is a string or quote. For example the following lists each contain three elements:\n\n\t"a b c"\n\t"a { b } c"\n\t"a \" b \" c"\n\nThe list is the basic higher level data structure in Pickle, and as you can see, there is nothing special about them. They are just strings treated in a special way. Processing these lists is incredibility inefficient as everything is stored as a string - a list needs to be parsed before it can be manipulated at all. This applies to all of the list functions. A more efficient, non-TCL compatible, set of list functions could be designed, or the internals of the library could be changed so they are more complex (which would help speeding up the mathematical functions), but either option is undesirable for different reasons.}
+  lindex {list index} {See 'llength'.\n\nIndex into a list, retrieving an element from that list. Indexing starts at zero, the first element being the zeroth element.}
+  lrepeat {number string} {Repeat a string a number of times to form a list.\n\nExamples:\n\n\tpickle> lrepeat 3 abc\n\tabc abc abc\n\tpickle> lrepeat 2 {x x}\n\t{x x} {x x}\n\n}
+  lreverse {list} {Reverse the elements in a list.}
+  lrange {list lower upper} {Extract a range from a list.}
+  lset {variable index value} {Look up a variable containing a list and set the element specified by an index to be equal to 'value'.}
+  linsert {list index value} {Insert a value into a list at a specified index, indices less than zero are treated as zero and greater than the last element are appended to the end of the list.}
+  lreplace {list first last values...} {Replace ranges of elements within a list, the function has a number of special cases.}
+  split {string splitter} {Split a string into a list, the value to split on is not a regular expression, but a string literal. There is a special case where the value to split on is the empty string, in this case it splits a string into a list of its constituent characters.}
+  lappend {variable values...} {Append values to a list, stored in a variable, the function returns the newly created list.}
+  list {args...} {Turn arguments into a list, arguments with spaces in them are quoted, the list command returns the concatenation of the escaped elements.}
+  concat {args...} {Trim arguments before concatenating them into a string.}
+  lsort {opts... list} {This command sorts a list, it uses insertion sort internally and lacks many of the options of the full command. It does implement the following options:\n\n- '-increasing' (default)\n\nSort the list in increasing order.\n\n- '-decreasing'\n\nSort the list in decreasing order.\n\n- '-ascii' (default)\n\nThe list is a series of strings that should be stored in ASCII order.\n\n- '-integer'\n\nThe list is a series of numbers that should be sorted numerically.}
+  subst {opts... string} {Optionally perform substitutions on a string, controllable via three flags. When you enter a string in a TCL program substitutions are automatically performed on that string, 'subst' can be used to perform a subset of those substitutions (command execution, variable substitutions, or escape character handling) a string.\n\n- -nobackslashes\n\nDisable escape characters.\n\n- -novariables\n\nDo not process variables.\n\n- -nocommands\n\nDo not process command substitutions.}
+  lsearch {opts... list pattern} {The search command attempts to find a pattern within a list and if found it returns the index as which the pattern was found within the list, or '-1' if it was not found.\n\n- '-nocase'\n\nDo a case insensitive search, beware this is ASCII only!\n\n- '-not'\n\nInvert the selection, matching patterns that *do not* match.\n\n- '-exact'\n\nPattern is an exact string to search for.\n\n- '-integer'\n\nThe pattern is a number to search for.\n\n- '-glob' (default)\n\nThis subcommand uses the same regex syntax (and engine) as the 'string match' subcommand, it is quite limited, and it is the default search option.\n\n- '-inline'\n\nInstead of returning the index, return the found element.\n\n- '-start index'\n\nStart at the specified index instead of at zero.}
+  reg {opts... regex string} {'reg' implements a small regular expression engine that can be used to extract matches from text. It has a few options that can be passed to it, and a few virtues; lazy, greedy and possessive.\n\n- -nocase\n\nIgnore case when matching a string.\n\n- -start index\n\nSet the start of the string to match from, numbers less than zero are treated as zero, and numbers greater than the length of the string are treated as referring to the end of the string.\n\n- -lazy\n\nMatch the shortest string possible.\n\n- -greedy (default)\n\nMatch the longest string possible.\n\n- -possessive\n\nMatch the longest string possible, with no backtracking. If backtracking is necessary the match fails.}
+  eq {string string} {Returns '0' is two strings are not equal and '1' if they are. Unlike '==' this acts on the entire string.}
+  ne {string string} {Returns '1' is two strings are not equal and '0' if they are. Unlike '!=' this acts on the entire string.}
+  incr {variable number?} {Increment a variable by 1, or by an optional value. 'incr' returns the incremented variable. 'incr' being implemented in C is usually a lot more efficient then defining 'incr' in TCL, like so:\n\n\tproc incr {x} { upvar 1 $x i; set i [+ $i 1] }\n\nAnd it is used often in looping constructs.}
+  trace {on *OR* trace off *OR* trace status} {This command can be used to turn tracing on, off, or to query the status of tracing. The TCL trace command is quite powerful, this one is far more limited.}
+  tracer {cmd args...} {This command *not* defined at startup, but can be defined by the user. This can be used to trace the execution of the program.\n\nThe commands executed within *tracer* will not be traced.}
+  unknown {cmd args...} {This command is *not* defined at startup, but can be defined by the user to catch command-not-found exceptions.\n\nWhen the interpreter encounters a command that has not been defined it attempts to find the 'unknown' command and execute that. If it is not found, it performs its default action, which is to throw an error and return an error string indicating the command has not been found. If the 'unknown' command has been found then it is executed with the command and its arguments being passed to 'unknown' as a list.\n\nFor example, defining:\n\n\tproc unknown {args} { system "$args" }\n\nWould mean any command the interpreter does know know about will be executed by the system shell, including its arguments, provided the *system* command is defined.\n\nIf an unknown command is found within the unknown function then a generic error message is returned instead.}
+  info {subcommand args...} {The 'info' command is used to query the status of the interpreter and supports many subcommands. The subcommands that are supported are:\n\n- commands match?\n\nMatch defaults to '\*'. Get a list of all defined commands filtered on 'match'.\n\n- procs match?\n\nMatch defaults to '\*'. Get a list of all commands defined with 'proc' filtered on 'match'.\n\n- functions match?\n\nMatch defaults to '\*'. Get a list of all mathematical functions filtered on 'match'.\n\n- locals match?\n\nMatch defaults to '\*'. Get a list of all defined locals filtered on 'match'.\n\n- globals match?\n\nMatch defaults to '\*'. Get a list of all defined globals filtered on 'match'.\n\n- level\n\nGet the current 'level' of the interpreter, which is the degree of nesting or scopes that exist relative to the top level scope. Entering a function increases the level by one, for example.\n\n- cmdcount\n\nGet the number of commands executed since startup, this can be used as a crude form of a performance counter if the command *clock* is not available.\n\n- version\n\nReturn the version number of the interpreter in list format "major minor patch", semantic versioning (see <https://semver.org/>) is used.\n\n- complete line\n\nDoes the 'line' constitute a command that can be called (which may result in an error)? Or 'does this line parse correctly'? "0" is returned if it cannot, "1" is returned if it can.\n\n- exists variable\n\nDoes 'variable' exist in the current scope, "0" is returned if it does not whilst "1" is returned if it does.\n\n- args name\n\nGet the arguments of the named function. Functions that are defined in C will returned the string 'built-in', otherwise a list is returned containing the function arguments.\n\n- body name\n\nGet the body of the named function. Functions that are built in functions defined in C will return a function pointer that represents that C function. Functions defined with 'proc' will return the body of the function as a string.\n\n- private name\n\nGet the private data of a function.\n\n- system attribute\n\nThe "system" subcommand is used to access various attributes that have been set in the interpreter at compile time or due to the environment that the system is compiled for.\n\nAttributes that can be looked up are:\n\n1. "pointer": size of a pointer in bits.\n2. "number": size of a number in bits.\n3. "recursion": recursion depth limit.\n4. "length": maximum length of a string or -1 if string length is unlimited.\n5. "min": minimum size of a signed number.\n6. "max": maximum size of a signed number.\n7. "string": are string operations defined?.\n8. "maths": are math operations defined?.\n9. "list": are list operations defined?.\n10. "regex": are regular expression operations defined?.\n11. "help": are help strings compiled in?.\n12. "debugging": is debugging turned on?.\n13. "strict": is strict numeric conversion turned on?.}
+  string {option arg *OR* string option arg arg *OR* string option arg arg arg} {The 'string' command in TCL implements nearly every string command you could possibly want, however this version of 'string' is more limited and behaves differently in many circumstances. 'string' also pulls in more standard C library functions from 'ctype.h' and 'string.h'.\n\nSome of the commands that are implemented:\n\n- string match -nocase? pattern String\n\nThis command is a primitive regular expression matcher, as available from <http://c-faq.com/lib/regex.html>. What it lacks in functionality, safety and usability, it makes up for by being only ten lines long (in the original). It is meant more for wildcard expansion of file names (so '?' replaces the meaning of '.' is most regular expression languages). '\\' is used as an escape character, which escapes the next character.\n\nThe following operations are supported: '\*' (match any string) and '?' (match any character). By default all patterns are anchored to match the entire string, but the usual behavior can be emulated by prefixing the suffixing the pattern with '\*'.\n\n- string trimleft  String Class?\n\nIf 'class' is empty, a white-space class is used. 'trimleft' removes leading characters in a Class from the given String.\n\n- string trimright String Class?\n\nIf 'class' is empty, a white-space class is used. 'trimleft' removes trailing characters in a class from the given String.\n\n- string trim      String Class?\n\nIf 'class' is empty, a white-space class is used. 'trimleft' removes both leading and trailing characters in a class from the given String.\n\n- string length  String\n\nGet the length of String. This is a simple byte length excluding an ASCII NUL terminator.\n\n- string tolower String\n\nConvert an ASCII String to lower case.\n\n- string toupper String\n\nConvert an ASCII String to upper case.\n\n- string reverse String\n\nReverse a string.\n\n- string equal   String1 String2\n\nCompare two strings for equality. Returns '1' if equal, '0' if not equal. This comparison is case sensitive.\n\n- string compare String1 String2\n\nCompare two strings.\n\n- string index   String Index\n\nRetrieve a character from a String at the specified Index. The index starts at zero for the first character up to the last character. Indices past the last character return the last character. Negative indexes starting counting from the last character (the last character being -1) and count downward, negative indexes that go before the first character return the first character.\n\n- string is Class String\n\n'is' determines whether a given String belongs to a Class. Most class tests accept a zero length string as matching that class with a few exceptions. Most class tests test that a class contains only certain characters (such as 'alpha' which checks that a string only contains the characters 'a-z' and 'A-Z', or 'digit', which checks that a string only contains the characters '0-9'. Other class tests test that a string matches a specific format, such as 'integer' (which does not accept a zero length string), it excepts the string to contain a decimal number with an optional '+' or '-' prefix.\n\nClass can be:\n\n- alnum: Characters are ASCII alphanumeric characters.\n- alpha: Characters are ASCII alphabetic character.\n- digit: Characters are the digits zero through to nine.\n- graph: Characters have a graphical representation.\n- lower: Characters are ASCII lower case alphabetic characters.\n- print: Characters are printable.\n- punct: Characters are punctuation.\n- space: Characters are white-space.\n- upper: Characters are ASCII upper case alphabetic characters.\n- xdigit: Characters are the digits used to represent hexadecimal characters.\n- ascii: Characters are ASCII (top bit not set).\n- control: Characters are control characters.\n- integer: String is an integer.\n\nAny other Class is invalid. Most classes are based on a C function (or macro) available in the ctype.h header.\n\n- string repeat String Count\n\nRepeat a String 'Count' many times. 'Count' must be positive, inclusive of zero.\n\n- string first Needle Haystack StartIndex?\n\nFind a Needle in a Haystack, optionally starting from 'StartIndex'. The index into the string where the first character of found of Needle in Haystack is returned if the string has been found, negative one if it has not been found.\n\n- string ordinal String\n\nConvert the first character in a string to a number that represents that character.\n\n- string char Number\n\nConvert a number to its character representation.\n\n- string hex2dec HexString\n\nConvert a lower or uppercase hexadecimal number to its decimal representation.\n\n- string dec2hex Number\n\nConvert a decimal number to its lowercase hexadecimal representation.\n\n- string hash String\n\nHash a string returning the hash of that string as a number.\n\n- string range String Index1 Index2\n\nCreate a sub-string from Index1 to Index2 from a String. If Index1 is greater than Index2 an empty string is returned. If Index1 is less than zero, it is set to zero, if Index2 is greater than the index of the last character, it is set to the index of the last character. Indexing starts at zero and goes up to one less than the strings length (or zero of empty string), which is the index of the last character. The characters from Index1 to Index2 inclusive form the sub-string.\n\n- string tr d set string *OR* string tr r set1 set2 string\n\nMuch like the Unix utility 'tr', this performs various translations given a set (or two sets of characters). 'tr' can delete characters in the set of characters in 'set' from 'string' if the option provided to it is 'd', or it can perform a translation from one set to another if the 'r' specifier is given. If the second set is larger than the first for the 'r' command the last character applies to the rest of the characters in 'set2'.\n\nBoth 'r' and 'd' options can both have the additional specifier 'c', which compliments the given 'set' or characters.\n\n'r' can also have the 's' specifier, which will squeeze repeated characters in the set\n\nExample:\n\n\tproc lowercase {x} {\n\t\tstring tr r abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ $x\n\t}\n\nWhich creates a function with the same functionality as 'string lowercase $x'.\n\n- string replace old-string first last new-string\n\nThis subcommands replaces a substring starting at 'first' and ending at 'last'.  The 'new-string' replaces the removed section of the 'old-string'.}
+
+  gets {} {Read in a new-line delimited string, returning the string on success, on End Of File it returns 'EOF' with a return code of 'break'.}
+  puts {*OR* puts string *OR* puts -nonewline string} {Write a line to *stdout*, the option '-nonewline' may be specified, which means no newline with be appended to the string.\n\nIf no string is given, then a single new line is printed out.}
+  getenv {string} {Retrieve an environment variable by the name 'string', returning it as a string.}
+  exit {*OR* exit number} {Exit the program with a status of 0, or with the provided status number.}
+  source {file-name} {Read and then evaluate a file off of disk. This may fail because the file could not be read or something when wrong during the evaluation.}
+  clock {seconds *OR* clock format time time-spec? *OR* clock clicks} {A simplified version of the TCL command 'clock' the subcommands it supports are:\n\n- clicks\n\nReturn the CPU clock.\n\n- seconds\n\nReturn the seconds since the Unix Epoch.\n\n- format time time-spec?\n\nThe format command expects a time in seconds since the Unix Epoch against an optional time-specification (the default time specification is "%a %b %d %H:%M:%S %Z %Y").  The formatting is done entirely by the function strftime.\n\nThere are internal limits on this string length (512 bytes excluding the NUL terminator).}
+  heap {option} {This command is useful for inspecting the size of the heap, it can report the number of bytes allocator, the number of frees, the number of allocations, and other statistics.\n\nThe options are:\n\n- frees\n\nThis is the number of frees that have taken place, excluding freeing 'NULL'.\n\n- allocations\n\nThis is the number of allocations that have taken place, including any\nreallocations.\n\n- total\n\nThis is the total number of bytes that have been allocated.\n\n- reallocations\n\nThis is the number of reallocations that have been performed on an already allocated pointer.\n\nThe "heap" command has another subcommand "fail-after", which is used for internal testing purposes, it takes a number and after that many calls to the allocation function it causes it to return a failure, which is fatal to the interpreter (but should not cause a crash). You should not need to use this subcommand. Calling this subcommand again resets the count until failure, setting the count to zero disables deliberate failure. This feature could be used as a crude watchdog, but it would be inadvisable to do so.}
+
+  words {} {This function comes from the programming language "Forth", it lists all defined commands.}
+  see {name} {This function comes from the programming language "Forth", it acts like a decompiler, given a function name it returns whether the function is a built in primitive, or if it is a defined function, it shows the source code for it.}
+  match {} {Equivalent to "string match $pattern $string", this uses the slightly different regex syntax that "string match" uses, '?' for single character matches, and '*' for matching anything like with '.*' in most 'normal' regex languages.}
+  foreach {v l b} {TCL supports two versions of 'foreach', this version does the following; for each element in the list 'l' set the variable named by 'v' to that element then execute 'b'.}
+  random {seed?} {Return a Pseudo Random Number, an optional seed is passed in. This function affects global state.}
+  seed {} {This is not a function but a variable, it is the seed used by "random".}
+  monitor {args} {Execute a command with tracing turned on, turning it off at the end of the commands execution.}
+  bye {} {Much like the Forth word/function "bye", this quits the interpreter with a clean exit code.}
+  quit {args} {Does the same as "bye", exiting the interpreter cleanly, but it discards the arguments given to it.}
+  time {cmd repeat?} {Execute 'cmd' 'repeat' times, the repeat command is optional and defaults to one time. The time taken to execute the command is returned if there is no error.}
+  format {fmt args} {Using the format string 'fmt' and arguments supplied in 'args' construct a string and return it.\n\nThe format string accepted by this function is greatly simplified compared to the one in TCL,\nthe following argument specifiers are accepted:\n\n- %%, '%' is the escape character, it turns into a single '%'.\n- %d, get a decimal from the argument list.\n- %s, get a string from the argument list.\n- %x, get an integer from the argument list and format it as a hexadecimal string.\n- %X, get an integer from the argument list and format it as a hexadecimal string, using upper case characters for the digits A-F.\n- %o, get an integer from the argument list and format it as an octal string.\n- %c, get a single character from the argument list.\n\nNo numeric or other modifiers are currently allowed to the argument specifiers.\n\n}
+  help {name} {Search the help database for a command and display the help if found.}
+  error {string ret-code?} {Print an error message, this is meant to be print to standard error, but will most likely print out to standard out. By default -1 is returned, which can be changed with an optional return code.}
+  lremove {lst args} {Remove elements from a list at the specified indices.}
+  lprepend {varName args} {Prepend a list of elements to a list specified by name.}
+  getopt {ax opt args} {A getopt inspired from <https://wiki.tcl-lang.org/page/getopt>\nUsage:\n\n\tgetopt argv -x\n\tgetopt argv -x opt\n\tgetopt argv -x opt default\n\nReturns: 1 on argument found in ${argv}, 0 on argument not found in ${argv}. Modifies variable given.}
+  lassign {list varName?...} {Assigns a list of values to a list of variable names. The first argument is the list of values, the rest of the arguments are the list of variables to create/reassign. Unassigned values are returned. If there is no value for a variable it will be created with the empty string.}
+  global {args...} {Create a list of local variables linked to global variables in the caller.}
+  switch {?opts? val {case expression case expression...}} {The switch statement is a more powerful version of the switch statement from C, it takes optional arguments (the default is to match exactly), a value and a list of case-expression pairs and attempts to match up the given value with the cases given, if a match is found the first matches corresponding expression is executed, completing the switch statement. The options that can be given to 'switch' are "-glob" and "-nocase", "-glob" turns the value to find into a regular expression of the same type given by "string match", and "-nocase" makes it so matches are case insensitive. }
+}
+
+proc help {name} {
+	upvar #0 helpdb helpdb
+	set m [llength $helpdb]
+	for {set i 0} {< $i $m} {incr i 3} {
+		if {match $name [lindex $helpdb $i]} {
+			puts "COMMAND:   [lindex $helpdb [+ $i 0]]"
+			puts "ARGUMENTS: [lindex $helpdb [+ $i 1]]"
+			puts
+			puts [lindex $helpdb [+ $i 2]]
+			#puts [subst -nocommands -novariables [lindex $helpdb [+ $i 2]]]
+			puts
+			#break
+		}
+	}
 }
 
 if {set shell} {
@@ -386,7 +534,8 @@ rename monitor ""
 rename see   ""
 rename words ""
 rename io    ""
-unset shell testing
+rename help  ""
+unset shell testing helpdb
 
 # ### Unit Tests ### #
 

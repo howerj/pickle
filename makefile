@@ -5,7 +5,7 @@
 # Might want to occasionally compile with "-fsanitize=undefined" to
 # catch any undefined behavior.
 #
-VERSION = 0x050201ul
+VERSION = 0x050202ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar

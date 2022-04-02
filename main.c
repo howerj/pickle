@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <locale.h>
 #include <time.h>
 
 #define UNUSED(X) ((void)(X))
@@ -252,6 +253,7 @@ fail:
 int main(int argc, char **argv) {
 	heap_t h = { 0, 0, 0, 0, 0, 0, };
 	pickle_t *i = NULL;
+	if (!setlocale(LC_ALL, "C")) goto fail; /* NB. Locale sucks */
 	if (pickle_tests(allocator, &h)   != PICKLE_OK) goto fail;
 	if (pickle_new(&i, allocator, &h) != PICKLE_OK) goto fail;
 	if (setArgv(i, argc, argv)  != PICKLE_OK) goto fail;
