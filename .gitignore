@@ -1,11 +1,13 @@
 *.1
 *.a
+*.dll
 *.exe
 *.gcda
 *.gcno
 *.gcov
 *.log
 *.o
+*.so
 *.tgz
 callgrind.*
 debug
@@ -14,4 +16,5 @@ install/*
 micro
 pickle
 profile
+single
 small

@@ -5,7 +5,7 @@
 # Might want to occasionally compile with "-fsanitize=undefined" to
 # catch any undefined behavior.
 #
-VERSION = 0x050202ul
+VERSION = 0x060000ul
 TARGET  = pickle
 CFLAGS  = -std=c99 -Wall -Wextra -pedantic -O2 -fwrapv ${DEFINES} ${EXTRA} -DPICKLE_VERSION="${VERSION}"
 AR      = ar
@@ -80,3 +80,5 @@ profile: debug shell
 	valgrind --tool=callgrind ./debug shell -t
 	kcachegrind
 
+single: single.h single.c
+	${CC} ${CFLAGS} single.c -o $@
