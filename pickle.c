@@ -1393,6 +1393,12 @@ static inline int picolDoCommand(pickle_t *i, int argc, char *argv[]) {
 	return r;
 }
 
+/* It is a mistake to use the C stack, which has been done here, as the backing
+ * for the stack in a higher level language. It is better to allocate each
+ * stack frame with "malloc()", this allows more control over the limits of
+ * recursion and helps in the implementation of closures and methods for
+ * yielding and restoring state which can be used for coroutines. Instead of
+ * a rewrite, I place an note here instead.  */
 static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *eval) {
 	check(i);
 	check(i->initialized);
@@ -1415,7 +1421,7 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 		}
 		if (p.type == PT_EOF)
 			break;
-		int tlen = p.end - p.start + 1;
+		long tlen = p.end - p.start + 1;
 		if (tlen < 0)
 			tlen = 0;
 		char *t = picolMalloc(i, tlen + 1); /* Using 'picolStackOrHeapAlloc' may complicate things. */
@@ -1500,8 +1506,12 @@ static int picolEvalAndSubst(pickle_t *i, pickle_parser_opts_t *o, const char *e
 			argc++;
 		} else { /* Interpolation */
 			check(argv);
-			const int oldlen = picolStrlen(argv[argc - 1]), ilen = picolStrlen(t);
-			char *arg = picolRealloc(i, argv[argc - 1], oldlen + ilen + 1);
+			check(argc >= 1);
+			const size_t oldlen = picolStrlen(argv[argc - 1]), ilen = picolStrlen(t);
+			const size_t newlen = oldlen + ilen + 1;
+			check(newlen > oldlen); /* overflow */
+			check(newlen > (oldlen + ilen)); /* overflow */
+			char *arg = picolRealloc(i, argv[argc - 1], newlen);
 			if (!arg) {
 				retcode = PICKLE_ERROR;
 				(void)picolFree(i, t);
@@ -1799,6 +1809,15 @@ static inline int picolCommandString(pickle_t *i, const int argc, char **argv, v
 			const char ch[2] = { arg1[index], '\0' };
 			return picolSetResultString(i, ch);
 		}
+		/* Bearing in mind this rant:
+		 *
+		 * https://github.com/mpv-player/mpv/commit/1e70e82baa9193f6f027338b0fab0f5078971fbe
+		 * https://news.ycombinator.com/item?id=25947277
+		 * https://old.reddit.com/r/programming/comments/7cfftq/wm4_talks_about_c_locales/
+		 *
+		 * And the "is*" functions in <ctype.h> are locale dependent,
+		 * it is probably most wise to rewrite these functions (and
+		 * assume we are using Gods own character set, ASCII). */
 		if (!compare(rq, "is")) { /* NB: These might be locale dependent. */
 			if (!compare(arg1, "alnum"))    { while (isalnum(*arg2))  arg2++; return picolSetResultNumber(i, !*arg2); }
 			if (!compare(arg1, "alpha"))    { while (isalpha(*arg2))  arg2++; return picolSetResultNumber(i, !*arg2); }
