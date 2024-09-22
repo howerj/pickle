@@ -1543,7 +1543,7 @@ static int picolEval(pickle_t *i, const char *t) {
 static inline int match(const char *pat, const char *str, const int nocase, const size_t depth) {
 	check(pat);
 	check(str);
-	assert(depth <= PICKLE_MAX_RECURSION);
+	check(depth <= PICKLE_MAX_RECURSION);
 	if (!depth) return -1; /* error: depth exceeded */
  again:
 	switch (*pat) {
