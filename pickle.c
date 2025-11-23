@@ -1149,7 +1149,7 @@ static int picolStringNeedsEscaping(const char *s) {
 	check(s);
 	long braces = 0;
 	char start = s[0], end = 0, ch = 0, sp = 0;
-	for (size_t i = 0; (ch = s[i]); s++) {
+	for (size_t i = 0; (ch = s[i]); i++) {
 		end = ch;
 		if (locateChar(string_white_space, ch))
 			sp = 1;
@@ -3040,7 +3040,7 @@ static inline int picolUnsetVar(pickle_t *i, const char *name) {
 		return picolVarFree(i, deleteMe);
 	}
 
-	for (p = cf->vars; p->next != deleteMe && p; p = p->next)
+	for (p = cf->vars; p && p->next != deleteMe; p = p->next)
 		;
 	check(p->next == deleteMe);
 	p->next = deleteMe->next;
